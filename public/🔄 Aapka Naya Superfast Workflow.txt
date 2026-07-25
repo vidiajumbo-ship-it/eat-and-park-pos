@@ -1,0 +1,14 @@
+🔄 Aapka Naya Superfast Workflow
+Ab manual npm run build aur folder upload karne ka jhanjhat hamesha ke liye khatam. Jab bhi aapko code mein kuch update karna ho (jaise koi naya feature dalna):
+
+VS Code mein apne changes save karein.
+
+Terminal mein type karein: git add .
+
+Phir type karein: git commit -m "koi bhi message jaise: naya feature add kiya"
+
+Aur aakhir mein: git push
+
+Bas! Netlify automatically aapke GitHub se naya code uthayega aur ishi link par background mein update kar dega. Aapko Netlify ka dashboard dobara kholne ki zaroorat hi nahi padegi.
+
+Ab jab app live ho chuki hai, toh kya hum ek dummy order ya test entry daal kar check karein ki live website se data aapke Firebase database mein theek se sync ho raha hai ya nahi?
