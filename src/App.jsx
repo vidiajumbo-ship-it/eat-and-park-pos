@@ -3,7 +3,7 @@ import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — STABLE MASTER RELEASE (150+ ITEMS)
+   🍽️ EAT & PARK RESTAURANT — V12.0 (THE ULTIMATE BULLETPROOF MASTER)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
@@ -389,26 +389,25 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", zIndex: 90 }}>
           <div style={{ background: "#fff", width: "100%", maxWidth: 480, margin: "0 auto", borderRadius: "24px 24px 0 0", padding: "24px 20px", maxHeight: "85vh", overflowY: "auto" }}>
             
-            {/* ✨ SECURE OTP LOGIN WITH CLEAR PROMPT */}
             {activeModal === 'login' && (
                <>
-                 <ModalHeader title="Secure Login" onClose={() => setActiveModal(null)} />
-                 <p style={{color: COLORS.textLight, marginBottom: 20}}>Login with your mobile number to place orders.</p>
+                 <ModalHeader title="Secure Login" onClose={() => { setActiveModal(null); setShowOtp(false); }} />
+                 <p style={{color: COLORS.textLight, marginBottom: 20}}>Login to track orders and earn EatCoins.</p>
                  {!showOtp ? (
                    <>
                      <input type="tel" placeholder="Enter 10-Digit Mobile Number" value={custPhone} onChange={e=>setCustPhone(e.target.value)} style={{...inputStyle, marginBottom: 16}} maxLength={10} />
                      <button onClick={() => { 
                        if(custPhone.length >= 10) { 
                          setShowOtp(true); 
-                         showToast("OTP Sent: Use 1234", "success"); 
+                         showToast("OTP Sent: 1234", "success"); 
                        } else { 
-                         showToast("Enter valid 10-digit phone", "error"); 
+                         showToast("Enter 10-digit phone number", "error"); 
                        } 
                      }} style={{...primaryBtn, width: '100%'}}>Send OTP</button>
                    </>
                  ) : (
                    <>
-                     <div style={{background: COLORS.sageLight, color: COLORS.sageDark, padding: 10, borderRadius: 8, marginBottom: 16, textAlign: 'center', fontWeight: 800}}>💡 Test OTP is: 1234</div>
+                     <div style={{background: COLORS.sageLight, color: COLORS.sageDark, padding: 10, borderRadius: 8, marginBottom: 16, textAlign: 'center', fontWeight: 800}}>💡 OTP Sent! Use Test Code: 1234</div>
                      <input type="number" placeholder="Enter 4-Digit OTP" value={otpInput} onChange={e=>setOtpInput(e.target.value)} style={{...inputStyle, marginBottom: 16, letterSpacing: 8, fontSize: 24, textAlign: 'center'}} />
                      <button onClick={() => { 
                        if(otpInput === '1234') { 
@@ -418,7 +417,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
                          setOtpInput("");
                          showToast("Login Successful!", "success"); 
                        } else { 
-                         showToast("Invalid OTP! Enter 1234", "error"); 
+                         showToast("Invalid OTP (Enter 1234)", "error"); 
                        } 
                      }} style={{...primaryBtn, width: '100%'}}>Verify & Login</button>
                    </>
