@@ -42,7 +42,7 @@ const RESTAURANT = {
   address: "Girja More, Ara – Buxar Main Road, Pakri, Ara", 
   phones: ["7303267750", "8271918062"], 
   whatsapp: "917303267750", 
-  upiId: "apnanumber@upi" 
+  upiId: "7303267750@upi" 
 };
 
 const CATEGORIES = [
