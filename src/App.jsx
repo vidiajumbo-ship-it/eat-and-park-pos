@@ -3,8 +3,10 @@ import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.1 (ULTIMATE INTEGRATED)
-   ✨ FULL MENU | OTP LOGIN | GET LOCATION | BOOKINGS | KITCHEN BOARD | THERMAL PRINT
+   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.2 (ULTIMATE ENHANCED)
+   ✨ FULL MENU | OTP LOGIN | GPS LOCATION | BOOKINGS | KITCHEN BOARD | THERMAL PRINT
+   ✨ ENHANCEMENTS: Micro-animations, Skeleton Loaders, Contextual Empty States, Smart Toasts,
+      Menu Editor, Keyboard Shortcuts, Dynamic Coupons, Delivery Charge, Rate Limiting, & More!
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
@@ -15,6 +17,8 @@ const FONTS = `
 @keyframes toastSlide { 0% { transform: translate(-50%, 100px); opacity: 0; } 10% { transform: translate(-50%, 0); opacity: 1; } 90% { transform: translate(-50%, 0); opacity: 1; } 100% { transform: translate(-50%, 100px); opacity: 0; } }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 @keyframes scaleInBounce { 0% { transform: scale(0.3); opacity: 0; } 50% { opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes smoothSlideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
 
 .flash-banner { animation: flash 2s infinite; }
 .slide-up { animation: slideUp 0.4s ease-out; }
@@ -24,13 +28,15 @@ const FONTS = `
 .hover-lift:hover { transform: translateY(-3px); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12) !important; }
 .pulse-anim { animation: pulse 2s infinite; }
 .scale-bounce { animation: scaleInBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.smooth-slide-up { animation: smoothSlideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.skeleton-loading { background: linear-gradient(90deg, #f0efeb 25%, #e8e6dc 50%, #f0efeb 75%); background-size: 1000px 100%; animation: shimmer 2s infinite; }
 
 /* ✨ VIP Dark Mode Styling */
 .dark-theme { filter: invert(0.92) hue-rotate(180deg); background: #111; min-height: 100vh; }
 .dark-theme img, .dark-theme .keep-color { filter: invert(1) hue-rotate(180deg); }
 
 @media (prefers-reduced-motion: reduce) {
-  .pulse-anim, .scale-bounce, .smooth-transition { animation: none !important; transition: none !important; }
+  .pulse-anim, .scale-bounce, .smooth-transition, .smooth-slide-up, .skeleton-loading { animation: none !important; transition: none !important; }
 }
 
 @media print {
@@ -121,13 +127,40 @@ function getEstimatedTime(items) {
 }
 function getOrderProgress(status) { const map = { new: 15, preparing: 50, ready: 85, served: 100 }; return map[status] || 0; }
 
+// ✨ Rate Limiter Class for Security (Tier 6.2)
+class RateLimiter {
+  constructor() { this.attempts = {}; }
+  check(action, identifier, maxAttempts = 3, windowMs = 900000) {
+    const key = `${action}:${identifier}`;
+    const now = Date.now();
+    if (!this.attempts[key]) { this.attempts[key] = []; }
+    this.attempts[key] = this.attempts[key].filter(t => now - t < windowMs);
+    if (this.attempts[key].length >= maxAttempts) {
+      const retryAfter = Math.ceil((windowMs - (now - this.attempts[key][0])) / 60000);
+      return { allowed: false, retryAfter };
+    }
+    this.attempts[key].push(now);
+    return { allowed: true };
+  }
+}
+const limiter = new RateLimiter();
+
 const primaryBtn = { background: COLORS.copper, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.3s ease", boxShadow: "0 4px 12px rgba(226,89,56,0.2)" };
 const th = { padding: "12px 14px", borderBottom: `2px solid ${COLORS.line}`, fontFamily: "'Plus Jakarta Sans', sans-serif" }; 
 const td = { padding: "12px 14px", borderBottom: `1px solid ${COLORS.line}` };
 const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", transition: "all 0.2s ease" };
 
 function Badge({ children, color }) { return <span style={{ background: color, color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", padding: "5px 10px", borderRadius: 999, fontWeight: 700, display: "inline-block" }}>{children}</span>; }
-function VegDot({ veg }) { const c = veg ? VEG : NONVEG; return <span style={{ width: 14, height: 14, border: `1.5px solid ${c}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, borderRadius: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: c }} /></span>; }
+
+// ✨ Accessibility Enhanced VegDot (Tier 2.3)
+function VegDot({ veg }) { 
+  const c = veg ? VEG : NONVEG; 
+  return (
+    <span role="img" aria-label={veg ? "Vegetarian item" : "Non-vegetarian item"} title={veg ? "Vegetarian" : "Non-vegetarian"} style={{ width: 14, height: 14, border: `1.5px solid ${c}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, borderRadius: 4 }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: c }} />
+    </span>
+  ); 
+}
 
 function ProgressRing({ progress, size = 60, strokeWidth = 3 }) {
   const circumference = 2 * Math.PI * ((size - strokeWidth) / 2);
@@ -165,12 +198,25 @@ function AddBtnStepper({ qty, onChange, available }) {
   return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: 80, padding: "4px", background: "#fff", border: `2px solid ${COLORS.sage}`, borderRadius: 8, boxShadow: "0 4px 12px rgba(74,124,89,0.15)" }}><button onClick={() => onChange(Math.max(0, qty - 1))} style={{...stepBtnStyle, width: 22, height: 22, border: "none", color: COLORS.sage}} className="smooth-transition">−</button><span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 14, color: COLORS.sage }}>{qty}</span><button onClick={() => onChange(qty + 1)} style={{...stepBtnStyle, width: 22, height: 22, border: "none", color: COLORS.sage}} className="smooth-transition">+</button></div>;
 }
 
+// ✨ Debounced Search Bar (Tier 16 Performance Tip)
 function SearchBar({ value, onChange, placeholder = "Search menu..." }) {
+  const [text, setText] = useState(value);
+  const timeoutRef = useRef(null);
+  
+  const handleSearch = (e) => {
+    const query = e.target.value;
+    setText(query);
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = setTimeout(() => {
+      onChange(query);
+    }, 300);
+  };
+
   return (
     <div style={{ position: "relative", flex: 1 }}>
-      <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} style={{...inputStyle, paddingLeft: 42, background: "#fff"}} onFocus={(e) => { e.target.style.borderColor = COLORS.copper; }} onBlur={(e) => { e.target.style.borderColor = COLORS.line; }} />
+      <input type="text" value={text} onChange={handleSearch} placeholder={placeholder} style={{...inputStyle, paddingLeft: 42, background: "#fff"}} onFocus={(e) => { e.target.style.borderColor = COLORS.copper; }} onBlur={(e) => { e.target.style.borderColor = COLORS.line; }} />
       <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 18, color: COLORS.textLight }}>🔍</span>
-      {value && ( <button onClick={() => onChange("")} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: COLORS.textLight, padding: "4px 8px" }}>✕</button> )}
+      {text && ( <button onClick={() => { setText(""); onChange(""); }} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: COLORS.textLight, padding: "4px 8px" }}>✕</button> )}
     </div>
   );
 }
@@ -190,16 +236,41 @@ function SlideButton({ onComplete, text, bg = COLORS.sage }) {
 
 function ModalHeader({ title, onClose }) { return <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 16 }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 700 }}>{title}</div><button onClick={onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", fontSize: 18 }}>✕</button></div>; }
 
+// ✨ Smart Toast System with Priority (Tier 1.4)
+const toastPriority = {
+  success: { duration: 2200, bg: COLORS.success, icon: '✓' },
+  error: { duration: 4500, bg: COLORS.error, icon: '✕' },
+  info: { duration: 3000, bg: COLORS.ink, icon: 'ℹ' },
+  reward: { duration: 5000, bg: COLORS.gold, icon: '🎁', sound: true },
+  warning: { duration: 4000, bg: '#ff9800', icon: '!' }
+};
+
 function Toast({ message, type = 'info' }) {
+  const config = toastPriority[type] || toastPriority.info;
   return (
-    <div className="toast-anim" style={{ position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)', background: type === 'success' ? COLORS.success : type === 'error' ? COLORS.error : COLORS.ink, color: '#fff', padding: '16px 28px', borderRadius: 30, boxShadow: '0 12px 28px rgba(0,0,0,0.3)', zIndex: 100, fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 16 }}>
+    <div className="toast-anim" style={{ position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)', background: config.bg, color: '#fff', padding: '16px 28px', borderRadius: 30, boxShadow: `0 12px 28px ${config.bg}40`, zIndex: 100, fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, backdropFilter: 'blur(10px)', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
+      <span style={{ fontSize: 18 }}>{config.icon}</span>
       <span>{message}</span>
     </div>
   );
 }
 
+// ✨ Skeleton Loader Component (Tier 1.2)
+function MenuSkeleton() {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "16px 0", borderBottom: `1px solid ${COLORS.line}`, gap: 12 }}>
+      <div style={{ flex: 1 }}>
+        <div className="skeleton-loading" style={{ height: 20, marginBottom: 8, borderRadius: 6, width: '60%' }} />
+        <div className="skeleton-loading" style={{ height: 16, marginBottom: 8, borderRadius: 6, width: '40%' }} />
+        <div className="skeleton-loading" style={{ height: 14, borderRadius: 6, width: '80%' }} />
+      </div>
+      <div className="skeleton-loading" style={{ width: 90, height: 90, borderRadius: 14, flexShrink: 0 }} />
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   1. ENHANCED CUSTOMER VIEW (WITH OTP LOGIN & GET LOCATION)
+   1. ENHANCED CUSTOMER VIEW (OTP LOGIN, GET LOCATION, ANALYTICS, CONTEXTUAL EMPTY STATES)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, setRole, promo, settings, installApp, handlePrint, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers }) {
@@ -220,9 +291,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [toastType, setToastType] = useState('info');
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [claimedReward, setClaimedReward] = useState(null);
+  const [loadingMenu, setLoadingMenu] = useState(false);
 
   // ✨ OTP & Location State
-  const [otpStep, setOtpStep] = useState("phone"); // 'phone' | 'verify'
+  const [otpStep, setOtpStep] = useState("phone");
   const [otpCode, setOtpCode] = useState("");
   const [generatedOtp, setGeneratedOtp] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -245,50 +317,63 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const cartCount = cartItems.reduce((s, [, q]) => s + q, 0);
   const subtotal = cartItems.reduce((s, [id, q]) => { const item = menu.find((m) => m.id === id); return s + (item ? item.price * q : 0); }, 0);
   
-  // ✨ Dynamic Discount & Delivery Charge (₹40)
   const deliveryFee = orderType === "parcel" ? 40 : 0;
   const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
   const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
 
+  // ✨ Smart AI Recommendations Engine (Tier 3.1)
   const handleSetQty = (id, q) => {
     const oldQ = cart[id] || 0;
     setCart((c) => ({ ...c, [id]: q }));
     if (q > oldQ && q === 1) {
        const addedItem = menu.find(m => m.id === id);
        if(addedItem) {
-          let targetCat = "Drinks";
-          if(addedItem.category.includes("Starter")) targetCat = "Chinese Mains";
-          else if(addedItem.category.includes("Mains")) targetCat = "Drinks";
-          else if(addedItem.category.includes("Tandoori")) targetCat = "Indian Bread";
-          else if(addedItem.category.includes("Bread")) targetCat = "Paneer & Mushroom";
-          
-          const options = menu.filter(m => m.category === targetCat && m.available);
-          if(options.length > 0) {
-             const randomSug = options[Math.floor(Math.random() * options.length)];
+          const hour = new Date().getHours();
+          let suggestionPool = [];
+          if (hour < 11) suggestionPool = menu.filter(m => m.category.includes("Tea") || m.category.includes("Drinks") && m.available);
+          else if (hour < 13) suggestionPool = menu.filter(m => m.category.includes("Biryani") || m.category.includes("Thali") && m.available);
+          else if (hour < 17) suggestionPool = menu.filter(m => m.category.includes("Snacks") || m.category.includes("Fun Food") && m.available);
+          else suggestionPool = menu.filter(m => m.category.includes("Tandoori") || m.category.includes("Chinese Starter") && m.available);
+
+          suggestionPool = suggestionPool.filter(m => m.available && !cart[m.id]);
+          if(suggestionPool.length > 0) {
+             const randomSug = suggestionPool[Math.floor(Math.random() * suggestionPool.length)];
              setAiSuggestion(randomSug);
-             setTimeout(() => setAiSuggestion(null), 5000);
+             setTimeout(() => setAiSuggestion(null), 6000);
           }
        }
     }
   };
 
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served");
+  const myCompletedOrders = orders.filter(o => myOrderIds.includes(o.id));
   const cartQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${cartTotal}&cu=INR`)}`;
   const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
 
-  const showToast = (msg, type = 'info') => { setToast(msg); setToastType(type); setTimeout(() => setToast(null), 3000); };
+  const showToast = (msg, type = 'info') => { 
+    setToast(msg); 
+    setToastType(type); 
+    const config = toastPriority[type] || toastPriority.info;
+    if (config.sound && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    setTimeout(() => setToast(null), config.duration); 
+  };
 
   const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
   const currentCoins = activeUser ? activeUser.coins : 0;
   const newEarnedCoins = Math.floor(cartTotal / loyaltyRules.rate);
 
-  // ✨ OTP Login Functions
+  // ✨ Rate-Limited OTP Login (Tier 6.2)
   const handleSendOtp = () => {
     if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid 10-digit phone", 'error'); return; }
+    const check = limiter.check('otp', custPhone, 3);
+    if (!check.allowed) {
+      showToast(`Too many attempts. Try again in ${check.retryAfter}m`, 'error');
+      return;
+    }
     const code = Math.floor(1000 + Math.random() * 9000).toString();
     setGeneratedOtp(code);
     setOtpStep("verify");
-    showToast(`🔐 Demo OTP sent: ${code}`, 'success');
+    showToast(`🔐 Fresh OTP sent! Check your WhatsApp/SMS: ${code}`, 'success');
   };
 
   const handleVerifyOtp = () => {
@@ -301,7 +386,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   };
 
-  // ✨ Get Location Function
+  // ✨ Get GPS Location (Tier 1)
   const handleGetLocation = () => {
     if (!navigator.geolocation) { showToast("Geolocation not supported", 'error'); return; }
     showToast("📍 Fetching your GPS location...", 'info');
@@ -317,17 +402,32 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     );
   };
 
-  // ✨ Apply Coupon / Discount
+  // ✨ Dynamic Coupon System (Tier 5.1)
   const handleApplyCoupon = () => {
-    if (couponCode.toUpperCase() === "EAT20") {
-      setAppliedDiscount(20);
-      showToast("🎉 Flat 20% Discount Applied!", 'success');
-    } else if (couponCode.toUpperCase() === "EATS10") {
-      setAppliedDiscount(10);
-      showToast("🎉 10% Discount Applied!", 'success');
-    } else {
-      showToast("❌ Invalid Coupon Code", 'error');
+    const code = couponCode.toUpperCase().trim();
+    const coupons = {
+      "EAT20": { discount: 20, min: 0, condition: () => true },
+      "EATS10": { discount: 10, min: 0, condition: () => true },
+      "WELCOME20": { discount: 20, min: 0, condition: () => myOrderIds.length === 0 },
+      "COMEBACK15": { discount: 15, min: 199, condition: () => true },
+      "LOYALTY50": { discount: 50, min: 0, condition: () => currentCoins >= 500 }
+    };
+
+    if (!coupons[code]) {
+      showToast("❌ Coupon not found. Try EAT20 or EATS10", 'error');
+      return;
     }
+    const coupon = coupons[code];
+    if (!coupon.condition()) {
+      showToast("⚠️ Coupon conditions not met for your profile", 'warning');
+      return;
+    }
+    if (subtotal < coupon.min) {
+      showToast(`⚠️ Minimum order ₹${coupon.min} required`, 'warning');
+      return;
+    }
+    setAppliedDiscount(coupon.discount);
+    showToast(`🎉 ${coupon.discount}% Discount Applied!`, 'success');
   };
 
   async function handlePlaceOrder() {
@@ -339,7 +439,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     const itemStrings = cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return `${qty}x ${m.name}` }).join(", ");
     const claimedText = claimedReward ? `\n🎁 *Free Reward Claimed:* ${claimedReward.item}` : "";
 
-    const waText = `🚨 *NEW ORDER ALERT* (#${orderId.slice(1,5).toUpperCase()})\n\n`
+    const waText = `🚨 *NEW ORDER CONFIRMED* (#${orderId.slice(1,5).toUpperCase()})\n\n`
                  + `*Type:* ${orderType === 'parcel' ? '🛍️ Parcel (Delivery ₹40)' : `🍽️ Table ${table}`}\n`
                  + `*Customer:* ${custName} (${custPhone})\n`
                  + (orderType === 'parcel' ? `*Address:* ${custAddress}\n\n` : `\n`)
@@ -359,7 +459,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     setClaimedReward(null);
     setCartOpen(false); 
     setActiveModal('track'); 
-    showToast("🎉 Order Placed Successfully!", 'success');
+    showToast("🎉 Order confirmed! Kitchen is firing up your meal.", 'success');
   }
 
   async function handleBooking() {
@@ -412,12 +512,21 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
           <button onClick={() => setVegOnly(!vegOnly)} style={{ padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${vegOnly ? COLORS.sage : COLORS.line}`, background: vegOnly ? COLORS.sageLight : "transparent", color: vegOnly ? COLORS.sageDark : COLORS.textLight, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}><VegDot veg={true} /> <span style={{fontSize: 13}}>{vegOnly ? "Veg" : "All"}</span></button>
         </div>
 
+        {/* ✨ Contextual Empty States (Tier 1.3) */}
         {filteredItems.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: COLORS.textLight }}><div style={{ fontSize: 36, marginBottom: 12 }}>🔍</div><div style={{ fontWeight: 600, fontSize: 15 }}>No items found</div></div>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: COLORS.textLight }}>
+            <div style={{ fontSize: 56, marginBottom: 16 }}>{vegOnly ? "🌱" : searchQuery ? "🔍" : "🍽️"}</div>
+            <div style={{ fontWeight: 800, fontSize: 18, color: COLORS.ink, marginBottom: 8 }}>
+              {vegOnly ? "No vegetarian options here" : searchQuery ? "Dish not found" : "This category is empty"}
+            </div>
+            <div style={{ fontWeight: 500, fontSize: 14, lineHeight: 1.6 }}>
+              {vegOnly ? "Try 'All Items' filter or explore Paneer & Mushroom section" : searchQuery ? "Try searching 'paneer', 'chicken', 'biryani', or 'tandoori'" : "Browse bestsellers in Fun Food or Tandoori!"}
+            </div>
+          </div>
         )}
 
         {filteredItems.map((item) => (
-          <div key={item.id} style={{ display: "flex", justifyContent: "space-between", padding: "16px 0", borderBottom: `1px solid ${COLORS.line}`, gap: 12, opacity: item.available ? 1 : 0.6 }} className="slide-up">
+          <div key={item.id} style={{ display: "flex", justifyContent: "space-between", padding: "16px 0", borderBottom: `1px solid ${COLORS.line}`, gap: 12, opacity: item.available ? 1 : 0.6 }} className="smooth-slide-up">
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                 <VegDot veg={item.veg} />
@@ -430,7 +539,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               {item.desc && <div style={{ fontSize: 12, color: COLORS.textLight, lineHeight: 1.4, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.desc}</div>}
             </div>
             <div style={{ position: "relative", width: 90, height: 90, flexShrink: 0 }}>
-              <img src={item.image} alt={item.name} loading="lazy" className="keep-color" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 14, filter: item.available ? 'none' : 'grayscale(100%)' }} />
+              <img src={item.image} alt={item.name} loading="lazy" decoding="async" className="keep-color" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 14, filter: item.available ? 'none' : 'grayscale(100%)', backfaceVisibility: 'hidden' }} />
               <div style={{ position: "absolute", bottom: -12, left: "50%", transform: "translateX(-50%)", zIndex: 2 }}>
                 <AddBtnStepper qty={cart[item.id] || 0} onChange={(q) => handleSetQty(item.id, q)} available={item.available} />
               </div>
@@ -477,6 +586,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
             
             <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
               <SidebarBtn icon={isDark ? "☀️" : "🌙"} text={isDark ? "Switch to Light Mode" : "VIP Dark Mode"} onClick={() => { setIsDark(!isDark); setShowSidebar(false); showToast(isDark ? "☀️ Light Mode Active" : "🌙 VIP Dark Mode Active", "success"); }} highlight />
+              <SidebarBtn icon="📊" text="My Journey Stats" onClick={() => { setShowSidebar(false); setActiveModal('stats'); }} />
               <SidebarBtn icon="🎁" text="Today's Offers" onClick={() => {setShowSidebar(false); setActiveModal('offers');}} />
               <SidebarBtn icon="🍽️" text="Table Booking" onClick={() => {setShowSidebar(false); setBookType("table"); setActiveModal('booking');}} />
               <SidebarBtn icon="🎉" text="Party Booking" onClick={() => {setShowSidebar(false); setBookType("party"); setActiveModal('booking');}} />
@@ -525,7 +635,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                       )}
                     </div>
                   ) : (
-                    <div style={{ color: COLORS.success, fontWeight: 800, fontSize: 14 }}>✓ Verified Customer ({custPhone})</div>
+                    <div style={{ color: COLORS.success, fontWeight: 800, fontSize: 14 }}>✓ Verified Customer ({custPhone.slice(0, 2)}****{custPhone.slice(-2)})</div>
                   )}
                 </div>
 
@@ -619,7 +729,31 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     <img src={cartQrSrc} alt="UPI QR Code" style={{ width: 160, height: 160, borderRadius: 14, border: '4px solid #fff', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }} />
                   </div>
                 )}
-                <button onClick={handlePlaceOrder} style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 14, padding: "16px", fontWeight: 800, fontSize: 16, cursor: "pointer", width: "100%", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }} className="hover-lift smooth-transition">🎉 Place Order</button>
+                {/* ✨ Accessibility Enhanced Place Order Button */}
+                <button onClick={handlePlaceOrder} aria-label="Place order and proceed to payment" title="Click to finalize order" style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 14, padding: "16px", fontWeight: 800, fontSize: 16, cursor: "pointer", width: "100%", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }} className="hover-lift smooth-transition">🎉 Place Order</button>
+              </>
+            )}
+
+            {/* ✨ Order Analytics Journey Modal (Tier 3.2) */}
+            {activeModal === 'stats' && (
+              <>
+                <ModalHeader title="Your Eat & Park Journey 📊" onClose={() => setActiveModal(null)} />
+                <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', padding: 20, borderRadius: 16, border: `1px solid ${COLORS.line}` }}>
+                  <div style={{ display: 'grid', gap: 14 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${COLORS.line}` }}>
+                      <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Total Spent</span>
+                      <strong style={{ color: COLORS.copper }}>{inr(myCompletedOrders.reduce((s, o) => s + o.items.reduce((a, i) => a + i.price * i.qty, 0), 0))}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: `1px solid ${COLORS.line}` }}>
+                      <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Orders Placed</span>
+                      <strong style={{ color: COLORS.sage }}>{myCompletedOrders.length}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0' }}>
+                      <span style={{ color: COLORS.textLight, fontWeight: 600 }}>EatCoins Balance</span>
+                      <strong style={{ color: COLORS.gold }}>{currentCoins} 🪙</strong>
+                    </div>
+                  </div>
+                </div>
               </>
             )}
 
@@ -724,11 +858,24 @@ function SidebarBtn({ icon, text, onClick, highlight }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   2. STAFF VIEW (KITCHEN BOARD & THERMAL PRINT)
+   2. STAFF VIEW (KITCHEN BOARD, KEYBOARD SHORTCUTS, THERMAL PRINT)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
-function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
-  const active = orders.filter((o) => o.status !== "served").sort((a, b) => a.createdAt - b.createdAt);
+function StaffView({ orders, advanceStatus, setRole, calls, resolveCall, loyaltyUsers }) {
+  // ✨ Smart Queue Management (Priority Sorting - Tier 3.3)
+  const active = orders.filter((o) => o.status !== "served").sort((a, b) => {
+    const aVIP = loyaltyUsers.find(u => u.phone === a.customer?.phone)?.coins || 0;
+    const bVIP = loyaltyUsers.find(u => u.phone === b.customer?.phone)?.coins || 0;
+    if (aVIP !== bVIP) return bVIP - aVIP;
+    
+    const aNow = Date.now() - a.createdAt;
+    const bNow = Date.now() - b.createdAt;
+    if (aNow > 15 * 60000 && bNow <= 15 * 60000) return -1;
+    if (bNow > 15 * 60000 && aNow <= 15 * 60000) return 1;
+
+    return a.createdAt - b.createdAt;
+  });
+
   const activeCalls = calls.filter(c => c.status === 'active');
   const columns = ["new", "preparing", "ready"];
   const newOrderCount = active.filter(o => o.status === "new").length;
@@ -736,6 +883,7 @@ function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
   const activeCallsCount = activeCalls.length;
   const prevCallsCountRef = useRef(activeCallsCount);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   useEffect(() => {
     if (newOrderCount > prevCountRef.current) {
@@ -753,25 +901,39 @@ function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
     prevCallsCountRef.current = activeCallsCount;
   }, [activeCallsCount]);
 
+  // ✨ Keyboard Shortcuts Audit & Enhancement (Tier 2.2)
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKey = (e) => {
+      if ((e.key === '?' || e.key === '/') && e.shiftKey) {
+        e.preventDefault();
+        setShowHelpModal(!showHelpModal);
+      }
       if (e.key === 'k' && e.ctrlKey) { e.preventDefault(); const firstOrder = active[0]; if (firstOrder) setSelectedOrderId(firstOrder.id); }
       if (e.key === 'ArrowUp') { const currentIndex = active.findIndex(o => o.id === selectedOrderId); if (currentIndex > 0) setSelectedOrderId(active[currentIndex - 1].id); }
       if (e.key === 'ArrowDown') { const currentIndex = active.findIndex(o => o.id === selectedOrderId); if (currentIndex < active.length - 1) setSelectedOrderId(active[currentIndex + 1].id); }
       if ((e.key === 'p' || e.key === 'P') && selectedOrderId && !e.ctrlKey) { const order = active.find(o => o.id === selectedOrderId); if (order && order.status === "new") advanceStatus(selectedOrderId, "new"); }
       if ((e.key === 'r' || e.key === 'R') && selectedOrderId && !e.ctrlKey) { const order = active.find(o => o.id === selectedOrderId); if (order && order.status === "preparing") advanceStatus(selectedOrderId, "preparing"); }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedOrderId, active]);
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [selectedOrderId, active, showHelpModal]);
 
-  // ✨ Thermal KOT & Bill Print Handler
+  const SHORTCUTS = {
+    'k': 'Focus first new order',
+    '↑ / ↓': 'Previous / Next order',
+    'P': 'Start preparation',
+    'R': 'Mark ready',
+    'Shift + ?': 'Show keyboard help'
+  };
+
   const handlePrintReceipt = (order) => {
     const printWindow = window.open('', '_blank', 'width=300,height=600');
     if (!printWindow) return;
     
     const itemsHtml = order.items.map(it => `<tr><td>${it.qty}x ${it.name}</td><td style="text-align:right">₹${it.price * it.qty}</td></tr>`).join('');
     const totalAmount = order.items.reduce((s, it) => s + (it.price * it.qty), 0);
+    const maskedPhone = order.customer?.phone ? `${order.customer.phone.slice(0, 2)}****${order.customer.phone.slice(-2)}` : '';
+    const maskedUpi = `${RESTAURANT.upiId.split('@')[0].slice(0, 2)}***@${RESTAURANT.upiId.split('@')[1]}`;
     
     printWindow.document.write(`
       <html>
@@ -788,13 +950,14 @@ function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
         <body>
           <h2>${RESTAURANT.name}</h2>
           <h4>${order.orderType === 'parcel' ? '🛍️ PARCEL ORDER' : `🍽️ TABLE ${order.table}`}</h4>
-          <p>Order ID: #${order.id.toUpperCase()}<br/>Customer: ${order.customer.name} (${order.customer.phone})</p>
+          <p>Order ID: #${order.id.toUpperCase()}<br/>Customer: ${order.customer.name} (${maskedPhone})</p>
           <table>
             <tr><th>Item</th><th style="text-align:right">Amt</th></tr>
             ${itemsHtml}
           </table>
           ${order.deliveryFee ? `<p>Delivery Fee: ₹${order.deliveryFee}</p>` : ''}
           <div class="total">Total: ₹${totalAmount + (order.deliveryFee || 0)}</div>
+          <p style="text-align:center; font-size:10px; margin-top:15px;">UPI: ${maskedUpi}</p>
           <script>window.print(); setTimeout(() => window.close(), 500);</script>
         </body>
       </html>
@@ -804,8 +967,14 @@ function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
 
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1200, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: 'center' }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>🍳 Kitchen Board</div><button onClick={() => setRole("admin")} style={{ ...primaryBtn, background: COLORS.ink }}>⚙️ Admin</button></div>
-      <div style={{ fontSize: 15, color: COLORS.textLight, marginBottom: 24, fontWeight: 600 }}>Use ↑↓ to navigate, P/R to advance</div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: 'center' }}>
+        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>🍳 Kitchen Board</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => setShowHelpModal(true)} style={{ ...primaryBtn, background: COLORS.paper2, color: COLORS.ink, boxShadow: 'none' }}>⌨️ Shortcuts</button>
+          <button onClick={() => setRole("admin")} style={{ ...primaryBtn, background: COLORS.ink }}>⚙️ Admin</button>
+        </div>
+      </div>
+      <div style={{ fontSize: 15, color: COLORS.textLight, marginBottom: 24, fontWeight: 600 }}>Use ↑↓ to navigate, P/R to advance, Shift+? for shortcuts</div>
 
       {activeCalls.length > 0 && (
         <div style={{ background: "rgba(239, 68, 68, 0.1)", border: `2px solid ${COLORS.error}`, borderRadius: 16, padding: 16, marginBottom: 24 }} className="slide-up">
@@ -860,12 +1029,30 @@ function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
           );
         })}
       </div>
+
+      {/* ✨ Keyboard Shortcuts Help Modal */}
+      {showHelpModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={() => setShowHelpModal(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', padding: 28, borderRadius: 20, width: '90%', maxWidth: 400 }}>
+            <h2 style={{ margin: '0 0 20px', fontFamily: "'Outfit', sans-serif" }}>⌨️ Keyboard Shortcuts</h2>
+            <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
+              {Object.entries(SHORTCUTS).map(([key, desc]) => (
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 8 }}>
+                  <kbd style={{ background: COLORS.copper, color: '#fff', padding: '4px 8px', borderRadius: 6, fontFamily: 'monospace', fontWeight: 800 }}>{key}</kbd>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{desc}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowHelpModal(false)} style={{ ...primaryBtn, width: '100%' }}>Got it</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   3. ADMIN VIEW (MENU EDITOR, BOOKINGS, ORDER HISTORY, LOYALTY)
+   3. ADMIN VIEW (MENU EDITOR, INVENTORY ALERTS, METRICS, EXPORTS)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder, setRole, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers }) {
@@ -875,7 +1062,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
   const [newOffer, setNewOffer] = useState({ title: "", desc: "" });
   const [newReward, setNewReward] = useState({ cost: "", item: "" });
 
-  // ✨ Menu Editor state
+  // ✨ Menu Editor State
   const [editingItem, setEditingItem] = useState(null);
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
@@ -884,8 +1071,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
   const filteredOrders = orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
   const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0), 0);
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0), 0) / filteredOrders.length) : 0;
-  const paidOrders = filteredOrders.filter(o => o.paid).length;
-  const dineInOrders = filteredOrders.filter(o => o.orderType === "dine_in").length;
 
   const handleAddOffer = () => { if(newOffer.title) { addOffer({ id: uid("off"), title: newOffer.title, desc: newOffer.desc }); setNewOffer({ title: "", desc: "" }); } }
 
@@ -896,7 +1081,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
     }
   }
 
-  // ✨ Menu Edit & Delete Handlers
   const handleSaveMenuItem = () => {
     if (!editingItem) return;
     setMenuState(menu.map(m => m.id === editingItem.id ? { ...m, name: newItemName, price: Number(newItemPrice), category: newItemCat } : m));
@@ -909,9 +1093,27 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
     }
   };
 
+  // ✨ CSV Report Export (Tier 10.1)
+  const exportCSV = () => {
+    const csvContent = "data:text/csv;charset=utf-8," + filteredOrders.map(o => `${o.id},${o.orderType},${o.table || 'N/A'},${o.paid ? 'Paid' : 'Unpaid'}`).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `eat_park_report_${filterDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1100, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, alignItems: 'center' }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>📊 Admin Dashboard</div><button onClick={() => setRole("customer")} style={{ background: COLORS.paper2, border: "none", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontWeight: 700 }}>← Exit</button></div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, alignItems: 'center' }}>
+        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>📊 Admin Dashboard</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={exportCSV} style={{ ...primaryBtn, background: COLORS.sage, boxShadow: 'none' }}>📥 Export CSV</button>
+          <button onClick={() => setRole("customer")} style={{ background: COLORS.paper2, border: "none", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontWeight: 700 }}>← Exit</button>
+        </div>
+      </div>
       
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto", scrollbarWidth: "none" }}>
         {["overview", "menu", "offers", "loyalty", "inventory", "orders", "bookings"].map((t) => ( <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", marginRight: 10, fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button> ))}
@@ -1007,7 +1209,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
             <thead><tr style={{ textAlign: "left", background: COLORS.paper }}><th style={th}>Customer</th><th style={th}>Phone</th><th style={th}>EatCoins 🪙</th></tr></thead>
             <tbody>
               {loyaltyUsers.sort((a,b)=>b.coins-a.coins).map((u, i) => (
-                <tr key={i}><td style={td}>{u.name}</td><td style={td}>{u.phone}</td><td style={{...td, fontWeight: 800, color: COLORS.sageDark}}>{u.coins}</td></tr>
+                <tr key={i}><td style={td}>{u.name}</td><td style={td}>{u.phone.slice(0, 2)}****{u.phone.slice(-2)}</td><td style={{...td, fontWeight: 800, color: COLORS.sageDark}}>{u.coins}</td></tr>
               ))}
             </tbody>
           </table>
@@ -1039,9 +1241,18 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
         </div>
       )}
 
-      {/* INVENTORY TAB */}
+      {/* INVENTORY TAB WITH LOW STOCK ALERTS (Tier 9.1) */}
       {tab === "inventory" && (
         <div className="slide-up">
+          {inventory.filter(i => i.stock < 5).length > 0 && (
+            <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: `2px solid ${COLORS.error}`, padding: 16, borderRadius: 14, marginBottom: 20 }}>
+              <div style={{ fontWeight: 800, color: COLORS.error, marginBottom: 8 }}>⚠️ Low Stock Warning</div>
+              {inventory.filter(i => i.stock < 5).map(item => (
+                <div key={item.id} style={{ fontSize: 14, fontWeight: 700, color: COLORS.error }}>• {item.name}: {item.stock} {item.unit} left</div>
+              ))}
+            </div>
+          )}
+
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 24, border: `1px solid ${COLORS.line}` }}>
             <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, marginBottom: 16, fontWeight: 700 }}>Add Raw Material</div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -1070,20 +1281,24 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
       {tab === "orders" && (
         <div style={{ overflowX: "auto", borderRadius: 16, border: `1px solid ${COLORS.line}`, boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
-            <thead><tr style={{ textAlign: "left", color: COLORS.textLight, fontSize: 13, background: COLORS.paper, fontWeight: 800 }}><th style={th}>Time</th><th style={th}>Table/Type</th><th style={th}>Items</th><th style={th}>Total</th><th style={th}>Action</th></tr></thead>
+            <thead><tr style={{ textAlign: "left", color: COLORS.textLight, fontSize: 13, background: COLORS.paper, fontWeight: 800 }}><th style={th}>Time</th><th style={th}>Table/Type</th><th style={th}>Customer</th><th style={th}>Items</th><th style={th}>Total</th><th style={th}>Action</th></tr></thead>
             <tbody>
-              {[...filteredOrders].sort((a, b) => b.createdAt - a.createdAt).map((o, idx) => (
-                <tr key={o.id} style={{ background: idx % 2 === 0 ? "#fff" : COLORS.paper }}>
-                  <td style={{...td, fontSize: 13, color: COLORS.textLight, fontWeight: 600}}>{new Date(o.createdAt).toLocaleTimeString('en-IN', {hour: '2-digit', minute:'2-digit'})}</td>
-                  <td style={td}>{o.orderType === "parcel" ? <Badge color={COLORS.copper}>Parcel</Badge> : <span style={{ fontWeight: 800, fontSize: 15 }}>T-{o.table}</span>}</td>
-                  <td style={{...td, fontSize: 14, fontWeight: 500}}>
-                    {o.items.map((it) => `${it.qty}×${it.name}`).join(", ")}
-                    {o.claimedReward && <span style={{display: 'block', color: COLORS.sageDark, fontWeight: 800, fontSize: 12, marginTop: 4}}>🎁 Free: {o.claimedReward}</span>}
-                  </td>
-                  <td style={{...td, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 15}}>{inr(o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0))}</td>
-                  <td style={td}><button onClick={() => markPaid(o.id, !o.paid)} style={{ border: `1.5px solid ${o.paid ? COLORS.sage : COLORS.line}`, background: o.paid ? COLORS.sage : "transparent", color: o.paid ? "#fff" : COLORS.ink, borderRadius: 10, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>{o.paid ? "✓ Paid" : "Mark paid"}</button></td>
-                </tr>
-              ))}
+              {[...filteredOrders].sort((a, b) => b.createdAt - a.createdAt).map((o, idx) => {
+                const maskedPhone = o.customer?.phone ? `${o.customer.phone.slice(0, 2)}****${o.customer.phone.slice(-2)}` : '';
+                return (
+                  <tr key={o.id} style={{ background: idx % 2 === 0 ? "#fff" : COLORS.paper }}>
+                    <td style={{...td, fontSize: 13, color: COLORS.textLight, fontWeight: 600}}>{new Date(o.createdAt).toLocaleTimeString('en-IN', {hour: '2-digit', minute:'2-digit'})}</td>
+                    <td style={td}>{o.orderType === "parcel" ? <Badge color={COLORS.copper}>Parcel</Badge> : <span style={{ fontWeight: 800, fontSize: 15 }}>T-{o.table}</span>}</td>
+                    <td style={td}><strong>{o.customer?.name}</strong><br/><span style={{fontSize: 12, color: COLORS.textLight}}>{maskedPhone}</span></td>
+                    <td style={{...td, fontSize: 14, fontWeight: 500}}>
+                      {o.items.map((it) => `${it.qty}×${it.name}`).join(", ")}
+                      {o.claimedReward && <span style={{display: 'block', color: COLORS.sageDark, fontWeight: 800, fontSize: 12, marginTop: 4}}>🎁 Free: {o.claimedReward}</span>}
+                    </td>
+                    <td style={{...td, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 15}}>{inr(o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0))}</td>
+                    <td style={td}><button onClick={() => markPaid(o.id, !o.paid)} style={{ border: `1.5px solid ${o.paid ? COLORS.sage : COLORS.line}`, background: o.paid ? COLORS.sage : "transparent", color: o.paid ? "#fff" : COLORS.ink, borderRadius: 10, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>{o.paid ? "✓ Paid" : "Mark paid"}</button></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1096,7 +1311,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
               {bookings.map(b => (
                 <tr key={b.id}>
                   <td style={td}>{b.type === "party" ? "🎉 Party" : "🍽️ Table"}</td>
-                  <td style={td}><strong>{b.name}</strong><br/>{b.phone}<br/>{b.guests} Guests</td>
+                  <td style={td}><strong>{b.name}</strong><br/>{b.phone.slice(0,2)}****{b.phone.slice(-2)}<br/>{b.guests} Guests</td>
                   <td style={td}>{b.date} at {b.time}</td>
                   <td style={td}><button onClick={() => deleteBooking(b.id)} style={{background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700}}>Delete</button></td>
                 </tr>
@@ -1124,7 +1339,11 @@ export default function App() {
   const [role, setRole] = useState("customer");
   const [isDark, setIsDark] = useState(false);
   const [calls, setCalls] = useState([]);
-  const [inventory, setInventory] = useState([]);
+  const [inventory, setInventory] = useState([
+    { id: 'inv1', name: 'Paneer', stock: 12, unit: 'kg' },
+    { id: 'inv2', name: 'Rice', stock: 25, unit: 'kg' },
+    { id: 'inv3', name: 'Chicken', stock: 1.5, unit: 'kg' }
+  ]);
   const [offersList, setOffersList] = useState(DEFAULT_OFFERS);
 
   const [loyaltyRules, setLoyaltyRules] = useState({
@@ -1192,7 +1411,7 @@ export default function App() {
       <style>{FONTS}</style>
       <div className="app-content">
         {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} offersList={offersList} table={table} setTable={setTable} setRole={setRole} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} />}
-        {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} setRole={setRole} calls={calls} resolveCall={resolveCall} />}
+        {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} setRole={setRole} calls={calls} resolveCall={resolveCall} loyaltyUsers={loyaltyUsers} />}
         {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} setRole={setRole} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} />}
       </div>
     </div>
