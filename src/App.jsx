@@ -3,7 +3,7 @@ import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — V12.0 (THE ULTIMATE BULLETPROOF MASTER)
+   🍽️ EAT & PARK RESTAURANT — V13.0 (BLACK SCREEN FIX & STABLE BUILD)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
@@ -411,10 +411,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
                      <input type="number" placeholder="Enter 4-Digit OTP" value={otpInput} onChange={e=>setOtpInput(e.target.value)} style={{...inputStyle, marginBottom: 16, letterSpacing: 8, fontSize: 24, textAlign: 'center'}} />
                      <button onClick={() => { 
                        if(otpInput === '1234') { 
-                         setIsLoggedIn(true); 
-                         setActiveModal(null); 
                          setShowOtp(false);
                          setOtpInput("");
+                         setIsLoggedIn(true); 
+                         setActiveModal(null); 
                          showToast("Login Successful!", "success"); 
                        } else { 
                          showToast("Invalid OTP (Enter 1234)", "error"); 
@@ -684,7 +684,7 @@ function AdminView({ menu, setMenu, bookings, orders, setRole, deleteOrder, offe
                   <td style={td}>
                     <div style={{display: 'flex', gap: 6}}>
                       <button onClick={() => handlePrint(o, "bill")} style={{background: COLORS.ink, color: '#fff', border: 'none', padding: '6px 10px', borderRadius: 10, fontWeight: 700}}>🖨️ Bill</button>
-                      <button onClick={() => deleteOrder(o.id)} style={{background: 'transparent', border: `1.5px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 10px', borderRadius: 10, fontWeight: 700}}>🗑️ Del</button>
+                      <button onClick={() => deleteOrder(o.id)} style={{background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 10px', borderRadius: 10, fontWeight: 700}}>🗑️ Del</button>
                     </div>
                   </td>
                 </tr>
