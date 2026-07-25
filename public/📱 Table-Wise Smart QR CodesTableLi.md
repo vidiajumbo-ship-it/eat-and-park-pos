@@ -1,0 +1,2 @@
+* 📱 Table-Wise Smart QR CodesTableLink (Customer Scan Karega Toh Ye Khulega)QR Code (Save Kar Lijiye)Table 1eatndpark.netlify.app/?table=1Table 2eatndpark.netlify.app/?table=2Table 3eatndpark.netlify.app/?table=3Table 4eatndpark.netlify.app/?table=4Table 5eatndpark.netlify.app/?table=5Table 6eatndpark.netlify.app/?table=6Table 7eatndpark.netlify.app/?table=7Table 8eatndpark.netlify.app/?table=8Table 9eatndpark.netlify.app/?table=9Table 10eatndpark.netlify.app/?table=10Table 11eatndpark.netlify.app/?table=11Table 12eatndpark.netlify.app/?table=12
+
