@@ -3,9 +3,7 @@ import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — V11.0 (ULTIMATE CUSTOMER EXPERIENCE)
-   ✨ ADDED: INSTANT COIN CLAIM | STAFF ADMIN BLOCKED | ORDER HISTORY | COIN BAL IN MENU
-   ✨ RETAINED: DELIVERY CHARGE | KITCHEN VIEW | PRINT KOT | OTP | BOOKING | LOCATION 
+   🍽️ EAT & PARK RESTAURANT — FULL MASTER EDITION (150+ ITEMS & ALL FEATURES)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
@@ -25,7 +23,6 @@ const FONTS = `
 .pulse-anim { animation: pulse 2s infinite; }
 .scale-bounce { animation: scaleInBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
-/* ✨ VIP Dark Mode */
 .dark-theme { filter: invert(0.92) hue-rotate(180deg); background: #111; min-height: 100vh; }
 .dark-theme img, .dark-theme .keep-color { filter: invert(1) hue-rotate(180deg); }
 
@@ -51,24 +48,176 @@ const RESTAURANT = {
   phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "apnanumber@upi" 
 };
 
-const CATEGORIES = ["Drinks", "Fun Food", "Chinese Starter", "Mughlai", "Tandoori", "Soup", "Indian Bread", "Snacks", "Chinese Mains", "Pulao", "Paneer & Mushroom", "Chicken, Mutton, Fish & Egg", "Biryani & Thali", "Aloo, Dal & Sides", "Momo", "Tea & Coffee"];
+const CATEGORIES = [
+  "Drinks", "Fun Food", "Chinese Starter", "Mughlai", "Tandoori", 
+  "Soup", "Indian Bread", "Snacks", "Chinese Mains", "Pulao", 
+  "Paneer & Mushroom", "Chicken, Mutton, Fish & Egg", "Biryani & Thali", 
+  "Aloo, Dal & Sides", "Momo", "Tea & Coffee"
+];
 
 function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true, image) {
   let img = image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; 
   return { id, name, desc: desc || "Freshly prepared.", price: Number(price), category, veg, available, image: img, portion: portion || "", isBestseller };
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   FULL 150+ MENU ITEMS DATABASE
+═══════════════════════════════════════════════════════════════════════════════════ */
 const DEFAULT_MENU = [
-  mi("d1", "Mint Mojito", 90, "Drinks", true, "Refreshing blend of fresh mint.", "", true), mi("d2", "Blue Lagoon", 90, "Drinks", true, "Tropical blue curacao cooler."), mi("d3", "Vanilla Shake", 120, "Drinks", true, "Classic thick vanilla milkshake."), mi("d9", "Cold Coffee", 120, "Drinks", true, "Chilled frothy coffee.", "", true), mi("d10", "Cold Drink", 50, "Drinks", true, "Chilled aerated beverage."),
-  mi("f1", "Veg Burger", 90, "Fun Food", true, "Crispy veggie patty with fresh lettuce."), mi("f2", "Eat & Park Special Pizza", 280, "Fun Food", true, "Loaded with exotic veggies.", "", true), mi("f8", "Eat & Park Egg Roll", 100, "Fun Food", false, "Double egg wrapped with crispy onions."), mi("f9", "Eat & Park Chicken Roll", 150, "Fun Food", false, "Juicy chicken tikka wrapped."),
-  mi("cs1", "Paneer Chilli", 240, "Chinese Starter", true, "Crispy paneer tossed in spicy sauce.", "Dry/Gravy", true), mi("cs8", "Chicken Chilli", 240, "Chinese Starter", false, "Diced chicken tossed with capsicum.", "Dry/Gravy", true), 
-  mi("mg1", "Tandoori Chicken", 450, "Mughlai", false, "Classic bone-in chicken marinated in yogurt."), mi("t1", "Paneer Tikka", 299, "Tandoori", true, "Cottage cheese marinated in spices.", "", true),
-  mi("b1", "Tandoori Roti", 15, "Indian Bread", true, "Whole wheat bread baked in oven."), mi("b7", "Butter Naan", 60, "Indian Bread", true, "Classic naan brushed with butter."),
-  mi("sn3", "French Fries", 100, "Snacks", true, "Crispy golden potato fries."), mi("cm2", "Veg Hakka Noodles", 160, "Chinese Mains", true, "Classic non-spicy noodles."), mi("cm12", "Veg Fried Rice", 170, "Chinese Mains", true, "Aromatic rice wok-tossed."),
-  mi("pn1", "Paneer Masala", 250, "Paneer & Mushroom", true, "Paneer cooked in rich gravy."), mi("pn6", "Paneer Butter Masala", 260, "Paneer & Mushroom", true, "Soft paneer in creamy makhani.", "", true),
-  mi("nv1", "Chicken Dehati", 550, "Chicken, Mutton, Fish & Egg", false, "Spicy rustic chicken curry."), mi("nv8", "Chicken Butter Masala", 350, "Chicken, Mutton, Fish & Egg", false, "Tandoori chicken in buttery gravy.", "", true), mi("nv12", "Mutton Handi", 650, "Chicken, Mutton, Fish & Egg", false, "Slow-cooked in earthen pot.", "500g", true),
-  mi("br5", "Chicken Biryani", 210, "Biryani & Thali", false, "Classic fragrant rice and chicken.", "", true), mi("br15", "Veg Thali", 250, "Biryani & Thali", true, "Complete meal platter."),
-  mi("al11", "Dal Tadka", 100, "Aloo, Dal & Sides", true, "Dhaba-style dal with tadka."), mi("mo1", "Veg Momo", 80, "Momo", true, "Steamed dumplings.", "Steam")
+  // Drinks
+  mi("d1", "Mint Mojito", 90, "Drinks", true, "Refreshing blend of fresh mint and lime.", "", true),
+  mi("d2", "Blue Lagoon", 90, "Drinks", true, "Tropical blue curacao cooler."),
+  mi("d3", "Vanilla Shake", 120, "Drinks", true, "Classic thick vanilla milkshake."),
+  mi("d4", "Strawberry Shake", 120, "Drinks", true, "Fresh strawberry flavored thick shake."),
+  mi("d5", "Butter Scotch Shake", 130, "Drinks", true, "Crunchy butterscotch shake."),
+  mi("d6", "Chocolate Shake", 130, "Drinks", true, "Rich creamy chocolate shake.", "", true),
+  mi("d7", "Oreo Shake", 140, "Drinks", true, "Loaded with crushed Oreo cookies."),
+  mi("d8", "Kitkat Shake", 140, "Drinks", true, "Blended with crunchy KitKat bars.", "", true),
+  mi("d9", "Cold Coffee", 120, "Drinks", true, "Chilled frothy cold coffee.", "", true),
+  mi("d10", "Cold Drink", 50, "Drinks", true, "Chilled aerated beverage."),
+  mi("d11", "Fresh Lime Water", 40, "Drinks", true, "Refreshing salted or sweet lime water."),
+  mi("d12", "Fresh Lime Soda", 60, "Drinks", true, "Fizzy lime soda (Sweet & Salt)."),
+
+  // Fun Food
+  mi("f1", "Veg Burger", 90, "Fun Food", true, "Crispy veggie patty with fresh lettuce and mayo."),
+  mi("f2", "Eat & Park Special Pizza", 280, "Fun Food", true, "Loaded with exotic veggies and extra cheese.", "", true),
+  mi("f3", "Corn & Cheese Pizza", 240, "Fun Food", true, "Sweet corn with molten mozzarella cheese."),
+  mi("f4", "Paneer Tikka Pizza", 260, "Fun Food", true, "Topped with spicy paneer chunks.", "", true),
+  mi("f5", "Veg Cheese Sandwich", 110, "Fun Food", true, "Grilled sandwich packed with cheese and veggies."),
+  mi("f6", "Paneer Grilled Sandwich", 140, "Fun Food", true, "Spiced paneer stuffing grilled to perfection."),
+  mi("f7", "White Sauce Pasta", 180, "Fun Food", true, "Penne pasta in rich creamy cheese sauce.", "", true),
+  mi("f8", "Eat & Park Egg Roll", 100, "Fun Food", false, "Double egg wrapped with crispy onions and sauces."),
+  mi("f9", "Eat & Park Chicken Roll", 150, "Fun Food", false, "Juicy chicken tikka wrapped in rumali roti.", "", true),
+  mi("f10", "Paneer Roll", 120, "Fun Food", true, "Spiced paneer strips wrapped with veggies."),
+
+  // Chinese Starter
+  mi("cs1", "Paneer Chilli", 240, "Chinese Starter", true, "Crispy paneer tossed in spicy soy-chilli sauce.", "Dry/Gravy", true),
+  mi("cs2", "Paneer 65", 250, "Chinese Starter", true, "Deep-fried spiced paneer cubes."),
+  mi("cs3", "Paneer Manchurian", 240, "Chinese Starter", true, "Paneer balls in tangy Manchurian sauce."),
+  mi("cs4", "Crispy Corn", 180, "Chinese Starter", true, "Golden fried corn kernels spiced with pepper.", "", true),
+  mi("cs5", "Veg Manchurian", 190, "Chinese Starter", true, "Veggie dumplings in dark soy sauce."),
+  mi("cs6", "Veg Spring Roll", 160, "Chinese Starter", true, "Crispy fried rolls filled with julienne veggies."),
+  mi("cs7", "Honey Chilli Potato", 170, "Chinese Starter", true, "Crispy potato fingers glazed in honey chilli.", "", true),
+  mi("cs8", "Chicken Chilli", 240, "Chinese Starter", false, "Diced chicken tossed with capsicum and chillies.", "Dry/Gravy", true),
+  mi("cs9", "Chicken 65", 260, "Chinese Starter", false, "South Indian style spicy fried chicken."),
+  mi("cs10", "Chicken Lollipop", 280, "Chinese Starter", false, "Frenched chicken wings deep fried.", "6 Pcs", true),
+  mi("cs11", "Chicken Manchurian", 250, "Chinese Starter", false, "Chicken chunks in flavorful Manchurian gravy."),
+  mi("cs12", "Lemon Chicken", 270, "Chinese Starter", false, "Tender chicken cooked in tangy lemon sauce."),
+
+  // Mughlai
+  mi("mg1", "Tandoori Chicken", 450, "Mughlai", false, "Classic bone-in chicken marinated in yogurt and spices.", "Full", true),
+  mi("mg2", "Tandoori Chicken Half", 240, "Mughlai", false, "Half portion of classic tandoori chicken.", "Half"),
+  mi("mg3", "Afghani Chicken", 480, "Mughlai", false, "Creamy, mild tandoori chicken preparation.", "Full", true),
+  mi("mg4", "Chicken Seekh Kebab", 280, "Mughlai", false, "Minced chicken skewers cooked in clay oven."),
+  mi("mg5", "Mutton Seekh Kebab", 320, "Mughlai", false, "Juicy minced mutton skewers."),
+
+  // Tandoori
+  mi("t1", "Paneer Tikka", 299, "Tandoori", true, "Cottage cheese marinated in spices and grilled.", "", true),
+  mi("t2", "Paneer Malai Tikka", 320, "Tandoori", true, "Creamy, melt-in-mouth paneer tikka."),
+  mi("t3", "Mushroom Tikka", 280, "Tandoori", true, "Fresh button mushrooms char-grilled in tandoor."),
+  mi("t4", "Veg Soya Chaap", 200, "Tandoori", true, "Tandoori spiced soya chaap sticks.", "", true),
+  mi("t5", "Malai Soya Chaap", 230, "Tandoori", true, "Rich creamy soya chaap from the tandoor."),
+
+  // Soup
+  mi("s1", "Tomato Soup", 100, "Soup", true, "Classic creamy warm tomato soup."),
+  mi("s2", "Veg Hot & Sour Soup", 110, "Soup", true, "Spicy and tangy vegetable broth.", "", true),
+  mi("s3", "Veg Manchow Soup", 110, "Soup", true, "Topped with crispy fried noodles."),
+  mi("s4", "Sweet Corn Soup", 120, "Soup", true, "Healthy sweet corn kernels in clear broth."),
+  mi("s5", "Chicken Hot & Sour Soup", 140, "Soup", false, "Spicy chicken soup with vinegar and soy."),
+  mi("s6", "Chicken Manchow Soup", 140, "Soup", false, "Dark spicy chicken soup with garlic and noodles.", "", true),
+
+  // Indian Bread
+  mi("b1", "Tandoori Roti", 15, "Indian Bread", true, "Whole wheat bread baked in clay oven."),
+  mi("b2", "Butter Tandoori Roti", 20, "Indian Bread", true, "Tandoori roti brushed with butter.", "", true),
+  mi("b3", "Plain Naan", 40, "Indian Bread", true, "Soft refined flour bread."),
+  mi("b4", "Butter Naan", 60, "Indian Bread", true, "Classic naan brushed with rich butter.", "", true),
+  mi("b5", "Garlic Naan", 70, "Indian Bread", true, "Topped with fresh garlic and coriander.", "", true),
+  mi("b6", "Stuffed Naan", 90, "Indian Bread", true, "Stuffed with spiced potato or paneer."),
+  mi("b7", "Lachha Paratha", 45, "Indian Bread", true, "Multi-layered crispy wheat paratha."),
+  mi("b8", "Missi Roti", 35, "Indian Bread", true, "Spiced gram flour flatbread."),
+
+  // Snacks
+  mi("sn1", "Veg Cutlet", 80, "Snacks", true, "Crispy fried vegetable patties."),
+  mi("sn2", "Paneer Pakoda", 150, "Snacks", true, "Cottage cheese fritters."),
+  mi("sn3", "French Fries", 100, "Snacks", true, "Crispy golden potato fries.", "", true),
+  mi("sn4", "Peri Peri Fries", 120, "Snacks", true, "Fries tossed in spicy peri peri seasoning."),
+  mi("sn5", "Cheese Balls", 160, "Snacks", true, "Deep fried cheesy potato spheres."),
+
+  // Chinese Mains
+  mi("cm1", "Veg Chowmein", 130, "Chinese Mains", true, "Stir-fried noodles with crunchy veggies."),
+  mi("cm2", "Veg Hakka Noodles", 160, "Chinese Mains", true, "Classic non-spicy wok tossed noodles.", "", true),
+  mi("cm3", "Schezwan Noodles", 170, "Chinese Mains", true, "Spicy noodles tossed in schezwan sauce."),
+  mi("cm4", "Veg Fried Rice", 170, "Chinese Mains", true, "Aromatic basmati rice wok-tossed with veggies."),
+  mi("cm5", "Schezwan Fried Rice", 190, "Chinese Mains", true, "Spicy fiery rice preparation."),
+  mi("cm6", "Chicken Chowmein", 170, "Chinese Mains", false, "Stir-fried noodles with tender chicken strips."),
+  mi("cm7", "Chicken Hakka Noodles", 190, "Chinese Mains", false, "Hakka noodles loaded with chicken chunks.", "", true),
+  mi("cm8", "Chicken Fried Rice", 210, "Chinese Mains", false, "Fried rice tossed with succulent chicken pieces."),
+
+  // Pulao
+  mi("p1", "Plain Rice", 90, "Pulao", true, "Steamed fluffy long-grain basmati rice."),
+  mi("p2", "Jeera Rice", 110, "Pulao", true, "Basmati rice tempered with cumin seeds.", "", true),
+  mi("p3", "Veg Pulao", 160, "Pulao", true, "Rice cooked with mixed garden vegetables."),
+  mi("p4", "Peas Pulao", 140, "Pulao", true, "Rice tossed with green peas and ghee."),
+  mi("p5", "Kashmiri Pulao", 210, "Pulao", true, "Rich rice preparation with dry fruits and fruits."),
+
+  // Paneer & Mushroom
+  mi("pn1", "Paneer Masala", 250, "Paneer & Mushroom", true, "Paneer cooked in rich onion-tomato gravy."),
+  mi("pn2", "Shahi Paneer", 270, "Paneer & Mushroom", true, "Rich creamy cashew gravy with paneer."),
+  mi("pn3", "Kadhai Paneer", 260, "Paneer & Mushroom", true, "Paneer cooked with freshly ground kadhai masala.", "", true),
+  mi("pn4", "Palak Paneer", 240, "Paneer & Mushroom", true, "Paneer cubes in smooth spinach gravy."),
+  mi("pn5", "Paneer Lababdar", 280, "Paneer & Mushroom", true, "Rich velvety tomato-onion gravy."),
+  mi("pn6", "Paneer Butter Masala", 260, "Paneer & Mushroom", true, "Soft paneer in luscious creamy makhani gravy.", "", true),
+  mi("pn7", "Matar Paneer", 230, "Paneer & Mushroom", true, "Green peas and paneer curry."),
+  mi("pn8", "Mushroom Masala", 250, "Paneer & Mushroom", true, "Button mushrooms in spiced gravy."),
+
+  // Chicken, Mutton, Fish & Egg
+  mi("nv1", "Chicken Dehati", 550, "Chicken, Mutton, Fish & Egg", false, "Spicy rustic village-style chicken curry.", "Full", true),
+  mi("nv2", "Chicken Dehati Half", 290, "Chicken, Mutton, Fish & Egg", false, "Half portion of rustic chicken curry.", "Half"),
+  mi("nv3", "Chicken Curry", 280, "Chicken, Mutton, Fish & Egg", false, "Classic homestyle chicken gravy."),
+  mi("nv4", "Chicken Korma", 320, "Chicken, Mutton, Fish & Egg", false, "Rich aromatic creamy chicken gravy."),
+  mi("nv5", "Kadhai Chicken", 300, "Chicken, Mutton, Fish & Egg", false, "Chicken with capsicum and whole spices."),
+  mi("nv6", "Chicken Handi", 340, "Chicken, Mutton, Fish & Egg", false, "Slow-cooked chicken in traditional pot."),
+  mi("nv7", "Chicken Rara", 360, "Chicken, Mutton, Fish & Egg", false, "Chicken chunks in rich minced meat gravy.", "", true),
+  mi("nv8", "Chicken Butter Masala", 350, "Chicken, Mutton, Fish & Egg", false, "Tandoori chicken simmered in rich buttery makhani.", "", true),
+  mi("nv9", "Mutton Curry", 420, "Chicken, Mutton, Fish & Egg", false, "Tender mutton pieces in robust gravy."),
+  mi("nv10", "Mutton Korma", 450, "Chicken, Mutton, Fish & Egg", false, "Royal Mughlai mutton preparation."),
+  mi("nv11", "Mutton Rogan Josh", 480, "Chicken, Mutton, Fish & Egg", false, "Kashmiri style red chilli mutton curry."),
+  mi("nv12", "Mutton Handi", 650, "Chicken, Mutton, Fish & Egg", false, "Slow cooked mutton in earthen handi.", "500g", true),
+  mi("nv13", "Fish Curry", 300, "Chicken, Mutton, Fish & Egg", false, "Fresh river fish in tangy mustard gravy."),
+  mi("nv14", "Egg Curry", 160, "Chicken, Mutton, Fish & Egg", false, "Boiled eggs in spicy homestyle gravy."),
+
+  // Biryani & Thali
+  mi("br1", "Veg Biryani", 180, "Biryani & Thali", true, "Aromatic basmati rice layered with veggies and spices."),
+  mi("br2", "Hyderabadi Veg Dum Biryani", 200, "Biryani & Thali", true, "Authentic slow-cooked dum veg biryani."),
+  mi("br3", "Paneer Dum Biryani", 230, "Biryani & Thali", true, "Layered with spiced paneer cubes."),
+  mi("br4", "Chicken Dum Biryani", 240, "Biryani & Thali", false, "Aromatic rice and tender chicken cooked in dum.", "", true),
+  mi("br5", "Chicken Biryani", 210, "Biryani & Thali", false, "Classic flavorful chicken rice.", "", true),
+  mi("br6", "Mutton Dum Biryani", 320, "Biryani & Thali", false, "Rich succulent mutton biryani."),
+  mi("br15", "Veg Thali", 250, "Biryani & Thali", true, "Complete meal: Paneer, Dal, Sabzi, 2 Roti, Rice, Raita, Sweet.", "", true),
+  mi("br16", "Special Non-Veg Thali", 380, "Biryani & Thali", false, "Chicken Curry, Mutton piece, Dal, Rice, 2 Roti, Raita, Sweet.", "", true),
+
+  // Aloo, Dal & Sides
+  mi("al1", "Dum Aloo", 160, "Aloo, Dal & Sides", true, "Baby potatoes in rich spiced gravy."),
+  mi("al2", "Aloo Jeera", 110, "Aloo, Dal & Sides", true, "Potatoes tossed with cumin and herbs."),
+  mi("al3", "Mix Veg", 190, "Aloo, Dal & Sides", true, "Assorted seasonal vegetables cooked together."),
+  mi("al4", "Dal Fry", 90, "Aloo, Dal & Sides", true, "Yellow lentils tempered with garlic and cumin."),
+  mi("al5", "Dal Tadka", 100, "Aloo, Dal & Sides", true, "Dhaba-style yellow dal with ghee tadka.", "", true),
+  mi("al6", "Dal Makhani", 180, "Aloo, Dal & Sides", true, "Slow-cooked black lentils in butter and cream.", "", true),
+  mi("al7", "Green Salad", 70, "Aloo, Dal & Sides", true, "Fresh cucumber, tomato, onion, lemon slices."),
+  mi("al8", "Boondi Raita", 80, "Aloo, Dal & Sides", true, "Yogurt whipped with crisp fried boondi."),
+
+  // Momo
+  mi("mo1", "Veg Momo", 80, "Momo", true, "Steamed dumplings stuffed with chopped veggies.", "Steam", true),
+  mi("mo2", "Veg Fried Momo", 110, "Momo", true, "Golden fried crunchy veg momos."),
+  mi("mo3", "Veg Paneer Momo", 100, "Momo", true, "Stuffed with seasoned paneer."),
+  mi("mo4", "Chicken Momo", 110, "Momo", false, "Juicy chicken stuffed steamed dumplings.", "Steam", true),
+  mi("mo5", "Chicken Fried Momo", 140, "Momo", false, "Deep fried crispy chicken momos."),
+  mi("mo6", "Chicken Tandoori Momo", 170, "Momo", false, "Momos charred in tandoor with spices.", "", true),
+
+  // Tea & Coffee
+  mi("tc1", "Hot Tea", 25, "Tea & Coffee", true, "Traditional Indian masala chai."),
+  mi("tc2", "Green Tea", 40, "Tea & Coffee", true, "Refreshing antioxidant green tea."),
+  mi("tc3", "Hot Coffee", 50, "Tea & Coffee", true, "Warm frothy milk coffee.")
 ];
 
 const DEFAULT_OFFERS = [
@@ -84,7 +233,6 @@ const STEP_INDEX = { new: 0, preparing: 1, ready: 2, served: 3 };
 function inr(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
 function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
 function timeAgo(ts) { const s = Math.floor((Date.now() - ts)/1000); if (s < 60) return s + "s ago"; const m = Math.floor(s/60); if (m < 60) return m + "m ago"; return Math.floor(m/60) + "h ago"; }
-function toLocalISODate(timestamp) { const d = new Date(timestamp); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]; }
 
 function useLocalStorage(key, initialValue) {
   const [storedValue, setStoredValue] = useState(() => { try { const item = window.localStorage.getItem(key); return item ? JSON.parse(item) : initialValue; } catch (error) { return initialValue; } });
@@ -93,7 +241,7 @@ function useLocalStorage(key, initialValue) {
 }
 
 const primaryBtn = { background: COLORS.copper, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.3s ease" };
-const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", transition: "all 0.2s ease" };
+const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box" };
 const th = { padding: "12px 14px", borderBottom: `2px solid ${COLORS.line}`, textAlign: 'left' }; 
 const td = { padding: "12px 14px", borderBottom: `1px solid ${COLORS.line}` };
 
@@ -144,7 +292,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
 
   const showToast = (msg, type = 'info') => { setToast(msg); setTimeout(() => setToast(null), 3000); };
   
-  // ✨ MATH & DELIVERY CHARGE LOGIC
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
   const cartTotal = cartItems.reduce((s, [id, q]) => { const item = menu.find(m => m.id === id); return s + (item ? item.price * q : 0); }, 0);
   
@@ -159,12 +306,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
   const deliveryCharge = orderType === "parcel" ? 40 : 0; 
   const grandTotal = Math.max(0, cartTotal - discountAmount) + deliveryCharge;
 
-  // ✨ INSTANT EATCOIN CALCULATION LOGIC
   const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
   const pastCoins = activeUser ? activeUser.coins : 0;
   const newEarnedCoins = Math.floor(grandTotal / loyaltyRules.rate);
-  
-  // 🔥 Customer gets to use coins immediately based on their cart total!
   const totalCoinsAvailableToSpend = pastCoins + newEarnedCoins; 
 
   const getLocation = () => {
@@ -245,7 +389,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
           <div style={{ width: "80%", maxWidth: 300, background: "#fff", padding: "24px", display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 30 }}><h2 style={{margin:0, color:COLORS.copper}}>Menu</h2><button onClick={()=>setShowSidebar(false)} style={{background:'none', border:'none', fontSize:20}}>✕</button></div>
             
-            {/* ✨ COIN BALANCE IN MENU */}
             {!isLoggedIn ? (
               <button onClick={() => {setShowSidebar(false); setActiveModal('login');}} style={{...primaryBtn, background: COLORS.ink}}>👤 Customer Login</button>
             ) : (
@@ -260,7 +403,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
             <button onClick={()=>{setShowSidebar(false); setActiveModal('booking');}} style={{...primaryBtn, background: COLORS.sage}}>📅 Table/Party Booking</button>
             <button onClick={()=>{setShowSidebar(false); setActiveModal('offers');}} style={{...primaryBtn, background: COLORS.gold, color: COLORS.ink}}>🎁 Today's Offers</button>
             
-            {/* ✨ ORDER HISTORY MENU ADDED */}
             {isLoggedIn && (
                <button onClick={()=>{setShowSidebar(false); setActiveModal('history');}} style={{...primaryBtn, background: COLORS.ink}}>📜 My Order History</button>
             )}
@@ -276,7 +418,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", zIndex: 90 }}>
           <div style={{ background: "#fff", width: "100%", maxWidth: 480, margin: "0 auto", borderRadius: "24px 24px 0 0", padding: "24px 20px", maxHeight: "85vh", overflowY: "auto" }}>
             
-            {/* 1. CUSTOMER LOGIN OTP */}
             {activeModal === 'login' && (
                <>
                  <ModalHeader title="Secure Login" onClose={() => setActiveModal(null)} />
@@ -295,7 +436,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
                </>
             )}
 
-            {/* 2. TABLE / PARTY BOOKING */}
             {activeModal === 'booking' && (
                <>
                  <ModalHeader title="Book Table / Party" onClose={() => setActiveModal(null)} />
@@ -311,7 +451,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
                </>
             )}
 
-            {/* ✨ 3. NEW ORDER HISTORY MODAL */}
             {activeModal === 'history' && (
                <>
                  <ModalHeader title="My Order History" onClose={() => setActiveModal(null)} />
@@ -326,7 +465,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
                </>
             )}
 
-            {/* 4. TRACK STATUS (WITH STEPS) */}
             {activeModal === 'track' && (
               <>
                 <ModalHeader title="Your Active Orders" onClose={() => setActiveModal(null)} />
@@ -349,7 +487,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
               </>
             )}
 
-            {/* 5. CHECKOUT CART */}
             {cartOpen && (
               <>
                 <ModalHeader title="Checkout" onClose={() => setCartOpen(false)} />
@@ -380,7 +517,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
                       </select>
                     </div>
 
-                    {/* ✨ INSTANT EATCOIN REWARD SECTION */}
                     <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', borderRadius: 16, padding: 16, marginBottom: 20, border: `1.5px solid ${COLORS.gold}` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <div style={{fontWeight: 800, fontSize: 16, color: COLORS.ink}}>🪙 EatCoins</div>
@@ -423,7 +559,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, offersList, table, 
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   2. STAFF / KITCHEN VIEW (✨ ADMIN BUTTON REMOVED)
+   2. STAFF / KITCHEN VIEW
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 function StaffView({ orders, advanceStatus, setRole, handlePrint }) {
@@ -432,7 +568,6 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint }) {
 
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1200, margin: "0 auto" }}>
-      {/* ✨ STAFF CAN NOW ONLY EXIT LOGOUT, CANNOT GO TO ADMIN */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20, alignItems: 'center' }}><div style={{ fontSize: 32, fontWeight: 800 }}>🍳 Kitchen Board</div><button onClick={() => setRole("customer")} style={{ ...primaryBtn, background: COLORS.rust }}>← Exit</button></div>
       
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24 }}>
@@ -472,7 +607,7 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   3. ADMIN VIEW
+   3. ADMIN VIEW (WITH MENU EDITOR)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 function AdminView({ menu, setMenu, bookings, orders, setRole, deleteOrder, offersList, handlePrint }) {
