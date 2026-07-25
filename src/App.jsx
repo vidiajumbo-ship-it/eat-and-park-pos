@@ -205,7 +205,6 @@ function AddBtnStepper({ qty, onChange, available }) {
   return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: 90, padding: "4px", background: "#fff", border: `2px solid ${COLORS.sage}`, borderRadius: 10, boxShadow: "0 4px 12px rgba(74,124,89,0.15)" }}><button onClick={() => onChange(Math.max(0, qty - 1))} style={{...stepBtnStyle, width: 26, height: 26, border: "none", color: COLORS.sage}} className="smooth-transition">−</button><span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 15, color: COLORS.sage }}>{qty}</span><button onClick={() => onChange(qty + 1)} style={{...stepBtnStyle, width: 26, height: 26, border: "none", color: COLORS.sage}} className="smooth-transition">+</button></div>;
 }
 
-// ✨ NEW: SearchBar updated with Voice Search Mic Button
 function SearchBar({ value, onChange, placeholder = "Search menu...", onVoiceSearch }) {
   const [suggestions, setSuggestions] = useState([]);
   const menuItemNames = DEFAULT_MENU.map(m => m.name);
@@ -225,7 +224,6 @@ function SearchBar({ value, onChange, placeholder = "Search menu...", onVoiceSea
     <div style={{ position: "relative", flex: 1 }}>
       <input type="text" value={value} onChange={handleChange} placeholder={placeholder} style={{...inputStyle, paddingLeft: 42, paddingRight: 50, background: "#fff"}} onFocus={(e) => { e.target.style.borderColor = COLORS.copper; e.target.style.boxShadow = "0 0 0 3px rgba(226,89,56,0.1)"; }} onBlur={(e) => { e.target.style.borderColor = COLORS.line; e.target.style.boxShadow = "none"; setTimeout(() => setSuggestions([]), 200); }} />
       <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 18, color: COLORS.textLight }}>🔍</span>
-      {/* Mic Button here */}
       <button onClick={onVoiceSearch} style={{ position: "absolute", right: value ? 36 : 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: "4px 8px" }} title="Voice Search">🎙️</button>
       {value && ( <button onClick={() => onChange({ target: { value: "" } })} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: COLORS.textLight, padding: "4px 8px" }}>✕</button> )}
       
@@ -277,7 +275,6 @@ function Toast({ message, type = 'info', action, onAction }) {
    1. ENHANCED CUSTOMER VIEW 
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
-// ✨ NEW PROPS: isDark, setIsDark, requestWaiter
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, setTable, setRole, promo, settings, installApp, handlePrint, isDark, setIsDark, requestWaiter }) {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [cart, setCart] = useState({});
@@ -347,7 +344,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
     setTimeout(() => setToast(null), 3000);
   };
 
-  // ✨ NEW: Voice Search Logic
   const handleVoiceSearch = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -443,9 +439,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
         <div className="flash-banner" style={{ color: "#fff", padding: "12px 16px", textAlign: "center", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 14, fontWeight: 700 }}>🎉 {promo.text}</div>
       )}
       
-      {/* ✨ NEW: Floating Call Waiter Button */}
-      <button onClick={() => {requestWaiter(table); showToast("🔔 Waiter has been notified!", 'success');}} style={{ position: "fixed", bottom: 100, right: 20, background: COLORS.rust, color: "#fff", border: "none", borderRadius: "50%", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(192,57,43,0.4)", cursor: "pointer", zIndex: 60, fontSize: 24 }} className="smooth-transition hover-lift scale-bounce" title="Call Waiter">
-        🔔
+      {/* ✨ NEW: Floating Call Waiter Button moved to Top Right (Below table selector) */}
+      <button onClick={() => {requestWaiter(table); showToast("🔔 Waiter has been notified!", 'success');}} style={{ position: "fixed", top: 80, right: 20, background: COLORS.rust, color: "#fff", border: "none", borderRadius: 20, padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 8px 24px rgba(192,57,43,0.4)", cursor: "pointer", zIndex: 60, fontSize: 14, fontWeight: 800 }} className="smooth-transition hover-lift scale-bounce" title="Call Waiter">
+        🔔 Waiter Calling
       </button>
 
       <div style={{ position: "relative", height: 280, borderRadius: "0 0 28px 28px", overflow: "hidden", boxShadow: "0 12px 36px rgba(0,0,0,0.12)", marginBottom: 16 }}>
@@ -571,7 +567,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
             </div>
             
             <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-              {/* ✨ NEW: VIP Dark Mode Toggle */}
               <SidebarBtn icon={isDark ? "☀️" : "🌙"} text={isDark ? "Switch to Light Mode" : "VIP Dark Mode"} onClick={() => { setIsDark(!isDark); setShowSidebar(false); showToast(isDark ? "☀️ Light Mode Active" : "🌙 VIP Dark Mode Active", "success"); }} highlight />
               <SidebarBtn icon="🏨" text="About Restaurant" onClick={() => {setShowSidebar(false); setActiveModal('about');}} />
               <SidebarBtn icon="🖼️" text="Gallery" onClick={() => {setShowSidebar(false); setActiveModal('gallery');}} />
@@ -773,13 +768,16 @@ function SidebarBtn({ icon, text, onClick, highlight }) {
    2. ENHANCED STAFF VIEW WITH KEYBOARD SHORTCUTS
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
-// ✨ NEW PROPS: calls, resolveCall
 function StaffView({ orders, advanceStatus, setRole, handlePrint, calls, resolveCall }) {
   const active = orders.filter((o) => o.status !== "served").sort((a, b) => a.createdAt - b.createdAt);
   const activeCalls = calls.filter(c => c.status === 'active');
   const columns = ["new", "preparing", "ready"];
   const newOrderCount = active.filter(o => o.status === "new").length;
   const prevCountRef = useRef(newOrderCount);
+  
+  // ✨ NEW: Reference for tracking Waiter calls sound
+  const activeCallsCount = activeCalls.length;
+  const prevCallsCountRef = useRef(activeCallsCount);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
 
   useEffect(() => {
@@ -794,6 +792,16 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint, calls, resolve
     }
     prevCountRef.current = newOrderCount;
   }, [newOrderCount]);
+
+  // ✨ NEW: Distinct Notification Sound for Waiter Calling
+  useEffect(() => {
+    if (activeCallsCount > prevCallsCountRef.current) {
+      // Different bell/chime sound for waiter calls
+      const bellAudio = new Audio("https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3");
+      bellAudio.play().catch(e => console.log("Click screen to enable sound for waiter calls."));
+    }
+    prevCallsCountRef.current = activeCallsCount;
+  }, [activeCallsCount]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -830,7 +838,6 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint, calls, resolve
         {active.length} active order{active.length !== 1 ? "s" : ""} | Use ↑↓ to navigate, P/R to advance
       </div>
 
-      {/* ✨ NEW: Waiter Call Alerts */}
       {activeCalls.length > 0 && (
         <div style={{ background: "rgba(239, 68, 68, 0.1)", border: `2px solid ${COLORS.error}`, borderRadius: 16, padding: 16, marginBottom: 24 }} className="slide-up">
           <h3 style={{ color: COLORS.error, margin: "0 0 12px 0", display: 'flex', alignItems: 'center', gap: 8 }}>🚨 Waiter Requested!</h3>
@@ -885,7 +892,7 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint, calls, resolve
                       )}
                       
                       <div style={{ borderTop: isSelected ? `1px solid rgba(255,255,255,0.3)` : `1.5px dashed ${COLORS.line}`, paddingTop: 16, marginBottom: 16 }}>
-                        {o.items.map((it) => ( <div key={it.itemId} style={{ fontSize: 15, marginBottom: 8, fontWeight: 600, color: isSelected ? '#fff' : COLORS.ink }}><span style={{ fontWeight: 800, display: 'inline-block', width: 28 }}>{it.qty}×</span> {it.name} <span style={{color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.textLight, fontSize: 13}}>{it.portion}</span></div> ))}
+                        {o.items.map((it) => ( <div key={it.itemId} style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 8, fontWeight: 600 }}><span>{it.qty}× {it.name}</span><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{inr(it.price * it.qty)}</span></div> ))}
                       </div>
                       {o.notes && <div style={{ fontSize: 14, color: isSelected ? '#fff' : COLORS.rust, marginTop: 10, fontStyle: "italic", padding: "10px 14px", background: isSelected ? 'rgba(255,255,255,0.2)' : COLORS.copperLight, borderRadius: 10, marginBottom: 16, fontWeight: 600 }}>💬 "{o.notes}"</div>}
                       
@@ -911,12 +918,10 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint, calls, resolve
    3. ENHANCED ADMIN VIEW WITH ADVANCED ANALYTICS
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
-// ✨ NEW PROPS: inventory, addInventory, updateStock, deleteBooking
 function AdminView({ menu, bookings, gallery, addGalleryImage, deleteGalleryImage, addMenuItem, updateMenuItem, removeMenuItem, orders, markPaid, deleteOrder, setRole, promo, settings, setPromoFirebase, setSettingsFirebase, handlePrint, inventory, addInventory, updateStock, deleteBooking }) {
   const [tab, setTab] = useState("overview");
   const [filterDate, setFilterDate] = useState(toLocalISODate(Date.now()));
   const [newImg, setNewImg] = useState("");
-  // ✨ NEW: Inventory Input State
   const [newInv, setNewInv] = useState({ name: "", stock: "", unit: "kg" });
 
   const filteredOrders = orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
@@ -964,7 +969,6 @@ function AdminView({ menu, bookings, gallery, addGalleryImage, deleteGalleryImag
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, alignItems: 'center' }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>📊 Admin Dashboard</div><button onClick={() => setRole("customer")} style={{ background: COLORS.paper2, border: "none", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontWeight: 700, transition: "all 0.2s ease" }} className="smooth-transition">← Back</button></div>
       
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto", scrollbarWidth: "none" }}>
-        {/* ✨ NEW: inventory tab added here */}
         {["overview", "inventory", "menu", "orders", "bookings", "gallery", "settings"].map((t) => ( <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", marginRight: 10, fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", transition: "all 0.2s ease", whiteSpace: "nowrap" }} className="smooth-transition">{t}</button> ))}
       </div>
 
@@ -1024,7 +1028,6 @@ function AdminView({ menu, bookings, gallery, addGalleryImage, deleteGalleryImag
         </>
       )}
 
-      {/* ✨ NEW: INVENTORY TAB */}
       {tab === "inventory" && (
         <div className="slide-up">
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 24, border: `1px solid ${COLORS.line}` }}>
@@ -1099,7 +1102,6 @@ function AdminView({ menu, bookings, gallery, addGalleryImage, deleteGalleryImag
       {tab === "bookings" && (
         <div style={{ overflowX: "auto", borderRadius: 16, border: `1px solid ${COLORS.line}`, boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
-            {/* ✨ NEW: Action column added in Bookings */}
             <thead><tr style={{ textAlign: "left", background: COLORS.paper, color: COLORS.textLight, fontSize: 13, fontWeight: 800 }}><th style={th}>Date & Time</th><th style={th}>Name</th><th style={th}>Phone</th><th style={th}>Type</th><th style={th}>Guests</th><th style={th}>Action</th></tr></thead>
             <tbody>
               {bookings.length === 0 && <tr><td colSpan="6" style={{padding: 30, textAlign: 'center', fontWeight: 600}}>No bookings yet.</td></tr>}
@@ -1110,7 +1112,6 @@ function AdminView({ menu, bookings, gallery, addGalleryImage, deleteGalleryImag
                   <td style={{...td, fontWeight: 600}}>{b.phone}</td>
                   <td style={{...td, fontWeight: 700}}>{b.type === "party" ? "🎉 Party" : "🍽️ Table"}</td>
                   <td style={{...td, fontWeight: 800}}>{b.guests}</td>
-                  {/* ✨ NEW: Delete Booking Button */}
                   <td style={td}><button onClick={() => deleteBooking(b.id)} style={{background: 'transparent', border: `1.5px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 10, cursor: 'pointer', fontWeight: 800, fontSize: 13}} className="smooth-transition hover-lift">🗑️</button></td>
                 </tr>
               ))}
@@ -1311,7 +1312,6 @@ function PrintReceipt({ order, type }) {
 
 export default function App() {
   const [role, setRole] = useState("customer");
-  // ✨ NEW STATES added here
   const [isDark, setIsDark] = useState(false);
   const [calls, setCalls] = useState([]);
   const [inventory, setInventory] = useState([]);
@@ -1343,7 +1343,6 @@ export default function App() {
       setReady(true);
     });
     
-    // ✨ NEW FIREBASE LISTENERS for Waiter Calls & Inventory
     const unsubCalls = onSnapshot(collection(db, "calls"), (s) => setCalls(s.docs.map(d => d.data())));
     const unsubInventory = onSnapshot(collection(db, "inventory"), (s) => setInventory(s.docs.map(d => d.data())));
     
@@ -1362,26 +1361,21 @@ export default function App() {
   const addGalleryImage = async (url) => { const id = uid("g"); await setDoc(doc(db, "gallery", id), { id, url, addedAt: Date.now() }); };
   const deleteGalleryImage = async (id) => { await deleteDoc(doc(db, "gallery", id)); };
 
-  // ✨ NEW: Delete Booking Function
   const deleteBooking = async (id) => { if(window.confirm("Are you sure you want to delete this booking?")) await deleteDoc(doc(db, "bookings", id)); };
 
-  // ✨ NEW: Inventory Functions
   const addInventory = async (item) => { await setDoc(doc(db, "inventory", item.id), item); };
   const updateStock = async (id, newStock) => { await updateDoc(doc(db, "inventory", id), { stock: newStock }); };
 
-  // ✨ NEW: Waiter Call Functions
   const requestWaiter = async (tbl) => { const id = uid("call"); await setDoc(doc(db, "calls", id), { id, table: tbl, time: Date.now(), status: "active" }); };
   const resolveCall = async (id) => { await deleteDoc(doc(db, "calls", id)); };
 
-  // ✨ NEW: Auto-Deduct Inventory inside Place Order
   const placeOrder = async (order) => { 
     await setDoc(doc(db, "orders", order.id), order); 
-    // Magic Inventory Deduction Loop
     order.items.forEach(cartItem => {
       const itemName = cartItem.name.toLowerCase();
       inventory.forEach(async (inv) => {
         if (itemName.includes(inv.name.toLowerCase())) {
-          const deductAmt = inv.unit === 'pcs' ? 1 : 0.2; // default: 200g (0.2) or 1 pc
+          const deductAmt = inv.unit === 'pcs' ? 1 : 0.2;
           const newStock = Math.max(0, inv.stock - (deductAmt * cartItem.qty));
           await updateDoc(doc(db, "inventory", inv.id), { stock: newStock });
         }
@@ -1403,12 +1397,10 @@ export default function App() {
   if (!ready) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: COLORS.paper, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700 }}>Loading menu...</div>;
 
   return (
-    // ✨ NEW: Dark Mode Wrapper logic added here
     <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <style>{FONTS}</style>
       
       <div className="app-content">
-        {/* Passed new props down to Views */}
         {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} table={table} setTable={setTable} setRole={setRole} promo={promo} settings={settings} installApp={handleInstallApp} handlePrint={handlePrint} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} />}
         {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} setRole={setRole} handlePrint={handlePrint} calls={calls} resolveCall={resolveCall} />}
         {role === "admin" && <AdminView menu={menu} bookings={bookings} gallery={gallery} addGalleryImage={addGalleryImage} deleteGalleryImage={deleteGalleryImage} addMenuItem={addMenuItem} updateMenuItem={updateMenuItem} removeMenuItem={removeMenuItem} orders={orders} markPaid={markPaid} deleteOrder={deleteOrder} setRole={setRole} promo={promo} settings={settings} setPromoFirebase={setPromoFirebase} setSettingsFirebase={setSettingsFirebase} handlePrint={handlePrint} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} />}
