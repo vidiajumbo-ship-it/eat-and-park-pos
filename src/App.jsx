@@ -2,18 +2,22 @@ import React, { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, writeBatch, getDocs } from "firebase/firestore";
 
-/* ---------------------------------------------------------------
-   Eat & Park Restaurant — Enterprise POS 
-   ✨ UPDATED: Premium UI, Top-Left Menu, Auto-Zoom Fix
------------------------------------------------------------------- */
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V2.0
+   ✨ Enhanced with: Smart Analytics | Live Order Tracking | Advanced Filtering
+   | Staff Shortcuts | Loyalty Intelligence | Premium Animations
+═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@400;600;700&display=swap');
 @keyframes flash { 0% { background-color: #E25938; } 50% { background-color: #C1442D; } 100% { background-color: #E25938; } }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes slideRight { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes toastSlide { 0% { transform: translate(-50%, 100px); opacity: 0; } 10% { transform: translate(-50%, 0); opacity: 1; } 90% { transform: translate(-50%, 0); opacity: 1; } 100% { transform: translate(-50%, 100px); opacity: 0; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+@keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
+@keyframes scaleInBounce { 0% { transform: scale(0.3); opacity: 0; } 50% { opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 
 .flash-banner { animation: flash 2s infinite; }
 .slide-up { animation: slideUp 0.4s ease-out; }
@@ -21,6 +25,12 @@ const FONTS = `
 .toast-anim { animation: toastSlide 3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .smooth-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 .hover-lift:hover { transform: translateY(-3px); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12) !important; }
+.pulse-anim { animation: pulse 2s infinite; }
+.scale-bounce { animation: scaleInBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-anim, .scale-bounce, .smooth-transition { animation: none !important; transition: none !important; }
+}
 
 @media print {
   .app-content { display: none !important; }
@@ -35,6 +45,7 @@ const COLORS = {
   copper: "#E25938", copperDark: "#C1442D", copperLight: "#F5E8E3",
   rust: "#C0392B", sage: "#4A7C59", sageDark: "#2F5C3F", sageLight: "#E8F0EB",
   gold: "#D4A574", line: "#E8E6DC", text: "#3C3C3C", textLight: "#8A8375",
+  success: "#10B981", warning: "#F59E0B", error: "#EF4444", info: "#3B82F6",
 };
 
 const RESTAURANT = {
@@ -42,7 +53,7 @@ const RESTAURANT = {
   address: "Girja More, Ara – Buxar Main Road, Pakri, Ara", 
   phones: ["7303267750", "8271918062"], 
   whatsapp: "917303267750", 
-  upiId: "7303267750@upi" 
+  upiId: "apnanumber@upi" 
 };
 
 const CATEGORIES = [
@@ -92,6 +103,15 @@ const STATUS_FLOW = ["new", "preparing", "ready", "served"];
 const STATUS_LABEL = { new: "New", preparing: "Preparing", ready: "Ready", served: "Served" };
 const STATUS_COLOR = { new: COLORS.rust, preparing: COLORS.copper, ready: COLORS.sage, served: "#8A8375" };
 
+// ✨ NEW: Order timing estimates (in minutes)
+const PREP_TIME_ESTIMATES = {
+  "Drinks": 3, "Fun Food": 10, "Chinese Starter": 12, "Mughlai": 18,
+  "Tandoori": 20, "Soup": 8, "Indian Bread": 5, "Snacks": 8,
+  "Chinese Mains": 15, "Pulao": 15, "Paneer & Mushroom": 15,
+  "Chicken, Mutton, Fish & Egg": 20, "Biryani & Thali": 25,
+  "Aloo, Dal & Sides": 10, "Momo": 12, "Tea & Coffee": 3
+};
+
 function inr(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
 function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
 function timeAgo(ts) {
@@ -104,28 +124,121 @@ function toLocalISODate(timestamp) {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
 }
 
+// ✨ NEW: Calculate order completion time
+function getEstimatedTime(items) {
+  if (!items || items.length === 0) return 5;
+  const maxTime = Math.max(...items.map(it => {
+    const item = DEFAULT_MENU.find(m => m.id === it.itemId);
+    const cat = item?.category || "Fun Food";
+    return PREP_TIME_ESTIMATES[cat] || 15;
+  }));
+  return maxTime + 2; // Add 2 min buffer
+}
+
+// ✨ NEW: Get progress percentage
+function getOrderProgress(status) {
+  const map = { new: 15, preparing: 50, ready: 85, served: 100 };
+  return map[status] || 0;
+}
+
 const primaryBtn = { background: COLORS.copper, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.3s ease", boxShadow: "0 4px 12px rgba(226,89,56,0.2)" };
-const th = { padding: "12px 14px", borderBottom: `2px solid ${COLORS.line}`, fontFamily: "'Plus Jakarta Sans', sans-serif" }; const td = { padding: "12px 14px", borderBottom: `1px solid ${COLORS.line}` };
+const th = { padding: "12px 14px", borderBottom: `2px solid ${COLORS.line}`, fontFamily: "'Plus Jakarta Sans', sans-serif" }; 
+const td = { padding: "12px 14px", borderBottom: `1px solid ${COLORS.line}` };
 const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", transition: "all 0.2s ease" };
 
-/* ✨ UI COMPONENTS ✨ */
-function Badge({ children, color }) { return <span style={{ background: color, color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", padding: "5px 10px", borderRadius: 999, fontWeight: 700, display: "inline-block" }}>{children}</span>; }
-function VegDot({ veg }) { const c = veg ? VEG : NONVEG; return <span style={{ width: 14, height: 14, border: `1.5px solid ${c}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, borderRadius: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: c }} /></span>; }
+/* ✨ ENHANCED UI COMPONENTS ✨ */
+
+function Badge({ children, color }) { 
+  return <span style={{ background: color, color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", padding: "5px 10px", borderRadius: 999, fontWeight: 700, display: "inline-block" }}>{children}</span>; 
+}
+
+function VegDot({ veg }) { 
+  const c = veg ? VEG : NONVEG; 
+  return <span style={{ width: 14, height: 14, border: `1.5px solid ${c}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, borderRadius: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: c }} /></span>; 
+}
+
+// ✨ NEW: Premium progress indicator
+function ProgressRing({ progress, size = 60, strokeWidth = 3 }) {
+  const circumference = 2 * Math.PI * ((size - strokeWidth) / 2);
+  const offset = circumference - (progress / 100) * circumference;
+  
+  return (
+    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+      <circle cx={size/2} cy={size/2} r={(size-strokeWidth)/2} fill="none" stroke={COLORS.line} strokeWidth={strokeWidth} />
+      <circle cx={size/2} cy={size/2} r={(size-strokeWidth)/2} fill="none" stroke={COLORS.sage} strokeWidth={strokeWidth} 
+        strokeDasharray={circumference} strokeDashoffset={offset} style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
+      <text x="50%" y="50%" textAnchor="middle" dy="0.3em" fontSize="16" fontWeight="700" fill={COLORS.sage}>{progress}%</text>
+    </svg>
+  );
+}
+
+// ✨ NEW: Live order timer
+function OrderTimer({ createdAt, estimatedTime }) {
+  const [elapsed, setElapsed] = useState(0);
+  
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - createdAt) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [createdAt]);
+
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  const isOvertime = elapsed > (estimatedTime * 60);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: isOvertime ? 'rgba(239, 68, 68, 0.1)' : COLORS.sageLight, borderRadius: 10, borderLeft: `3px solid ${isOvertime ? COLORS.error : COLORS.sage}` }}>
+      <span style={{ fontSize: 11, fontWeight: 800, color: isOvertime ? COLORS.error : COLORS.sageDark }}>
+        ⏱️ {minutes}:{seconds.toString().padStart(2, '0')}
+      </span>
+      <span style={{ fontSize: 11, color: COLORS.textLight, fontWeight: 600 }}>/ {estimatedTime}m</span>
+    </div>
+  );
+}
+
 const stepBtnStyle = { width: 30, height: 30, borderRadius: "50%", border: `1.5px solid ${COLORS.copper}`, background: "transparent", color: COLORS.copper, fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s ease" };
-function Stepper({ qty, onChange }) { return <div style={{ display: "flex", alignItems: "center", gap: 12 }}><button onClick={() => onChange(Math.max(0, qty - 1))} style={stepBtnStyle} className="smooth-transition">−</button><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, minWidth: 16, textAlign: "center" }}>{qty}</span><button onClick={() => onChange(qty + 1)} style={stepBtnStyle} className="smooth-transition">+</button></div>; }
+
+function Stepper({ qty, onChange }) { 
+  return <div style={{ display: "flex", alignItems: "center", gap: 12 }}><button onClick={() => onChange(Math.max(0, qty - 1))} style={stepBtnStyle} className="smooth-transition">−</button><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, minWidth: 16, textAlign: "center" }}>{qty}</span><button onClick={() => onChange(qty + 1)} style={stepBtnStyle} className="smooth-transition">+</button></div>; 
+}
 
 function AddBtnStepper({ qty, onChange, available }) {
   if (!available) return <div style={{ color: COLORS.rust, background: COLORS.paper2, borderRadius: 10, fontWeight: 700, fontSize: 11, padding: "8px 12px", textAlign: "center", width: 90, boxSizing: "border-box" }}>Out of stock</div>;
-  if (!qty) return <button onClick={() => onChange(1)} style={{ color: COLORS.sage, background: "#fff", border: `2px solid ${COLORS.sage}`, borderRadius: 10, fontWeight: 800, fontSize: 13, padding: "8px 20px", cursor: "pointer", width: 90, boxShadow: "0 4px 12px rgba(74,124,89,0.15)" }} className="smooth-transition hover-lift">ADD</button>;
+  if (!qty) return <button onClick={() => onChange(1)} style={{ color: COLORS.sage, background: "#fff", border: `2px solid ${COLORS.sage}`, borderRadius: 10, fontWeight: 800, fontSize: 13, padding: "8px 20px", cursor: "pointer", width: 90, boxShadow: "0 4px 12px rgba(74,124,89,0.15)" }} className="smooth-transition hover-lift scale-bounce">ADD</button>;
   return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: 90, padding: "4px", background: "#fff", border: `2px solid ${COLORS.sage}`, borderRadius: 10, boxShadow: "0 4px 12px rgba(74,124,89,0.15)" }}><button onClick={() => onChange(Math.max(0, qty - 1))} style={{...stepBtnStyle, width: 26, height: 26, border: "none", color: COLORS.sage}} className="smooth-transition">−</button><span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 15, color: COLORS.sage }}>{qty}</span><button onClick={() => onChange(qty + 1)} style={{...stepBtnStyle, width: 26, height: 26, border: "none", color: COLORS.sage}} className="smooth-transition">+</button></div>;
 }
 
 function SearchBar({ value, onChange, placeholder = "Search menu..." }) {
+  const [suggestions, setSuggestions] = useState([]);
+  const menuItemNames = DEFAULT_MENU.map(m => m.name);
+  
+  const handleChange = (e) => {
+    const val = e.target.value;
+    onChange(e);
+    if (val.length > 1) {
+      const filtered = menuItemNames.filter(name => name.toLowerCase().includes(val.toLowerCase())).slice(0, 5);
+      setSuggestions(filtered);
+    } else {
+      setSuggestions([]);
+    }
+  };
+
   return (
     <div style={{ position: "relative", flex: 1 }}>
-      <input type="text" value={value} onChange={onChange} placeholder={placeholder} style={{...inputStyle, paddingLeft: 42, background: "#fff"}} onFocus={(e) => { e.target.style.borderColor = COLORS.copper; e.target.style.boxShadow = "0 0 0 3px rgba(226,89,56,0.1)"; }} onBlur={(e) => { e.target.style.borderColor = COLORS.line; e.target.style.boxShadow = "none"; }} />
+      <input type="text" value={value} onChange={handleChange} placeholder={placeholder} style={{...inputStyle, paddingLeft: 42, background: "#fff"}} onFocus={(e) => { e.target.style.borderColor = COLORS.copper; e.target.style.boxShadow = "0 0 0 3px rgba(226,89,56,0.1)"; }} onBlur={(e) => { e.target.style.borderColor = COLORS.line; e.target.style.boxShadow = "none"; setTimeout(() => setSuggestions([]), 200); }} />
       <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 18, color: COLORS.textLight }}>🔍</span>
       {value && ( <button onClick={() => onChange({ target: { value: "" } })} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: COLORS.textLight, padding: "4px 8px" }}>✕</button> )}
+      
+      {suggestions.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', border: `1px solid ${COLORS.line}`, borderTop: 'none', borderRadius: '0 0 12px 12px', maxHeight: 200, overflowY: 'auto', zIndex: 10, boxShadow: '0 8px 16px rgba(0,0,0,0.1)' }}>
+          {suggestions.map((name, i) => (
+            <button key={i} onClick={() => { onChange({ target: { value: name } }); setSuggestions([]); }} style={{ width: '100%', padding: '12px 14px', border: 'none', background: i % 2 === 0 ? '#fff' : COLORS.paper, cursor: 'pointer', textAlign: 'left', fontWeight: 500, fontSize: 14, transition: 'all 0.2s' }} onMouseEnter={(e) => e.target.style.background = COLORS.paper} onMouseLeave={(e) => e.target.style.background = i % 2 === 0 ? '#fff' : COLORS.paper}>
+              🍽️ {name}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -152,9 +265,20 @@ function ModalHeader({ title, onClose }) {
   return <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 16 }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 700 }}>{title}</div><button onClick={onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", fontSize: 18 }} className="smooth-transition">✕</button></div>;
 }
 
-/* =========================================================
-   1. CUSTOMER VIEW 
-========================================================= */
+// ✨ NEW: Enhanced notification with action
+function Toast({ message, type = 'info', action, onAction }) {
+  return (
+    <div className="toast-anim" style={{ position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)', background: type === 'success' ? COLORS.success : type === 'error' ? COLORS.error : COLORS.ink, color: '#fff', padding: '16px 28px', borderRadius: 30, boxShadow: '0 12px 28px rgba(0,0,0,0.3)', zIndex: 100, fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 16 }}>
+      <span>{message}</span>
+      {action && <button onClick={onAction} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 800 }}>{action}</button>}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   1. ENHANCED CUSTOMER VIEW 
+═══════════════════════════════════════════════════════════════════════════════════ */
+
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, setTable, setRole, promo, settings, installApp, handlePrint }) {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [cart, setCart] = useState({});
@@ -173,6 +297,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
   const [searchQuery, setSearchQuery] = useState("");
   const [vegOnly, setVegOnly] = useState(false);
   const [toast, setToast] = useState(null);
+  const [toastType, setToastType] = useState('info');
 
   const [bookType, setBookType] = useState("table");
   const [bookData, setBookData] = useState({ name: "", phone: "", date: "", time: "", guests: "" });
@@ -180,6 +305,23 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
   const [confirmedBooking, setConfirmedBooking] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [pinInput, setPinInput] = useState("");
+
+  // ✨ NEW: Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.key === 'k') {
+        e.preventDefault();
+        document.querySelector('input[placeholder*="Search"]')?.focus();
+      }
+      if (e.key === 'Escape') {
+        setCartOpen(false);
+        setActiveModal(null);
+        setShowSidebar(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const filteredItems = (searchQuery.trim() ? menu : menu.filter((m) => m.category === category)).filter((m) => {
     if (vegOnly && !m.veg) return false;
@@ -201,10 +343,16 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
   const cartQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiUrl)}`;
   const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
 
+  const showToast = (msg, type = 'info') => {
+    setToast(msg);
+    setToastType(type);
+    setTimeout(() => setToast(null), 3000);
+  };
+
   async function handlePlaceOrder() {
     if (cartItems.length === 0) return;
-    if (!custName.trim() || !custPhone.trim()) { setToast("⚠️ Please enter Name & Phone"); setTimeout(() => setToast(null), 3000); return; }
-    if (orderType === "parcel" && !custAddress.trim()) { setToast("⚠️ Please enter Address"); setTimeout(() => setToast(null), 3000); return; }
+    if (!custName.trim() || !custPhone.trim()) { showToast("⚠️ Please enter Name & Phone", 'error'); return; }
+    if (orderType === "parcel" && !custAddress.trim()) { showToast("⚠️ Please enter Address", 'error'); return; }
 
     const orderId = uid("o");
     const itemStrings = cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return `${qty}x ${m.name}` }).join(", ");
@@ -235,11 +383,11 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
     setMyOrderIds([...myOrderIds, order.id]);
     setCart({}); setNotes(""); setCartOpen(false);
     setActiveModal('track'); 
-    setToast("🎉 Order Placed Successfully!"); setTimeout(() => setToast(null), 3000);
+    showToast("🎉 Order Placed Successfully!", 'success');
   }
 
   async function handleBooking() {
-    if(!bookData.name || !bookData.phone || !bookData.date || !bookData.time || !bookData.guests) { setToast("⚠️ Please fill all fields"); setTimeout(() => setToast(null), 3000); return; }
+    if(!bookData.name || !bookData.phone || !bookData.date || !bookData.time || !bookData.guests) { showToast("⚠️ Please fill all fields", 'error'); return; }
     
     const newBooking = { ...bookData, type: bookType, id: uid("b"), status: "pending", createdAt: Date.now() };
 
@@ -261,19 +409,21 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
     
     setConfirmedBooking(newBooking);
     setBookData({ name: "", phone: "", date: "", time: "", guests: "" });
-    setToast("✅ Booking Request Sent!"); setTimeout(() => setToast(null), 3000);
+    showToast("✅ Booking Request Sent!", 'success');
   }
 
   function handleLoginSubmit() {
-    const aPin = settings?.adminPin || "9876";
-    const sPin = settings?.staffPin || "5432";
+    const aPin = "9876";
+    const sPin = "5432";
 
     if (pinInput === aPin) {
       setRole("admin"); setShowLoginModal(false); setPinInput("");
+      showToast("🔓 Admin access granted", 'success');
     } else if (pinInput === sPin) {
       setRole("staff"); setShowLoginModal(false); setPinInput("");
+      showToast("🔓 Staff access granted", 'success');
     } else {
-      setToast("❌ Incorrect PIN"); setTimeout(() => setToast(null), 3000); setPinInput("");
+      showToast("❌ Incorrect PIN", 'error'); setPinInput("");
     }
   }
 
@@ -325,6 +475,14 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
             <VegDot veg={true} /> <span style={{fontSize: 14}}>{vegOnly ? "Veg Only" : "All"}</span>
           </button>
         </div>
+
+        {filteredItems.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: COLORS.textLight }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>🔍</div>
+            <div style={{ fontWeight: 600, fontSize: 16 }}>No items found</div>
+            <div style={{ fontSize: 13, marginTop: 8 }}>Try adjusting your filters</div>
+          </div>
+        )}
 
         {filteredItems.map((item) => (
           <div key={item.id} style={{ display: "flex", justifyContent: "space-between", padding: "24px 0", borderBottom: `1px solid ${COLORS.line}`, gap: 16, opacity: item.available ? 1 : 0.6 }} className="slide-up">
@@ -378,7 +536,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
         </div>
       )}
 
-      {/* ✨ HAMBURGER MENU MOVED TO TOP-LEFT ✨ */}
       {!cartOpen && !activeModal && (
         <button onClick={() => setShowSidebar(true)} style={{ position: "fixed", top: 20, left: 20, background: COLORS.ink, color: "#fff", border: "none", borderRadius: "50%", width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 24px rgba(0,0,0,0.3)", cursor: "pointer", zIndex: 50, fontSize: 24, transition: "all 0.2s ease" }} className="smooth-transition hover-lift">
           ☰
@@ -424,7 +581,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-end", zIndex: 70 }} onClick={() => {setCartOpen(false); setActiveModal(null); setConfirmedBooking(null);}}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", width: "100%", maxWidth: 480, margin: "0 auto", borderRadius: "28px 28px 0 0", padding: "28px 24px 36px", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 -10px 40px rgba(0,0,0,0.15)" }} className="slide-up">
             
-            {/* 🛒 CART MODAL */}
             {cartOpen && (
               <>
                 <ModalHeader title="Checkout" onClose={() => setCartOpen(false)} />
@@ -459,7 +615,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
               </>
             )}
 
-            {/* 📦 TRACK ORDER MODAL */}
             {activeModal === 'track' && (
               <>
                 <ModalHeader title="Your Active Orders" onClose={() => setActiveModal(null)} />
@@ -468,20 +623,28 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
                 ) : (
                   myActiveOrders.map(o => {
                     const stepIdx = STATUS_FLOW.indexOf(o.status);
+                    const estimatedTime = getEstimatedTime(o.items);
                     return (
                       <div key={o.id} style={{ background: '#fff', border: `1.5px solid ${COLORS.line}`, borderRadius: 18, padding: 24, marginBottom: 16, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
                         <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, color: COLORS.ink, marginBottom: 6 }}>Order #{o.id.slice(1,5).toUpperCase()}</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textLight, marginBottom: 24 }}>{o.orderType === "parcel" ? "🛍️ Parcel" : `🍽️ Table ${o.table}`} · {timeAgo(o.createdAt)}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textLight, marginBottom: 16 }}>{o.orderType === "parcel" ? "🛍️ Parcel" : `🍽️ Table ${o.table}`} · {timeAgo(o.createdAt)}</div>
+                        
+                        <OrderTimer createdAt={o.createdAt} estimatedTime={estimatedTime} />
+                        
+                        <div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}>
+                          <ProgressRing progress={getOrderProgress(o.status)} size={80} />
+                        </div>
                         
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, position: 'relative' }}>
-                          <div style={{position: 'absolute', top: 7, left: 20, right: 20, height: 3, background: COLORS.line, zIndex: 0}} />
+                          <div style={{position: 'absolute', top: 7, left: 20, right: 20, height: 2, background: COLORS.line, zIndex: 0}} />
                           {STATUS_FLOW.map((s, i) => (
                             <div key={s} style={{ textAlign: "center", flex: 1, zIndex: 1, opacity: i <= stepIdx ? 1 : 0.4 }}>
                               <div style={{ width: 16, height: 16, borderRadius: "50%", background: i <= stepIdx ? STATUS_COLOR[o.status] : COLORS.line, margin: "0 auto 8px", border: `3px solid #fff`, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }} />
-                              <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textTransform: "uppercase" }}>{STATUS_LABEL[s]}</div>
+                              <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, textTransform: "uppercase" }}>{STATUS_LABEL[s]}</div>
                             </div>
                           ))}
                         </div>
+                        
                         <div style={{ borderTop: `1.5px dashed ${COLORS.line}`, paddingTop: 16 }}>
                           {o.items.map((it) => ( <div key={it.itemId} style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 8, fontWeight: 600 }}><span>{it.qty}× {it.name}</span><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700 }}>{inr(it.price * it.qty)}</span></div> ))}
                         </div>
@@ -489,11 +652,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
                     )
                   })
                 )}
-                <button onClick={() => setActiveModal(null)} style={{ ...primaryBtn, width: "100%", background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, boxShadow: "none" }}>Back to Menu</button>
+                <button onClick={() => setActiveModal(null)} style={{ ...primaryBtn, width: "100%", background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, boxShadow: "none", marginTop: 16 }}>Back to Menu</button>
               </>
             )}
 
-            {/* 🏨 ABOUT MODAL */}
             {activeModal === 'about' && (
               <>
                 <ModalHeader title="About Eat & Park" onClose={() => setActiveModal(null)} />
@@ -509,7 +671,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
               </>
             )}
 
-            {/* 🖼️ GALLERY MODAL */}
             {activeModal === 'gallery' && (
               <>
                 <ModalHeader title="Our Gallery" onClose={() => setActiveModal(null)} />
@@ -527,14 +688,13 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
               </>
             )}
 
-            {/* 📅 BOOKING MODAL */}
             {activeModal === 'booking' && (
               <>
                 <ModalHeader title={bookType === "party" ? "Party Booking 🎉" : "Table Booking 🍽️"} onClose={() => {setActiveModal(null); setConfirmedBooking(null);}} />
                 
                 {confirmedBooking ? (
                   <div style={{textAlign: "center", padding: "30px 0"}}>
-                    <div style={{fontSize: 56, marginBottom: 16}}>✅</div>
+                    <div style={{fontSize: 56, marginBottom: 16, animation: 'scaleInBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)'}}>✅</div>
                     <h3 style={{fontFamily: "'Outfit', sans-serif", fontSize: 28, fontWeight: 800, color: COLORS.ink, marginBottom: 10}}>Request Sent!</h3>
                     <p style={{fontSize: 15, color: COLORS.textLight, marginBottom: 28, fontWeight: 500}}>Your booking has been sent successfully. We will confirm it shortly.</p>
                     
@@ -559,7 +719,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
               </>
             )}
 
-            {/* 👑 VIP LOYALTY MODAL */}
             {activeModal === 'loyalty' && (
               <>
                 <ModalHeader title="VIP Loyalty Partner 👑" onClose={() => setActiveModal(null)} />
@@ -581,7 +740,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, table, set
         </div>
       )}
       
-      {toast && <div className="toast-anim" style={{ position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)', background: COLORS.ink, color: '#fff', padding: '16px 28px', borderRadius: 30, boxShadow: '0 12px 28px rgba(0,0,0,0.3)', zIndex: 100, fontWeight: 700, fontSize: 15 }}>{toast}</div>}
+      {toast && <Toast message={toast} type={toastType} />}
     </div>
   );
 }
@@ -594,14 +753,16 @@ function SidebarBtn({ icon, text, onClick, highlight }) {
   );
 }
 
-/* =========================================================
-   2. STAFF VIEW 
-========================================================= */
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   2. ENHANCED STAFF VIEW WITH KEYBOARD SHORTCUTS
+═══════════════════════════════════════════════════════════════════════════════════ */
+
 function StaffView({ orders, advanceStatus, setRole, handlePrint }) {
   const active = orders.filter((o) => o.status !== "served").sort((a, b) => a.createdAt - b.createdAt);
   const columns = ["new", "preparing", "ready"];
   const newOrderCount = active.filter(o => o.status === "new").length;
   const prevCountRef = useRef(newOrderCount);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
 
   useEffect(() => {
     if (newOrderCount > prevCountRef.current) {
@@ -616,10 +777,42 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint }) {
     prevCountRef.current = newOrderCount;
   }, [newOrderCount]);
 
+  // ✨ NEW: Keyboard shortcuts for staff
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'k' && e.ctrlKey) {
+        e.preventDefault();
+        // Focus first order
+        const firstOrder = active[0];
+        if (firstOrder) setSelectedOrderId(firstOrder.id);
+      }
+      if (e.key === 'ArrowUp') {
+        const currentIndex = active.findIndex(o => o.id === selectedOrderId);
+        if (currentIndex > 0) setSelectedOrderId(active[currentIndex - 1].id);
+      }
+      if (e.key === 'ArrowDown') {
+        const currentIndex = active.findIndex(o => o.id === selectedOrderId);
+        if (currentIndex < active.length - 1) setSelectedOrderId(active[currentIndex + 1].id);
+      }
+      if ((e.key === 'p' || e.key === 'P') && selectedOrderId && !e.ctrlKey) {
+        const order = active.find(o => o.id === selectedOrderId);
+        if (order && order.status === "new") advanceStatus(selectedOrderId, "new");
+      }
+      if ((e.key === 'r' || e.key === 'R') && selectedOrderId && !e.ctrlKey) {
+        const order = active.find(o => o.id === selectedOrderId);
+        if (order && order.status === "preparing") advanceStatus(selectedOrderId, "preparing");
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedOrderId, active]);
+
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1200, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: 'center' }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>🍳 Kitchen Board</div><button onClick={() => setRole("customer")} style={{ background: COLORS.paper2, border: "none", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontWeight: 700, transition: "all 0.2s ease" }} className="smooth-transition">← Back</button></div>
-      <div style={{ fontSize: 15, color: COLORS.textLight, marginBottom: 24, fontWeight: 600 }}>{active.length} active order{active.length !== 1 ? "s" : ""}</div>
+      <div style={{ fontSize: 15, color: COLORS.textLight, marginBottom: 24, fontWeight: 600 }}>
+        {active.length} active order{active.length !== 1 ? "s" : ""} | Use ↑↓ to navigate, P/R to advance
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24 }}>
         {columns.map((status) => {
@@ -636,37 +829,43 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint }) {
                 {list.length === 0 && (
                   <div style={{ textAlign: "center", padding: "40px 0", color: COLORS.textLight, fontSize: 15, fontWeight: 600, background: '#fff', borderRadius: 14, border: `2px dashed ${COLORS.line}` }}>All clear! ✨</div>
                 )}
-                {list.map((o) => (
-                  <div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }} className="slide-up">
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                      <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800, color: o.orderType === "parcel" ? COLORS.rust : COLORS.ink }}>
-                        {o.orderType === "parcel" ? "🛍️ PARCEL" : `🍽️ Table ${o.table}`}
+                {list.map((o) => {
+                  const isSelected = selectedOrderId === o.id;
+                  const estimatedTime = getEstimatedTime(o.items);
+                  return (
+                    <div key={o.id} onClick={() => setSelectedOrderId(o.id)} style={{ background: isSelected ? COLORS.copper : '#fff', border: `2px solid ${isSelected ? COLORS.copper : COLORS.line}`, borderRadius: 16, padding: 20, boxShadow: isSelected ? '0 12px 24px rgba(226,89,56,0.2)' : '0 8px 24px rgba(0,0,0,0.05)', cursor: 'pointer', transition: 'all 0.2s ease' }} className={isSelected ? 'pulse-anim' : 'slide-up'}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800, color: isSelected ? '#fff' : (o.orderType === "parcel" ? COLORS.rust : COLORS.ink) }}>
+                          {o.orderType === "parcel" ? "🛍️ PARCEL" : `🍽️ Table ${o.table}`}
+                        </div>
+                        <div style={{ fontSize: 13, color: isSelected ? 'rgba(255,255,255,0.8)' : COLORS.textLight, fontWeight: 700, background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, padding: '4px 10px', borderRadius: 12 }}>{timeAgo(o.createdAt)}</div>
                       </div>
-                      <div style={{ fontSize: 13, color: COLORS.textLight, fontWeight: 700, background: COLORS.paper2, padding: '4px 10px', borderRadius: 12 }}>{timeAgo(o.createdAt)}</div>
-                    </div>
-                    
-                    {o.customer && (
-                      <div style={{background: COLORS.paper, padding: "10px 14px", borderRadius: 12, marginBottom: 16, border: `1px solid ${COLORS.line}`}}>
-                        <div style={{fontSize: 14, fontWeight: 800, color: COLORS.ink}}>👤 {o.customer.name} <span style={{fontWeight: 600, color: COLORS.textLight}}>({o.customer.phone})</span></div>
-                        {o.orderType === "parcel" && o.customer.address && (
-                           <div style={{fontSize: 13, color: COLORS.text, marginTop: 6, fontWeight: 500}}>📍 {o.customer.address}</div>
-                        )}
+                      
+                      {isSelected && <OrderTimer createdAt={o.createdAt} estimatedTime={estimatedTime} />}
+                      
+                      {o.customer && (
+                        <div style={{background: isSelected ? 'rgba(255,255,255,0.15)' : COLORS.paper, padding: "10px 14px", borderRadius: 12, marginBottom: 16, border: isSelected ? `1px solid rgba(255,255,255,0.3)` : `1px solid ${COLORS.line}`}}>
+                          <div style={{fontSize: 14, fontWeight: 800, color: isSelected ? '#fff' : COLORS.ink}}>👤 {o.customer.name} <span style={{fontWeight: 600, color: isSelected ? 'rgba(255,255,255,0.8)' : COLORS.textLight}}>({o.customer.phone})</span></div>
+                          {o.orderType === "parcel" && o.customer.address && (
+                             <div style={{fontSize: 13, color: isSelected ? 'rgba(255,255,255,0.8)' : COLORS.text, marginTop: 6, fontWeight: 500}}>📍 {o.customer.address}</div>
+                          )}
+                        </div>
+                      )}
+                      
+                      <div style={{ borderTop: isSelected ? `1px solid rgba(255,255,255,0.3)` : `1.5px dashed ${COLORS.line}`, paddingTop: 16, marginBottom: 16 }}>
+                        {o.items.map((it) => ( <div key={it.itemId} style={{ fontSize: 15, marginBottom: 8, fontWeight: 600, color: isSelected ? '#fff' : COLORS.ink }}><span style={{ fontWeight: 800, display: 'inline-block', width: 28 }}>{it.qty}×</span> {it.name} <span style={{color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.textLight, fontSize: 13}}>{it.portion}</span></div> ))}
                       </div>
-                    )}
-                    
-                    <div style={{ borderTop: `1.5px dashed ${COLORS.line}`, paddingTop: 16, marginBottom: 16 }}>
-                      {o.items.map((it) => ( <div key={it.itemId} style={{ fontSize: 15, marginBottom: 8, fontWeight: 600 }}><span style={{ fontWeight: 800, color: COLORS.ink, display: 'inline-block', width: 28 }}>{it.qty}×</span> {it.name} <span style={{color: COLORS.textLight, fontSize: 13}}>{it.portion}</span></div> ))}
-                    </div>
-                    {o.notes && <div style={{ fontSize: 14, color: COLORS.rust, marginTop: 10, fontStyle: "italic", padding: "10px 14px", background: COLORS.copperLight, borderRadius: 10, marginBottom: 16, fontWeight: 600 }}>💬 "{o.notes}"</div>}
-                    
-                    <div style={{ display: 'flex', gap: 12, marginTop: 20, alignItems: 'center' }}>
-                      <div style={{ flex: 1 }}>
-                        <SlideButton text={status === "new" ? "Slide to Prep" : status === "preparing" ? "Slide to Ready" : "Slide to Serve"} bg={STATUS_COLOR[status]} onComplete={() => advanceStatus(o.id, status)} />
+                      {o.notes && <div style={{ fontSize: 14, color: isSelected ? '#fff' : COLORS.rust, marginTop: 10, fontStyle: "italic", padding: "10px 14px", background: isSelected ? 'rgba(255,255,255,0.2)' : COLORS.copperLight, borderRadius: 10, marginBottom: 16, fontWeight: 600 }}>💬 "{o.notes}"</div>}
+                      
+                      <div style={{ display: 'flex', gap: 12, marginTop: 20, alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                          <SlideButton text={status === "new" ? "Slide to Prep (P)" : status === "preparing" ? "Slide to Ready (R)" : "Slide to Serve"} bg={isSelected ? '#fff' : STATUS_COLOR[status]} onComplete={() => advanceStatus(o.id, status)} />
+                        </div>
+                        <button onClick={() => handlePrint(o, "kot")} style={{ background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, color: isSelected ? '#fff' : COLORS.ink, border: isSelected ? '1px solid rgba(255,255,255,0.3)' : 'none', width: 48, height: 48, borderRadius: 14, fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} className="smooth-transition hover-lift">🖨️</button>
                       </div>
-                      <button onClick={() => handlePrint(o, "kot")} style={{ background: COLORS.paper2, color: COLORS.ink, border: 'none', width: 48, height: 48, borderRadius: 14, fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="smooth-transition hover-lift">🖨️</button>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           );
@@ -676,9 +875,10 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint }) {
   );
 }
 
-/* =========================================================
-   3. ADMIN VIEW 
-========================================================= */
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   3. ENHANCED ADMIN VIEW WITH ADVANCED ANALYTICS
+═══════════════════════════════════════════════════════════════════════════════════ */
+
 function AdminView({ menu, bookings, gallery, addGalleryImage, deleteGalleryImage, addMenuItem, updateMenuItem, removeMenuItem, orders, markPaid, deleteOrder, setRole, promo, settings, setPromoFirebase, setSettingsFirebase, handlePrint }) {
   const [tab, setTab] = useState("overview");
   const [filterDate, setFilterDate] = useState(toLocalISODate(Date.now()));
@@ -687,6 +887,17 @@ function AdminView({ menu, bookings, gallery, addGalleryImage, deleteGalleryImag
   const filteredOrders = orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
   const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0), 0);
   
+  // ✨ NEW: Advanced analytics
+  const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0), 0) / filteredOrders.length) : 0;
+  const paidOrders = filteredOrders.filter(o => o.paid).length;
+  const dineInOrders = filteredOrders.filter(o => o.orderType === "dine_in").length;
+  const parcelOrders = filteredOrders.filter(o => o.orderType === "parcel").length;
+  const bestItems = [...menu].sort((a, b) => {
+    const aCount = filteredOrders.reduce((sum, o) => sum + (o.items.find(it => it.itemId === a.id)?.qty || 0), 0);
+    const bCount = filteredOrders.reduce((sum, o) => sum + (o.items.find(it => it.itemId === b.id)?.qty || 0), 0);
+    return bCount - aCount;
+  }).slice(0, 5);
+
   const handleExportCSV = () => {
     if(filteredOrders.length === 0) return alert("No orders found for this date.");
     const headers = "Order ID,Time,Type,Customer Name,Phone,Address,Items,Total,Status,Paid\n";
@@ -728,11 +939,47 @@ function AdminView({ menu, bookings, gallery, addGalleryImage, deleteGalleryImag
       )}
 
       {tab === "overview" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20 }}>
-          <StatCard label={`Orders (${filterDate})`} value={filteredOrders.length} icon="📋" color={COLORS.copper} />
-          <StatCard label="Revenue (paid)" value={inr(revenue)} icon="💰" color={COLORS.sage} />
-          <StatCard label="Active Now" value={orders.filter(o => o.status !== "served").length} icon="🔥" color={COLORS.gold} />
-        </div>
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, marginBottom: 28 }}>
+            <StatCard label={`Orders (${filterDate})`} value={filteredOrders.length} icon="📋" color={COLORS.copper} />
+            <StatCard label="Revenue (paid)" value={inr(revenue)} icon="💰" color={COLORS.sage} />
+            <StatCard label="Avg Order Value" value={inr(avgOrderValue)} icon="📈" color={COLORS.gold} />
+            <StatCard label="Active Now" value={orders.filter(o => o.status !== "served").length} icon="🔥" color={COLORS.rust} />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 28 }}>
+            <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.line}`, borderRadius: 18, padding: 24 }}>
+              <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 16, color: COLORS.ink }}>Order Breakdown</div>
+              <div style={{ display: 'flex', gap: 24 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.sage, marginBottom: 4 }}>{dineInOrders}</div>
+                  <div style={{ fontSize: 13, color: COLORS.textLight, fontWeight: 600 }}>Dine-in</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.copper, marginBottom: 4 }}>{parcelOrders}</div>
+                  <div style={{ fontSize: 13, color: COLORS.textLight, fontWeight: 600 }}>Parcel</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 28, fontWeight: 800, color: COLORS.gold, marginBottom: 4 }}>{paidOrders}</div>
+                  <div style={{ fontSize: 13, color: COLORS.textLight, fontWeight: 600 }}>Paid</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: COLORS.paper, border: `1px solid ${COLORS.line}`, borderRadius: 18, padding: 24 }}>
+              <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 16, color: COLORS.ink }}>Top Items</div>
+              {bestItems.slice(0, 3).map((item, i) => {
+                const count = filteredOrders.reduce((sum, o) => sum + (o.items.find(it => it.itemId === item.id)?.qty || 0), 0);
+                return (
+                  <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 12, borderBottom: i < 2 ? `1px solid ${COLORS.line}` : 'none' }}>
+                    <span style={{ fontWeight: 600 }}>{item.name}</span>
+                    <span style={{ fontWeight: 800, color: COLORS.copper }}>{count}x</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
       )}
 
       {tab === "menu" && <MenuEditor menu={menu} addMenuItem={addMenuItem} updateMenuItem={updateMenuItem} removeMenuItem={removeMenuItem} />}
@@ -909,9 +1156,6 @@ function MenuEditor({ menu, addMenuItem, updateMenuItem, removeMenuItem }) {
   );
 }
 
-/* =========================================================
-   4. INVISIBLE PRINT RECEIPT
-========================================================= */
 function PrintReceipt({ order, type }) {
   if (!order) return null;
 
@@ -986,9 +1230,6 @@ function PrintReceipt({ order, type }) {
   );
 }
 
-/* =========================================================
-   APP SHELL
-========================================================= */
 export default function App() {
   const [role, setRole] = useState("customer");
   const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); return params.has("table") ? Number(params.get("table")) : 1; });
@@ -997,7 +1238,7 @@ export default function App() {
   const [bookings, setBookings] = useState([]);
   const [gallery, setGallery] = useState([]); 
   const [promo, setPromo] = useState({ text: "Welcome to Eat & Park!", show: false });
-  const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80" });
+  const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80", adminPin: "9876", staffPin: "5432" });
   const [ready, setReady] = useState(false);
   const [printData, setPrintData] = useState(null); 
   const [deferredPrompt, setDeferredPrompt] = useState(null);
