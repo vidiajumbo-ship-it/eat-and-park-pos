@@ -901,6 +901,7 @@ export default function App() {
   const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80", adminPin: "9876", staffPin: "5432" });
 
   const deleteBooking = (id) => { setBookings(bookings.filter(b=>b.id!==id)); };
+  const bookEvent = (booking) => { setBookings([...bookings, booking]); };
   const deleteOrder = (id) => { setOrdersState(orders.filter(o=>o.id!==id)); }; // ✨ Delete Order
   const addInventory = (item) => { setInventory([...inventory, item]); };
   const updateStock = (id, newStock) => { setInventory(inventory.map(i=>i.id===id?{...i,stock:newStock}:i)); };
