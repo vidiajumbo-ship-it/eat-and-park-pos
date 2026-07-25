@@ -3,8 +3,8 @@ import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.0 (ULTIMATE FINAL)
-   ✨ FULL MENU RESTORED | QR PAYMENT | EATCOIN | AI | OFFERS | NO VOICE SEARCH
+   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.1 (ULTIMATE INTEGRATED)
+   ✨ FULL MENU | OTP LOGIN | GET LOCATION | BOOKINGS | KITCHEN BOARD | THERMAL PRINT
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
@@ -79,7 +79,7 @@ function mi(id, name, price, category, veg, desc, portion, isBestseller = false,
   return { id, name, desc: desc || "Freshly prepared with premium ingredients.", price, category, veg, available, image: img, portion: portion || "", isBestseller };
 }
 
-// ✨ FULL MENU RESTORED (Saare items yahan hain)
+// ✨ FULL MENU RESTORED
 const DEFAULT_MENU = [
   mi("d1", "Mint Mojito", 90, "Drinks", true, "Refreshing blend of fresh mint, lemon, and sparkling soda.", "", true), mi("d2", "Blue Lagoon", 90, "Drinks", true, "Tropical blue curacao cooler with a citrusy kick."), mi("d3", "Vanilla Shake", 120, "Drinks", true, "Classic thick and creamy vanilla milkshake."), mi("d4", "Chocolate Shake", 130, "Drinks", true, "Rich cocoa blended with milk and ice cream."), mi("d5", "Kitkat Oreo Shake", 150, "Drinks", true, "Ultimate crunch of KitKat and Oreo cookies."), mi("d9", "Cold Coffee", 120, "Drinks", true, "Chilled, frothy coffee perfection.", "", true), mi("d10", "Cold Drink", 50, "Drinks", true, "Chilled aerated beverage."),
   mi("f1", "Veg Burger", 90, "Fun Food", true, "Crispy veggie patty with fresh lettuce and creamy mayo."), mi("f2", "Eat & Park Special Pizza", 280, "Fun Food", true, "Loaded with exotic veggies, extra cheese and secret sauce.", "", true), mi("f3", "Veg Roll", 90, "Fun Food", true, "Spiced veggies wrapped in a soft, flaky paratha."), mi("f4", "Paneer Roll", 100, "Fun Food", true, "Tandoori paneer chunks rolled to perfection."), mi("f8", "Eat & Park Egg Roll", 100, "Fun Food", false, "Double egg wrapped with crispy onions and sauces."), mi("f9", "Eat & Park Chicken Roll", 150, "Fun Food", false, "Juicy chicken tikka wrapped in a crispy paratha."), mi("f11", "White Sauce Pasta", 180, "Fun Food", true, "Penne in a rich, creamy, and cheesy garlic sauce."), mi("f14", "Veg Sandwich", 120, "Fun Food", true, "Freshly grilled with layers of healthy veggies and cheese."), mi("f15", "Chicken Sandwich", 150, "Fun Food", false, "Grilled sandwich stuffed with creamy chicken filling."),
@@ -165,7 +165,6 @@ function AddBtnStepper({ qty, onChange, available }) {
   return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: 80, padding: "4px", background: "#fff", border: `2px solid ${COLORS.sage}`, borderRadius: 8, boxShadow: "0 4px 12px rgba(74,124,89,0.15)" }}><button onClick={() => onChange(Math.max(0, qty - 1))} style={{...stepBtnStyle, width: 22, height: 22, border: "none", color: COLORS.sage}} className="smooth-transition">−</button><span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 14, color: COLORS.sage }}>{qty}</span><button onClick={() => onChange(qty + 1)} style={{...stepBtnStyle, width: 22, height: 22, border: "none", color: COLORS.sage}} className="smooth-transition">+</button></div>;
 }
 
-// ✨ NORMAL SEARCH BAR (NO VOICE SEARCH - BUG FREE)
 function SearchBar({ value, onChange, placeholder = "Search menu..." }) {
   return (
     <div style={{ position: "relative", flex: 1 }}>
@@ -200,7 +199,7 @@ function Toast({ message, type = 'info' }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   1. ENHANCED CUSTOMER VIEW
+   1. ENHANCED CUSTOMER VIEW (WITH OTP LOGIN & GET LOCATION)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, setRole, promo, settings, installApp, handlePrint, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers }) {
@@ -222,6 +221,14 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [claimedReward, setClaimedReward] = useState(null);
 
+  // ✨ OTP & Location State
+  const [otpStep, setOtpStep] = useState("phone"); // 'phone' | 'verify'
+  const [otpCode, setOtpCode] = useState("");
+  const [generatedOtp, setGeneratedOtp] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedDiscount, setAppliedDiscount] = useState(0);
+
   const [bookType, setBookType] = useState("table");
   const [bookData, setBookData] = useState({ name: "", phone: "", date: "", time: "", guests: "" });
   const [confirmedBooking, setConfirmedBooking] = useState(null);
@@ -236,8 +243,13 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
   const cartCount = cartItems.reduce((s, [, q]) => s + q, 0);
-  const cartTotal = cartItems.reduce((s, [id, q]) => { const item = menu.find((m) => m.id === id); return s + (item ? item.price * q : 0); }, 0);
+  const subtotal = cartItems.reduce((s, [id, q]) => { const item = menu.find((m) => m.id === id); return s + (item ? item.price * q : 0); }, 0);
   
+  // ✨ Dynamic Discount & Delivery Charge (₹40)
+  const deliveryFee = orderType === "parcel" ? 40 : 0;
+  const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
+  const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
+
   const handleSetQty = (id, q) => {
     const oldQ = cart[id] || 0;
     setCart((c) => ({ ...c, [id]: q }));
@@ -261,7 +273,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   };
 
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served");
-  // ✨ PAYMENT QR CODE LOGIC (UPI)
   const cartQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${cartTotal}&cu=INR`)}`;
   const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
 
@@ -270,6 +281,54 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
   const currentCoins = activeUser ? activeUser.coins : 0;
   const newEarnedCoins = Math.floor(cartTotal / loyaltyRules.rate);
+
+  // ✨ OTP Login Functions
+  const handleSendOtp = () => {
+    if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid 10-digit phone", 'error'); return; }
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    setGeneratedOtp(code);
+    setOtpStep("verify");
+    showToast(`🔐 Demo OTP sent: ${code}`, 'success');
+  };
+
+  const handleVerifyOtp = () => {
+    if (otpCode === generatedOtp || otpCode === "1234") {
+      setIsLoggedIn(true);
+      setOtpStep("phone");
+      showToast("✅ Login Successful!", 'success');
+    } else {
+      showToast("❌ Incorrect OTP", 'error');
+    }
+  };
+
+  // ✨ Get Location Function
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) { showToast("Geolocation not supported", 'error'); return; }
+    showToast("📍 Fetching your GPS location...", 'info');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setCustAddress(`Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)} (Auto-detected GPS Location)`);
+        showToast("✅ Location fetched successfully!", 'success');
+      },
+      (error) => {
+        showToast("⚠️ Unable to retrieve location", 'error');
+      }
+    );
+  };
+
+  // ✨ Apply Coupon / Discount
+  const handleApplyCoupon = () => {
+    if (couponCode.toUpperCase() === "EAT20") {
+      setAppliedDiscount(20);
+      showToast("🎉 Flat 20% Discount Applied!", 'success');
+    } else if (couponCode.toUpperCase() === "EATS10") {
+      setAppliedDiscount(10);
+      showToast("🎉 10% Discount Applied!", 'success');
+    } else {
+      showToast("❌ Invalid Coupon Code", 'error');
+    }
+  };
 
   async function handlePlaceOrder() {
     if (cartItems.length === 0) return;
@@ -281,16 +340,17 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     const claimedText = claimedReward ? `\n🎁 *Free Reward Claimed:* ${claimedReward.item}` : "";
 
     const waText = `🚨 *NEW ORDER ALERT* (#${orderId.slice(1,5).toUpperCase()})\n\n`
-                 + `*Type:* ${orderType === 'parcel' ? '🛍️ Parcel' : `🍽️ Table ${table}`}\n`
+                 + `*Type:* ${orderType === 'parcel' ? '🛍️ Parcel (Delivery ₹40)' : `🍽️ Table ${table}`}\n`
                  + `*Customer:* ${custName} (${custPhone})\n`
                  + (orderType === 'parcel' ? `*Address:* ${custAddress}\n\n` : `\n`)
                  + `*Items:* ${itemStrings}${claimedText}\n`
+                 + (appliedDiscount > 0 ? `*Discount:* ${appliedDiscount}%\n` : ``)
                  + `*Total Bill:* ₹${cartTotal}\n`
                  + (notes ? `*Notes:* ${notes}` : ``);
                  
     const link = document.createElement('a'); link.href = `https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`; link.target = '_blank'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
 
-    const order = { id: orderId, table, orderType, customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "" }, items: cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty }; }), claimedReward: claimedReward ? claimedReward.item : null, rewardUsedCoins: claimedReward ? claimedReward.cost : 0, earnedCoins: newEarnedCoins, notes, payment: "cash", status: "new", paid: false, createdAt: Date.now() };
+    const order = { id: orderId, table, orderType, customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "" }, items: cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty }; }), claimedReward: claimedReward ? claimedReward.item : null, rewardUsedCoins: claimedReward ? claimedReward.cost : 0, earnedCoins: newEarnedCoins, discount: appliedDiscount, deliveryFee, notes, payment: "cash", status: "new", paid: false, createdAt: Date.now() };
     
     await placeOrder(order); 
     setMyOrderIds([...myOrderIds, order.id]); 
@@ -444,14 +504,49 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 
                 <div style={{ display: "flex", gap: 12, marginTop: 20, marginBottom: 16 }}>
                   <button onClick={() => setOrderType("dine_in")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "dine_in" ? COLORS.copper : COLORS.line}`, background: orderType === "dine_in" ? COLORS.copper : "#fff", color: orderType === "dine_in" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer", transition: "all 0.2s ease" }}>🍽️ Dine-in</button>
-                  <button onClick={() => setOrderType("parcel")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "parcel" ? COLORS.copper : COLORS.line}`, background: orderType === "parcel" ? COLORS.copper : "#fff", color: orderType === "parcel" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer", transition: "all 0.2s ease" }}>🛍️ Parcel</button>
+                  <button onClick={() => setOrderType("parcel")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "parcel" ? COLORS.copper : COLORS.line}`, background: orderType === "parcel" ? COLORS.copper : "#fff", color: orderType === "parcel" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer", transition: "all 0.2s ease" }}>🛍️ Parcel (+₹40)</button>
+                </div>
+
+                {/* ✨ OTP LOGIN UI IN CHECKOUT */}
+                <div style={{ background: COLORS.paper2, padding: 16, borderRadius: 16, marginBottom: 16, border: `1px solid ${COLORS.line}` }}>
+                  <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10, color: COLORS.ink }}>🔐 Quick OTP Authentication</div>
+                  {!isLoggedIn ? (
+                    <div>
+                      {otpStep === "phone" ? (
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <input type="tel" placeholder="10-digit Phone" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} style={{...inputStyle, flex: 1}} />
+                          <button onClick={handleSendOtp} style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer" }}>Send OTP</button>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <input type="text" placeholder="Enter OTP (e.g. 1234)" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} style={{...inputStyle, flex: 1}} />
+                          <button onClick={handleVerifyOtp} style={{ background: COLORS.success, color: "#fff", border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer" }}>Verify</button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ color: COLORS.success, fontWeight: 800, fontSize: 14 }}>✓ Verified Customer ({custPhone})</div>
+                  )}
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 20 }}>
                   <div style={{fontSize: 13, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', letterSpacing: 1}}>Your Details</div>
-                  <input type="tel" placeholder="Phone Number *" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} style={{...inputStyle, borderColor: custPhone.length >= 10 ? COLORS.sage : COLORS.line}} />
                   <input type="text" placeholder="Your Name *" value={custName} onChange={(e) => setCustName(e.target.value)} style={inputStyle} />
-                  {orderType === "parcel" && <textarea placeholder="Delivery Address *" value={custAddress} onChange={(e) => setCustAddress(e.target.value)} style={{...inputStyle, resize: "none"}} rows={2} />}
+                  
+                  {orderType === "parcel" && (
+                    <div>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <textarea placeholder="Delivery Address *" value={custAddress} onChange={(e) => setCustAddress(e.target.value)} style={{...inputStyle, resize: "none", flex: 1}} rows={2} />
+                        <button onClick={handleGetLocation} title="Get GPS Location" style={{ background: COLORS.sage, color: "#fff", border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>📍 GPS</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* ✨ COUPON / DISCOUNT INPUT */}
+                <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                  <input type="text" placeholder="Coupon Code (e.g. EAT20)" value={couponCode} onChange={(e) => setCouponCode(e.target.value)} style={inputStyle} />
+                  <button onClick={handleApplyCoupon} style={{ background: COLORS.gold, color: COLORS.ink, border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer" }}>Apply</button>
                 </div>
 
                 {/* 🪙 EATCOIN LOYALTY SYSTEM UI */}
@@ -494,8 +589,21 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special cooking instructions?" style={{ ...inputStyle, marginBottom: 20, resize: "none" }} rows={2} />
                 
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 18 }}>
+                <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.textLight }}>
+                    <span>Subtotal</span><span>{inr(subtotal)}</span>
+                  </div>
+                  {appliedDiscount > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.success }}>
+                      <span>Discount ({appliedDiscount}%)</span><span>-{inr(discountAmount)}</span>
+                    </div>
+                  )}
+                  {orderType === "parcel" && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.copper }}>
+                      <span>Delivery Charge</span><span>+{inr(deliveryFee)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 18, borderTop: `1px solid ${COLORS.line}`, paddingTop: 8, marginTop: 4 }}>
                     <span>Grand Total</span><span style={{ fontFamily: "'JetBrains Mono', monospace", color: COLORS.copper }}>{inr(cartTotal)}</span>
                   </div>
                   {claimedReward && (
@@ -505,7 +613,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   )}
                 </div>
                 
-                {/* ✨ UPI PAYMENT QR CODE FOR PARCEL */}
                 {orderType === "parcel" && (
                   <div style={{ textAlign: "center", padding: "20px", background: COLORS.paper, border: `2px dashed ${COLORS.line}`, borderRadius: 16, marginBottom: 20 }}>
                     <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.ink, marginBottom: 12 }}>Scan to Pay {inr(cartTotal)}</div>
@@ -617,10 +724,10 @@ function SidebarBtn({ icon, text, onClick, highlight }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   2. STAFF VIEW
+   2. STAFF VIEW (KITCHEN BOARD & THERMAL PRINT)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
-function StaffView({ orders, advanceStatus, setRole, handlePrint, calls, resolveCall }) {
+function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
   const active = orders.filter((o) => o.status !== "served").sort((a, b) => a.createdAt - b.createdAt);
   const activeCalls = calls.filter(c => c.status === 'active');
   const columns = ["new", "preparing", "ready"];
@@ -657,6 +764,43 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint, calls, resolve
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedOrderId, active]);
+
+  // ✨ Thermal KOT & Bill Print Handler
+  const handlePrintReceipt = (order) => {
+    const printWindow = window.open('', '_blank', 'width=300,height=600');
+    if (!printWindow) return;
+    
+    const itemsHtml = order.items.map(it => `<tr><td>${it.qty}x ${it.name}</td><td style="text-align:right">₹${it.price * it.qty}</td></tr>`).join('');
+    const totalAmount = order.items.reduce((s, it) => s + (it.price * it.qty), 0);
+    
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>KOT / Bill - #${order.id.slice(1,5)}</title>
+          <style>
+            body { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 10px; width: 260px; color: #000; }
+            h2, h4 { text-align: center; margin: 4px 0; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { padding: 4px 0; border-bottom: 1px dashed #000; }
+            .total { font-weight: bold; font-size: 14px; text-align: right; margin-top: 10px; }
+          </style>
+        </head>
+        <body>
+          <h2>${RESTAURANT.name}</h2>
+          <h4>${order.orderType === 'parcel' ? '🛍️ PARCEL ORDER' : `🍽️ TABLE ${order.table}`}</h4>
+          <p>Order ID: #${order.id.toUpperCase()}<br/>Customer: ${order.customer.name} (${order.customer.phone})</p>
+          <table>
+            <tr><th>Item</th><th style="text-align:right">Amt</th></tr>
+            ${itemsHtml}
+          </table>
+          ${order.deliveryFee ? `<p>Delivery Fee: ₹${order.deliveryFee}</p>` : ''}
+          <div class="total">Total: ₹${totalAmount + (order.deliveryFee || 0)}</div>
+          <script>window.print(); setTimeout(() => window.close(), 500);</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1200, margin: "0 auto" }}>
@@ -698,7 +842,6 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint, calls, resolve
                       </div>
                       <div style={{ borderTop: isSelected ? `1px solid rgba(255,255,255,0.3)` : `1.5px dashed ${COLORS.line}`, paddingTop: 16, marginBottom: 16 }}>
                         {o.items.map((it) => ( <div key={it.itemId} style={{ fontSize: 15, marginBottom: 8, fontWeight: 600, color: isSelected ? '#fff' : COLORS.ink }}><span style={{ fontWeight: 800, display: 'inline-block', width: 28 }}>{it.qty}×</span> {it.name} <span style={{color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.textLight, fontSize: 13}}>{it.portion}</span></div> ))}
-                        {/* ✨ SHOW FREE REWARD IN KITCHEN */}
                         {o.claimedReward && (
                           <div style={{ fontSize: 15, marginTop: 12, padding: '8px 12px', background: isSelected ? 'rgba(255,255,255,0.2)' : COLORS.sageLight, color: isSelected ? '#fff' : COLORS.sageDark, borderRadius: 8, fontWeight: 800 }}>
                             🎁 FREE: {o.claimedReward}
@@ -707,7 +850,7 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint, calls, resolve
                       </div>
                       <div style={{ display: 'flex', gap: 12, marginTop: 20, alignItems: 'center' }}>
                         <div style={{ flex: 1 }}><SlideButton text={status === "new" ? "Slide to Prep (P)" : status === "preparing" ? "Slide to Ready (R)" : "Slide to Serve"} bg={isSelected ? '#fff' : STATUS_COLOR[status]} onComplete={() => advanceStatus(o.id, status)} /></div>
-                        <button onClick={() => handlePrint(o, "kot")} style={{ background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, color: isSelected ? '#fff' : COLORS.ink, border: isSelected ? '1px solid rgba(255,255,255,0.3)' : 'none', width: 48, height: 48, borderRadius: 14, fontSize: 20, cursor: 'pointer' }}>🖨️</button>
+                        <button onClick={() => handlePrintReceipt(o)} style={{ background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, color: isSelected ? '#fff' : COLORS.ink, border: isSelected ? '1px solid rgba(255,255,255,0.3)' : 'none', width: 48, height: 48, borderRadius: 14, fontSize: 20, cursor: 'pointer' }} title="Print KOT / Bill">🖨️</button>
                       </div>
                     </div>
                   )
@@ -722,18 +865,24 @@ function StaffView({ orders, advanceStatus, setRole, handlePrint, calls, resolve
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   3. ADMIN VIEW
+   3. ADMIN VIEW (MENU EDITOR, BOOKINGS, ORDER HISTORY, LOYALTY)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
-function AdminView({ menu, bookings, orders, markPaid, deleteOrder, setRole, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers }) {
+function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder, setRole, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers }) {
   const [tab, setTab] = useState("overview");
   const [filterDate, setFilterDate] = useState(toLocalISODate(Date.now()));
   const [newInv, setNewInv] = useState({ name: "", stock: "", unit: "kg" });
   const [newOffer, setNewOffer] = useState({ title: "", desc: "" });
   const [newReward, setNewReward] = useState({ cost: "", item: "" });
 
+  // ✨ Menu Editor state
+  const [editingItem, setEditingItem] = useState(null);
+  const [newItemName, setNewItemName] = useState("");
+  const [newItemPrice, setNewItemPrice] = useState("");
+  const [newItemCat, setNewItemCat] = useState(CATEGORIES[0]);
+
   const filteredOrders = orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
-  const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0), 0);
+  const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0), 0);
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0), 0) / filteredOrders.length) : 0;
   const paidOrders = filteredOrders.filter(o => o.paid).length;
   const dineInOrders = filteredOrders.filter(o => o.orderType === "dine_in").length;
@@ -747,12 +896,25 @@ function AdminView({ menu, bookings, orders, markPaid, deleteOrder, setRole, inv
     }
   }
 
+  // ✨ Menu Edit & Delete Handlers
+  const handleSaveMenuItem = () => {
+    if (!editingItem) return;
+    setMenuState(menu.map(m => m.id === editingItem.id ? { ...m, name: newItemName, price: Number(newItemPrice), category: newItemCat } : m));
+    setEditingItem(null);
+  };
+
+  const handleDeleteMenuItem = (id) => {
+    if (window.confirm("Are you sure you want to delete this menu item?")) {
+      setMenuState(menu.filter(m => m.id !== id));
+    }
+  };
+
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, alignItems: 'center' }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>📊 Admin Dashboard</div><button onClick={() => setRole("customer")} style={{ background: COLORS.paper2, border: "none", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontWeight: 700 }}>← Exit</button></div>
       
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto", scrollbarWidth: "none" }}>
-        {["overview", "offers", "loyalty", "inventory", "orders", "bookings"].map((t) => ( <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", marginRight: 10, fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button> ))}
+        {["overview", "menu", "offers", "loyalty", "inventory", "orders", "bookings"].map((t) => ( <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", marginRight: 10, fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button> ))}
       </div>
 
       {tab === "overview" && (
@@ -767,6 +929,44 @@ function AdminView({ menu, bookings, orders, markPaid, deleteOrder, setRole, inv
             <StatCard label="Avg Order Value" value={inr(avgOrderValue)} icon="📈" color={COLORS.gold} />
           </div>
         </>
+      )}
+
+      {/* ✨ MENU EDITOR TAB */}
+      {tab === "menu" && (
+        <div className="slide-up">
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", marginBottom: 16 }}>Menu Management (Edit & Delete)</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+            {menu.map(item => (
+              <div key={item.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{fontWeight: 800, fontSize: 16, color: COLORS.ink}}>{item.name} <span style={{fontSize: 12, color: COLORS.textLight}}>({item.category})</span></div>
+                  <div style={{fontFamily: "'JetBrains Mono', monospace", color: COLORS.copper, fontWeight: 800}}>{inr(item.price)}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => { setEditingItem(item); setNewItemName(item.name); setNewItemPrice(item.price); setNewItemCat(item.category); }} style={{ background: COLORS.paper2, border: 'none', padding: '8px 14px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                  <button onClick={() => handleDeleteMenuItem(item.id)} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '8px 14px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {editingItem && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99 }}>
+              <div style={{ background: '#fff', padding: 24, borderRadius: 20, width: '90%', maxWidth: 400 }}>
+                <h3 style={{ marginTop: 0 }}>Edit Menu Item</h3>
+                <input type="text" value={newItemName} onChange={e=>setNewItemName(e.target.value)} style={{...inputStyle, marginBottom: 12}} />
+                <input type="number" value={newItemPrice} onChange={e=>setNewItemPrice(e.target.value)} style={{...inputStyle, marginBottom: 12}} />
+                <select value={newItemCat} onChange={e=>setNewItemCat(e.target.value)} style={{...inputStyle, marginBottom: 20}}>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button onClick={() => setEditingItem(null)} style={{ flex: 1, padding: 12, border: `1px solid ${COLORS.line}`, background: 'transparent', borderRadius: 10, fontWeight: 700 }}>Cancel</button>
+                  <button onClick={handleSaveMenuItem} style={{ flex: 1, padding: 12, background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800 }}>Save</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* LOYALTY MANAGER */}
@@ -880,7 +1080,7 @@ function AdminView({ menu, bookings, orders, markPaid, deleteOrder, setRole, inv
                     {o.items.map((it) => `${it.qty}×${it.name}`).join(", ")}
                     {o.claimedReward && <span style={{display: 'block', color: COLORS.sageDark, fontWeight: 800, fontSize: 12, marginTop: 4}}>🎁 Free: {o.claimedReward}</span>}
                   </td>
-                  <td style={{...td, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 15}}>{inr(o.items.reduce((s, it) => s + it.price * it.qty, 0))}</td>
+                  <td style={{...td, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 15}}>{inr(o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0))}</td>
                   <td style={td}><button onClick={() => markPaid(o.id, !o.paid)} style={{ border: `1.5px solid ${o.paid ? COLORS.sage : COLORS.line}`, background: o.paid ? COLORS.sage : "transparent", color: o.paid ? "#fff" : COLORS.ink, borderRadius: 10, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>{o.paid ? "✓ Paid" : "Mark paid"}</button></td>
                 </tr>
               ))}
@@ -927,7 +1127,6 @@ export default function App() {
   const [inventory, setInventory] = useState([]);
   const [offersList, setOffersList] = useState(DEFAULT_OFFERS);
 
-  // 🪙 LOYALTY STATE
   const [loyaltyRules, setLoyaltyRules] = useState({
     rate: 10, 
     rewards: [{ id: "r1", cost: 300, item: "Free French Fry" }]
@@ -955,7 +1154,6 @@ export default function App() {
   const placeOrder = async (order) => { 
     setOrdersState([...orders, order]);
     
-    // ✨ EATCOIN BALANCE UPDATE LOGIC
     if(order.customer.phone && order.customer.phone.length >= 10) {
        const netCoins = order.earnedCoins - (order.rewardUsedCoins || 0);
        const existingUserIndex = loyaltyUsers.findIndex(u => u.phone === order.customer.phone);
@@ -969,7 +1167,6 @@ export default function App() {
        }
     }
 
-    // 📦 INVENTORY AUTO-DEDUCT
     order.items.forEach(cartItem => {
       const itemName = cartItem.name.toLowerCase();
       let newInv = [...inventory];
@@ -995,8 +1192,8 @@ export default function App() {
       <style>{FONTS}</style>
       <div className="app-content">
         {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} offersList={offersList} table={table} setTable={setTable} setRole={setRole} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} />}
-        {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} setRole={setRole} handlePrint={() => {}} calls={calls} resolveCall={resolveCall} />}
-        {role === "admin" && <AdminView menu={menu} bookings={bookings} orders={orders} markPaid={markPaid} setRole={setRole} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} />}
+        {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} setRole={setRole} calls={calls} resolveCall={resolveCall} />}
+        {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} setRole={setRole} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} />}
       </div>
     </div>
   );
