@@ -413,14 +413,14 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     const claimedText = claimedReward ? `\n🎁 *Free Reward Claimed:* ${claimedReward.item}` : "";
 
     const waText = `🚨 *NEW ORDER ALERT* (#${orderId.slice(1,5).toUpperCase()})\n\n`
-                 + `*Type:* ${orderType === 'parcel' ? '🛍️ Parcel (Delivery ₹40)' : `🍽️ Table ${table}`}\n`
-                 + `*Customer:* ${custName} (${custPhone})\n`
-                 + (orderType === 'parcel' ? `*Address:* ${custAddress}\n\n` : `\n`)
-                 + `*Items:* ${itemStrings}${claimedText}\n`
-                 + (appliedDiscount > 0 ? `*Discount:* ${appliedDiscount}%\n` : ``)
-                 + `*Total Bill:* ₹${cartTotal}\n`
-                 + (notes ? `*Notes:* ${notes}` : ``);
-                 
+               + `*Type:* ${orderType === 'parcel' ? '🛍️ Parcel (Delivery ₹40)' : `🍽️ Table ${table}`}\n`
+               + `*Customer:* ${custName} (${custPhone})\n`
+               + (orderType === 'parcel' ? `*Address:* ${custAddress}\n\n` : `\n`)
+               + `*Items:* ${itemStrings}${claimedText}\n`
+               + (appliedDiscount > 0 ? `*Discount:* ${appliedDiscount}%\n` : ``)
+               + `*Total Bill:* ₹${cartTotal}\n`
+               + (notes ? `*Notes:* ${notes}` : ``);
+               
     const link = document.createElement('a'); link.href = `https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`; link.target = '_blank'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
 
     const order = { id: orderId, table, orderType, customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "" }, items: cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty }; }), claimedReward: claimedReward ? claimedReward.item : null, rewardUsedCoins: claimedReward ? claimedReward.cost : 0, earnedCoins: newEarnedCoins, discount: appliedDiscount, deliveryFee, notes, payment: "cash", status: "new", paid: false, createdAt: Date.now() };
@@ -1136,9 +1136,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
   const [addMenuDesc, setAddMenuDesc] = useState("");
   const [addMenuImage, setAddMenuImage] = useState("");
 
-  // ✨ Gallery image input state
   const [newGalleryImg, setNewGalleryImg] = useState("");
-  // ✨ Hero image input state
   const [heroImgInput, setHeroImgInput] = useState(settings?.heroImage || "");
 
   const filteredOrders = orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
@@ -1192,7 +1190,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
     alert("✅ New dish added successfully!");
   };
 
-  // ✨ Handle adding image to gallery
   const handleAddGalleryPhoto = () => {
     if (!newGalleryImg.trim()) return;
     setGallery([...gallery, newGalleryImg.trim()]);
@@ -1204,7 +1201,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
     setGallery(gallery.filter((_, i) => i !== index));
   };
 
-  // ✨ Handle saving hero image
   const handleSaveHeroImage = () => {
     if (!heroImgInput.trim()) return;
     setSettings({ ...settings, heroImage: heroImgInput.trim() });
@@ -1214,7 +1210,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
   const handleExportCSV = () => {
     const rows = [["Time", "Type", "Items", "Total", "Paid"]];
     filteredOrders.forEach(o => {
-      const total = o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0);
+      const total = o.items.reduce((s, it) => s + (it.price * it.qty), 0) + (o.deliveryFee || 0);
       rows.push([
         new Date(o.createdAt).toLocaleTimeString('en-IN'),
         o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`,
@@ -1254,7 +1250,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
         </>
       )}
 
-      {/* ✨ SETTINGS TAB (FOR HERO FRONT IMAGE) */}
       {tab === "settings" && (
         <div className="slide-up" style={{ background: COLORS.paper, padding: 24, borderRadius: 16, border: `1px solid ${COLORS.line}` }}>
           <h3 style={{ fontFamily: "'Outfit', sans-serif", marginTop: 0, marginBottom: 16 }}>🖼️ Change Hero Front Image</h3>
@@ -1271,7 +1266,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
         </div>
       )}
 
-      {/* ✨ GALLERY MANAGEMENT TAB */}
       {tab === "gallery" && (
         <div className="slide-up">
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30, border: `1px solid ${COLORS.line}` }}>
@@ -1294,7 +1288,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
         </div>
       )}
 
-      {/* ✨ MENU MANAGEMENT & ADD NEW DISH TAB */}
       {tab === "menu" && (
         <div className="slide-up">
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30, border: `1px solid ${COLORS.line}` }}>
@@ -1500,7 +1493,7 @@ function StatCard({ label, value, icon, color }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   4. MAIN APP COMPONENT
+   4. MAIN APP COMPONENT (WITH FIREBASE FIRESTORE SYNC)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 export default function App() {
@@ -1529,17 +1522,66 @@ export default function App() {
   const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80", adminPin: "9876", staffPin: "5432" });
   const [ready, setReady] = useState(true);
 
-  const deleteBooking = async (id) => { if(window.confirm("Delete this booking?")) setBookings(bookings.filter(b=>b.id!==id)); };
-  const addInventory = async (item) => { setInventory([...inventory, item]); };
-  const updateStock = async (id, newStock) => { setInventory(inventory.map(i=>i.id===id?{...i,stock:newStock}:i)); };
-  const requestWaiter = async (tbl) => { setCalls([...calls, { id: uid("call"), table: tbl, time: Date.now(), status: "active" }]); };
-  const resolveCall = async (id) => { setCalls(calls.filter(c=>c.id!==id)); };
+  // 🔄 Firebase Real-time Sync (Orders)
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, "orders"), (snapshot) => {
+      const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (ordersData.length > 0) setOrdersState(ordersData);
+    }, (error) => {
+      console.error("Firestore sync error:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const deleteBooking = async (id) => { 
+    if(window.confirm("Delete this booking?")) {
+      try {
+        await deleteDoc(doc(db, "bookings", id));
+        setBookings(bookings.filter(b => b.id !== id));
+      } catch (e) {
+        setBookings(bookings.filter(b => b.id !== id));
+      }
+    } 
+  };
+
+  const addInventory = async (item) => { 
+    try {
+      await setDoc(doc(db, "inventory", item.id), item);
+      setInventory([...inventory, item]);
+    } catch(e) {
+      setInventory([...inventory, item]);
+    }
+  };
+
+  const updateStock = async (id, newStock) => { 
+    try {
+      await updateDoc(doc(db, "inventory", id), { stock: newStock });
+      setInventory(inventory.map(i => i.id === id ? { ...i, stock: newStock } : i));
+    } catch(e) {
+      setInventory(inventory.map(i => i.id === id ? { ...i, stock: newStock } : i));
+    }
+  };
+
+  const requestWaiter = async (tbl) => { 
+    const newCall = { id: uid("call"), table: tbl, time: Date.now(), status: "active" };
+    setCalls([...calls, newCall]); 
+  };
+
+  const resolveCall = async (id) => { 
+    setCalls(calls.filter(c => c.id !== id)); 
+  };
   
   const addOffer = async (off) => { setOffersList([...offersList, off]); };
-  const removeOffer = async (id) => { setOffersList(offersList.filter(o=>o.id!==id)); };
+  const removeOffer = async (id) => { setOffersList(offersList.filter(o => o.id !== id)); };
 
-  const placeOrder = async (order) => { 
-    setOrdersState([...orders, order]);
+  const placeOrder = async (order) => {  
+    try {
+      await setDoc(doc(db, "orders", order.id), order);
+    } catch (e) {
+      console.error("Error saving order to Firestore:", e);
+    }
+
+    setOrdersState(prev => [...prev, order]);
     
     if(order.customer.phone && order.customer.phone.length >= 10) {
        const netCoins = order.earnedCoins - (order.rewardUsedCoins || 0);
@@ -1575,9 +1617,37 @@ export default function App() {
     });
   };
 
-  const advanceStatus = async (orderId, currentStatus) => { const idx = STATUS_FLOW.indexOf(currentStatus); const nextStatus = STATUS_FLOW[Math.min(idx + 1, STATUS_FLOW.length - 1)]; setOrdersState(orders.map(o=>o.id===orderId?{...o,status:nextStatus, ...(nextStatus === "served" ? { servedAt: Date.now() } : {})}:o)); };
-  const markPaid = async (orderId, paid) => { setOrdersState(orders.map(o=>o.id===orderId?{...o,paid}:o)); };
-  const bookEvent = async (booking) => { setBookings([...bookings, booking]); };
+  const advanceStatus = async (orderId, currentStatus) => { 
+    const idx = STATUS_FLOW.indexOf(currentStatus); 
+    const nextStatus = STATUS_FLOW[Math.min(idx + 1, STATUS_FLOW.length - 1)]; 
+    const updateData = { status: nextStatus, ...(nextStatus === "served" ? { servedAt: Date.now() } : {}) };
+    
+    try {
+      await updateDoc(doc(db, "orders", orderId), updateData);
+    } catch(e) {
+      console.error(e);
+    }
+
+    setOrdersState(orders.map(o => o.id === orderId ? { ...o, ...updateData } : o)); 
+  };
+
+  const markPaid = async (orderId, paid) => { 
+    try {
+      await updateDoc(doc(db, "orders", orderId), { paid });
+    } catch(e) {
+      console.error(e);
+    }
+    setOrdersState(orders.map(o => o.id === orderId ? { ...o, paid } : o)); 
+  };
+
+  const bookEvent = async (booking) => { 
+    try {
+      await setDoc(doc(db, "bookings", booking.id), booking);
+    } catch(e) {
+      console.error(e);
+    }
+    setBookings([...bookings, booking]); 
+  };
 
   if (!ready) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: COLORS.paper, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700 }}>Loading menu...</div>;
 
