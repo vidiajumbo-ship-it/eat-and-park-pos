@@ -1,0 +1,30 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDSMZGg9JrD53aPabLkjLV6Y23f3AXpdW8",
+  authDomain: "eat-and-park.firebaseapp.com",
+  projectId: "eat-and-park",
+  storageBucket: "eat-and-park.firebasestorage.app",
+  messagingSenderId: "868395201303",
+  appId: "1:868395201303:web:171425ef56a4cfeab1bd52"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+
+
+
+
+npm install firebase
+
+
+npm install -g firebase-tools
+
+firebase login
+firebase init
+firebase deploy

@@ -1,0 +1,1211 @@
+import React, { useState, useEffect, useCallback, useRef } from "react";
+
+/* ---------------------------------------------------------------
+   Eat & Park Restaurant — QR table ordering
+   Roles: customer (scans QR at table) · staff (kitchen ticket board)
+   · admin (menu + orders + daily overview)
+   Data lives in shared window.storage so every role sees the same
+   live orders, as if on separate devices.
+------------------------------------------------------------------ */
+
+const FONTS = `
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+`;
+
+const COLORS = {
+  ink: "#243B1F",
+  paper: "#F2F1DF",
+  paper2: "#E8E6D0",
+  copper: "#C1442D",
+  copperDark: "#9C3520",
+  rust: "#C0392B",
+  sage: "#3F7D3B",
+  line: "#D6D3BB",
+};
+const VEG = COLORS.sage;
+const NONVEG = COLORS.rust;
+
+const RESTAURANT = {
+  name: "Eat & Park",
+  full: "Eat & Park Restaurant",
+  tagline: "A Family Restaurant",
+  address: "Girja More, Ara – Buxar Main Road, Pakri, Ara, Bhojpur",
+  phones: ["8271918062", "7303267750"],
+};
+
+const CATEGORIES = [
+  "Drinks",
+  "Fun Food",
+  "Chinese Starter",
+  "Mughlai",
+  "Tandoori",
+  "Soup",
+  "Indian Bread",
+  "Snacks",
+  "Chinese Mains",
+  "Pulao",
+  "Paneer & Mushroom",
+  "Chicken, Mutton, Fish & Egg",
+  "Biryani & Thali",
+  "Aloo, Dal & Sides",
+  "Momo",
+  "Tea & Coffee",
+];
+
+// veg: true = veg (green dot), false = non-veg (red dot)
+function mi(id, name, price, category, veg, desc) {
+  return { id, name, desc: desc || "", price, category, veg, available: true };
+}
+
+const DEFAULT_MENU = [
+  // Drinks
+  mi("d1", "Mint Mojito", 90, "Drinks", true),
+  mi("d2", "Blue Lagoon", 90, "Drinks", true),
+  mi("d3", "Vanilla Shake", 120, "Drinks", true),
+  mi("d4", "Chocolate Shake", 130, "Drinks", true),
+  mi("d5", "Kitkat Oreo Shake", 150, "Drinks", true),
+  mi("d6", "Strawberry Shake", 120, "Drinks", true),
+  mi("d7", "Mango Shake", 120, "Drinks", true),
+  mi("d8", "Butterscotch Shake", 120, "Drinks", true),
+  mi("d9", "Cold Coffee", 120, "Drinks", true),
+  mi("d10", "Cold Drink", 50, "Drinks", true),
+
+  // Fun Food
+  mi("f1", "Veg Burger", 90, "Fun Food", true),
+  mi("f2", "Eat & Park Special Pizza", 280, "Fun Food", true),
+  mi("f3", "Veg Roll", 90, "Fun Food", true),
+  mi("f4", "Paneer Roll", 100, "Fun Food", true),
+  mi("f5", "Veg Cheese Roll", 120, "Fun Food", true),
+  mi("f6", "Paneer Tikka Roll", 160, "Fun Food", true),
+  mi("f7", "Mushroom Tikka Roll", 180, "Fun Food", true),
+  mi("f8", "Eat & Park Egg Roll", 100, "Fun Food", false),
+  mi("f9", "Eat & Park Chicken Roll", 150, "Fun Food", false),
+  mi("f10", "Veg Pasta", 150, "Fun Food", true),
+  mi("f11", "White Sauce Pasta", 180, "Fun Food", true),
+  mi("f12", "Red Sauce Pasta", 170, "Fun Food", true),
+  mi("f13", "Mix Sauce Pasta", 200, "Fun Food", true),
+  mi("f14", "Veg Sandwich", 120, "Fun Food", true),
+  mi("f15", "Chicken Sandwich", 150, "Fun Food", false),
+
+  // Chinese Starter
+  mi("cs1", "Paneer Chilli Dry/Gravy", 240, "Chinese Starter", true),
+  mi("cs2", "Mushroom Chilli Dry/Gravy", 250, "Chinese Starter", true),
+  mi("cs3", "Veg Manchurian Dry/Gravy", 180, "Chinese Starter", true),
+  mi("cs4", "Paneer Manchurian Dry/Gravy", 250, "Chinese Starter", true),
+  mi("cs5", "Crispy Baby Corn Chilli Dry/Gravy", 240, "Chinese Starter", true),
+  mi("cs6", "Veg Salt & Pepper", 240, "Chinese Starter", true),
+  mi("cs7", "Hot Garlic Paneer / Mushroom / Babycorn / Manchurian", 270, "Chinese Starter", true),
+  mi("cs8", "Chicken Chilli Dry/Gravy", 240, "Chinese Starter", false),
+  mi("cs9", "Chicken Manchurian Dry/Gravy", 260, "Chinese Starter", false),
+  mi("cs10", "Chicken Lollipop Dry/Gravy", 300, "Chinese Starter", false),
+  mi("cs11", "Chicken Crispy Honey", 300, "Chinese Starter", false),
+  mi("cs12", "Chicken Salt & Pepper", 250, "Chinese Starter", false),
+  mi("cs13", "Chicken Charshi", 300, "Chinese Starter", false),
+
+  // Mughlai (non-veg)
+  mi("mg1", "Tandoori Chicken", 450, "Mughlai", false),
+  mi("mg2", "Tandoori Afghani Chicken", 550, "Mughlai", false),
+  mi("mg3", "Chicken Tikka", 350, "Mughlai", false),
+  mi("mg4", "Chicken Malai Tikka", 360, "Mughlai", false),
+  mi("mg5", "Chicken Achari Tikka", 350, "Mughlai", false),
+  mi("mg6", "Chicken Hariyali", 350, "Mughlai", false),
+  mi("mg7", "Chicken Reshmi Kabab", 340, "Mughlai", false),
+  mi("mg8", "Chicken Leg Kabab", 320, "Mughlai", false),
+  mi("mg9", "Chicken Saslik Kabab", 400, "Mughlai", false),
+
+  // Tandoori (veg)
+  mi("t1", "Paneer Tikka", 299, "Tandoori", true),
+  mi("t2", "Mushroom Tikka", 285, "Tandoori", true),
+  mi("t3", "Paneer Achari Tikka", 300, "Tandoori", true),
+  mi("t4", "Paneer Malai Tikka", 320, "Tandoori", true),
+  mi("t5", "Paneer Lahshuni Tikka", 335, "Tandoori", true),
+  mi("t6", "Veg Seek Kabab", 290, "Tandoori", true),
+
+  // Soup
+  mi("s1", "Tomato Soup", 120, "Soup", true),
+  mi("s2", "Veg Hot n Sour Soup", 110, "Soup", true),
+  mi("s3", "Veg Manchow Soup", 120, "Soup", true),
+  mi("s4", "Mushroom Soup", 120, "Soup", true),
+  mi("s5", "Sweet Corn Soup", 110, "Soup", true),
+  mi("s6", "Chicken Manchow Soup", 150, "Soup", false),
+  mi("s7", "Chicken Hot n Sour Soup", 140, "Soup", false),
+  mi("s8", "Chicken Lemon Coriander Soup", 160, "Soup", false),
+  mi("s9", "Chicken Sweet Corn Soup", 160, "Soup", false),
+
+  // Indian Bread
+  mi("b1", "Tandoori Roti", 15, "Indian Bread", true),
+  mi("b2", "Tandoori Butter Roti", 20, "Indian Bread", true),
+  mi("b3", "Laccha Paratha", 50, "Indian Bread", true),
+  mi("b4", "Tawa Roti", 12, "Indian Bread", true),
+  mi("b5", "Tawa Butter Roti", 15, "Indian Bread", true),
+  mi("b6", "Plain Naan", 50, "Indian Bread", true),
+  mi("b7", "Butter Naan", 60, "Indian Bread", true),
+  mi("b8", "Garlic Naan", 70, "Indian Bread", true),
+  mi("b9", "Stuffed Naan", 80, "Indian Bread", true),
+  mi("b10", "Rumali Roti", 40, "Indian Bread", true),
+  mi("b11", "Aloo Paratha", 70, "Indian Bread", true),
+  mi("b12", "Paneer Paratha", 90, "Indian Bread", true),
+  mi("b13", "Sattu Paratha", 80, "Indian Bread", true),
+
+  // Snacks
+  mi("sn1", "Onion Pakoda", 150, "Snacks", true),
+  mi("sn2", "Paneer Pakoda", 180, "Snacks", true),
+  mi("sn3", "French Fries", 100, "Snacks", true),
+  mi("sn4", "Masala French Fries", 120, "Snacks", true),
+  mi("sn5", "Crispy Chilli Potato", 160, "Snacks", true),
+  mi("sn6", "Honey Chilli Potato", 180, "Snacks", true),
+  mi("sn7", "Bread Omlet", 100, "Snacks", false),
+  mi("sn8", "Egg Pakoda", 120, "Snacks", false),
+  mi("sn9", "Chicken Pakoda", 200, "Snacks", false),
+
+  // Chinese Mains (Noodles + Rice)
+  mi("cm1", "Veg Chowmein", 130, "Chinese Mains", true),
+  mi("cm2", "Veg Hakka Noodles", 160, "Chinese Mains", true),
+  mi("cm3", "Paneer Noodles", 180, "Chinese Mains", true),
+  mi("cm4", "Veg Schezwan Noodles", 200, "Chinese Mains", true),
+  mi("cm5", "Veg Garlic Noodles", 180, "Chinese Mains", true),
+  mi("cm6", "Veg Mix Noodles", 200, "Chinese Mains", true),
+  mi("cm7", "Egg Noodles", 160, "Chinese Mains", false),
+  mi("cm8", "Chicken Noodles", 180, "Chinese Mains", false),
+  mi("cm9", "Chicken Schezwan Noodles", 200, "Chinese Mains", false),
+  mi("cm10", "Non Veg Mix Noodles", 220, "Chinese Mains", false),
+  mi("cm11", "Paneer Fried Rice", 200, "Chinese Mains", true),
+  mi("cm12", "Veg Fried Rice", 170, "Chinese Mains", true),
+  mi("cm13", "Veg Schezwan Fried Rice", 180, "Chinese Mains", true),
+  mi("cm14", "Egg Fried Rice", 180, "Chinese Mains", false),
+  mi("cm15", "Chicken Fried Rice", 200, "Chinese Mains", false),
+  mi("cm16", "Chilli Garlic Fried Rice", 190, "Chinese Mains", false),
+  mi("cm17", "Mix Fried Rice", 220, "Chinese Mains", false),
+
+  // Pulao
+  mi("p1", "Plain Rice", 90, "Pulao", true),
+  mi("p2", "Jeera Rice", 110, "Pulao", true),
+  mi("p3", "Veg Pulao", 180, "Pulao", true),
+  mi("p4", "Peas Pulao", 190, "Pulao", true),
+  mi("p5", "Paneer Pulao", 200, "Pulao", true),
+  mi("p6", "Kashmiri Pulao", 220, "Pulao", true),
+
+  // Paneer & Mushroom
+  mi("pn1", "Paneer Masala", 250, "Paneer & Mushroom", true),
+  mi("pn2", "Paneer Pyaza", 260, "Paneer & Mushroom", true),
+  mi("pn3", "Paneer Handi", 260, "Paneer & Mushroom", true),
+  mi("pn4", "Paneer Karahi", 260, "Paneer & Mushroom", true),
+  mi("pn5", "Mutter Paneer", 220, "Paneer & Mushroom", true),
+  mi("pn6", "Paneer Butter Masala", 260, "Paneer & Mushroom", true),
+  mi("pn7", "Paneer Tawa Masala", 280, "Paneer & Mushroom", true),
+  mi("pn8", "Paneer Dehati", 280, "Paneer & Mushroom", true),
+  mi("pn9", "Paneer Punjabi", 280, "Paneer & Mushroom", true),
+  mi("pn10", "Shahi Paneer / Istu", 300, "Paneer & Mushroom", true),
+  mi("pn11", "Paneer Mushroom", 280, "Paneer & Mushroom", true),
+  mi("pn12", "Paneer Diwani", 300, "Paneer & Mushroom", true),
+  mi("pn13", "Paneer Bhurji", 260, "Paneer & Mushroom", true),
+  mi("pn14", "Paneer Kaleji", 320, "Paneer & Mushroom", true),
+  mi("pn15", "Palak Paneer", 220, "Paneer & Mushroom", true),
+  mi("pn16", "Mushroom Masala", 250, "Paneer & Mushroom", true),
+  mi("pn17", "Mushroom Karahi", 260, "Paneer & Mushroom", true),
+  mi("pn18", "Mushroom Handi", 280, "Paneer & Mushroom", true),
+  mi("pn19", "Mushroom Payaza", 270, "Paneer & Mushroom", true),
+  mi("pn20", "Mushroom Dehati", 300, "Paneer & Mushroom", true),
+  mi("pn21", "Mushroom Butter Masala", 280, "Paneer & Mushroom", true),
+  mi("pn22", "Mushroom Chatpata", 300, "Paneer & Mushroom", true),
+
+  // Chicken, Mutton, Fish & Egg
+  mi("nv1", "Chicken Dehati", 550, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv2", "Chicken Curry", 280, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv3", "Chicken Handi", 290, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv4", "Chicken Istu", 280, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv5", "Chicken Kadhi", 300, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv6", "Chicken Do Pyaza", 280, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv7", "Chicken Punjabi", 480, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv8", "Chicken Butter Masala", 350, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv9", "Eat & Park Spl. Chicken", 600, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv10", "Mutton Curry", 340, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv11", "Mutton Masala", 350, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv12", "Mutton Handi (500g)", 650, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv13", "Mutton Handi (1kg)", 1200, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv14", "Mutton Istu", 380, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv15", "Mutton Dehati", 440, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv16", "Mutton Ahuna", 1250, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv17", "E & P Spl. Mutton (500g)", 700, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv18", "E & P Spl. Mutton (1kg)", 1250, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv19", "Fish Curry (Small)", 120, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv20", "Fish Curry (Large)", 220, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv21", "Fish Masala (Small)", 130, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv22", "Fish Masala (Large)", 250, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv23", "Fish Fry (Small)", 110, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv24", "Fish Fry (Large)", 200, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv25", "Egg Curry (4pc)", 200, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv26", "Egg Masala (4pc)", 220, "Chicken, Mutton, Fish & Egg", false),
+  mi("nv27", "Omlet Curry (4pc)", 240, "Chicken, Mutton, Fish & Egg", false),
+
+  // Biryani & Thali
+  mi("br1", "Veg Biryani", 180, "Biryani & Thali", true),
+  mi("br2", "Paneer Biryani", 200, "Biryani & Thali", true),
+  mi("br3", "Mutter Biryani", 190, "Biryani & Thali", true),
+  mi("br4", "Eat & Park Special Biryani", 240, "Biryani & Thali", true),
+  mi("br5", "Chicken Biryani", 210, "Biryani & Thali", false),
+  mi("br6", "Chicken Egg Biryani", 220, "Biryani & Thali", false),
+  mi("br7", "Chicken Leg Biryani", 230, "Biryani & Thali", false),
+  mi("br8", "Chicken Leg Egg Biryani", 240, "Biryani & Thali", false),
+  mi("br9", "Chicken Leg Spl. Biryani", 350, "Biryani & Thali", false),
+  mi("br10", "Hydrabadi Chicken Biryani", 380, "Biryani & Thali", false),
+  mi("br11", "Eat & Park Spl. Chicken Biryani", 330, "Biryani & Thali", false),
+  mi("br12", "Mutton Biryani", 280, "Biryani & Thali", false),
+  mi("br13", "Eat & Park Spl. Mutton Biryani", 350, "Biryani & Thali", false),
+  mi("br14", "Egg Biryani", 180, "Biryani & Thali", false),
+  mi("br15", "Veg Thali", 250, "Biryani & Thali", true, "2 Roti, Half Rice, Manchurian, Paneer, Salad, Aachar, Dal"),
+  mi("br16", "Non Veg Thali", 280, "Biryani & Thali", false, "2 Roti, Half Rice, Chicken, Salad, Aachar"),
+
+  // Aloo, Dal & Sides
+  mi("al1", "Aloo Mutter", 120, "Aloo, Dal & Sides", true),
+  mi("al2", "Aloo Palak", 150, "Aloo, Dal & Sides", true),
+  mi("al3", "Aloo Dum", 140, "Aloo, Dal & Sides", true),
+  mi("al4", "Aloo Payaza", 150, "Aloo, Dal & Sides", true),
+  mi("al5", "Aloo Jeera", 150, "Aloo, Dal & Sides", true),
+  mi("al6", "Aloo Parwal", 120, "Aloo, Dal & Sides", true),
+  mi("al7", "Mix Veg", 180, "Aloo, Dal & Sides", true),
+  mi("al8", "Aloo Bhujiya", 110, "Aloo, Dal & Sides", true),
+  mi("al9", "Seasonal Veg", 150, "Aloo, Dal & Sides", true),
+  mi("al10", "Dal Fry", 70, "Aloo, Dal & Sides", true),
+  mi("al11", "Dal Tadka", 100, "Aloo, Dal & Sides", true),
+  mi("al12", "Dal Makhni", 140, "Aloo, Dal & Sides", true),
+  mi("al13", "Bundi Raita", 55, "Aloo, Dal & Sides", true),
+  mi("al14", "Veg Raita", 60, "Aloo, Dal & Sides", true),
+  mi("al15", "Green Salad", 80, "Aloo, Dal & Sides", true),
+  mi("al16", "Onion Salad", 50, "Aloo, Dal & Sides", true),
+
+  // Momo
+  mi("mo1", "Veg Momo (Steam)", 80, "Momo", true),
+  mi("mo2", "Veg Momo (Fry)", 100, "Momo", true),
+  mi("mo3", "Veg Momo (Pan Fry)", 120, "Momo", true),
+  mi("mo4", "Veg Momo (Kurkure)", 130, "Momo", true),
+  mi("mo5", "Veg Momo (Tandoori)", 150, "Momo", true),
+  mi("mo6", "Paneer Momo (Steam)", 100, "Momo", true),
+  mi("mo7", "Paneer Momo (Fry)", 120, "Momo", true),
+  mi("mo8", "Paneer Momo (Pan Fry)", 150, "Momo", true),
+  mi("mo9", "Paneer Momo (Kurkure)", 160, "Momo", true),
+  mi("mo10", "Paneer Momo (Tandoori)", 170, "Momo", true),
+  mi("mo11", "Chicken Momo (Steam)", 150, "Momo", false),
+  mi("mo12", "Chicken Momo (Fry)", 160, "Momo", false),
+  mi("mo13", "Chicken Momo (Pan Fry)", 180, "Momo", false),
+  mi("mo14", "Chicken Momo (Kurkure)", 190, "Momo", false),
+  mi("mo15", "Chicken Momo (Tandoori)", 200, "Momo", false),
+
+  // Tea & Coffee
+  mi("tc1", "Tea", 30, "Tea & Coffee", true),
+  mi("tc2", "Coffee", 50, "Tea & Coffee", true),
+];
+
+const STATUS_FLOW = ["new", "preparing", "ready", "served"];
+const STATUS_LABEL = { new: "New", preparing: "Preparing", ready: "Ready", served: "Served" };
+const STATUS_COLOR = { new: COLORS.rust, preparing: COLORS.copper, ready: COLORS.sage, served: "#8A8375" };
+
+function inr(n) {
+  return "₹" + Number(n).toLocaleString("en-IN");
+}
+
+function uid(prefix) {
+  return prefix + Math.random().toString(36).slice(2, 8);
+}
+
+function timeAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return s + "s ago";
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + "m ago";
+  const h = Math.floor(m / 60);
+  return h + "h " + (m % 60) + "m ago";
+}
+
+/* ---------------- storage helpers ---------------- */
+
+async function loadShared(key, fallback) {
+  try {
+    const res = await window.storage.get(key, true);
+    return res ? JSON.parse(res.value) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+}
+async function saveShared(key, value) {
+  try {
+    await window.storage.set(key, JSON.stringify(value), true);
+  } catch (e) {
+    console.error("storage set failed", key, e);
+  }
+}
+
+/* ---------------- small UI atoms ---------------- */
+
+function Badge({ children, color }) {
+  return (
+    <span
+      style={{
+        background: color,
+        color: "#fff",
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 11,
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        padding: "4px 9px",
+        borderRadius: 999,
+        fontWeight: 600,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function TornEdge({ flip }) {
+  const teeth = 18;
+  return (
+    <svg
+      viewBox={`0 0 ${teeth * 10} 10`}
+      preserveAspectRatio="none"
+      style={{ width: "100%", height: 10, display: "block", transform: flip ? "rotate(180deg)" : "none" }}
+    >
+      {Array.from({ length: teeth }).map((_, i) => (
+        <circle key={i} cx={i * 10 + 5} cy={flip ? 10 : 0} r="5" fill={COLORS.paper} />
+      ))}
+    </svg>
+  );
+}
+
+/* Ticket / receipt-style card — the app's signature element */
+function Ticket({ children, stampColor = COLORS.copper, code, style }) {
+  return (
+    <div style={{ filter: "drop-shadow(0 3px 10px rgba(32,38,31,0.12))", ...style }}>
+      <div style={{ background: COLORS.paper, borderLeft: `1px dashed ${COLORS.line}`, borderRight: `1px dashed ${COLORS.line}` }}>
+        <TornEdge />
+        <div style={{ padding: "16px 18px", position: "relative" }}>
+          {code && (
+            <div
+              style={{
+                position: "absolute",
+                top: 12,
+                right: 14,
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                border: `2px solid ${stampColor}`,
+                color: stampColor,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: 10,
+                fontWeight: 700,
+                transform: "rotate(8deg)",
+                textAlign: "center",
+                lineHeight: 1.1,
+              }}
+            >
+              {code}
+            </div>
+          )}
+          {children}
+        </div>
+        <TornEdge flip />
+      </div>
+    </div>
+  );
+}
+
+function VegDot({ veg }) {
+  const c = veg ? VEG : NONVEG;
+  return (
+    <span
+      style={{
+        width: 12,
+        height: 12,
+        border: `1.4px solid ${c}`,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: veg ? "50%" : "50%", background: c }} />
+    </span>
+  );
+}
+
+function Stepper({ qty, onChange }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <button
+        onClick={() => onChange(Math.max(0, qty - 1))}
+        style={stepBtnStyle}
+        aria-label="Decrease quantity"
+      >
+        −
+      </button>
+      <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600, minWidth: 16, textAlign: "center" }}>{qty}</span>
+      <button onClick={() => onChange(qty + 1)} style={stepBtnStyle} aria-label="Increase quantity">
+        +
+      </button>
+    </div>
+  );
+}
+const stepBtnStyle = {
+  width: 28,
+  height: 28,
+  borderRadius: "50%",
+  border: `1px solid ${COLORS.copper}`,
+  background: "transparent",
+  color: COLORS.copper,
+  fontSize: 16,
+  lineHeight: 1,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+/* =========================================================
+   CUSTOMER VIEW
+========================================================= */
+function CustomerView({ menu, orders, placeOrder, table, setTable }) {
+  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [cart, setCart] = useState({}); // itemId -> qty
+  const [cartOpen, setCartOpen] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [payment, setPayment] = useState("cash");
+  const [myOrderId, setMyOrderId] = useState(null);
+  const [placing, setPlacing] = useState(false);
+
+  const availableInCat = menu.filter((m) => m.category === category && m.available);
+  const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
+  const cartCount = cartItems.reduce((s, [, q]) => s + q, 0);
+  const cartTotal = cartItems.reduce((s, [id, q]) => {
+    const item = menu.find((m) => m.id === id);
+    return s + (item ? item.price * q : 0);
+  }, 0);
+
+  const setQty = (id, q) => setCart((c) => ({ ...c, [id]: q }));
+
+  const myOrder = orders.find((o) => o.id === myOrderId);
+
+  async function handlePlaceOrder() {
+    if (cartItems.length === 0) return;
+    setPlacing(true);
+    const order = {
+      id: uid("o"),
+      table,
+      items: cartItems.map(([id, qty]) => {
+        const m = menu.find((mi) => mi.id === id);
+        return { itemId: id, name: m.name, price: m.price, qty };
+      }),
+      notes,
+      payment,
+      status: "new",
+      paid: false,
+      createdAt: Date.now(),
+    };
+    await placeOrder(order);
+    setMyOrderId(order.id);
+    setCart({});
+    setNotes("");
+    setCartOpen(false);
+    setPlacing(false);
+  }
+
+  if (myOrder) {
+    const stepIdx = STATUS_FLOW.indexOf(myOrder.status);
+    return (
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "28px 16px 60px" }}>
+        <Header table={table} />
+        <div style={{ marginTop: 22 }}>
+          <Ticket code={"#" + myOrder.id.slice(1, 4).toUpperCase()} stampColor={STATUS_COLOR[myOrder.status]}>
+            <div style={{ fontFamily: "Fraunces, serif", fontSize: 22, color: COLORS.ink, marginBottom: 2 }}>
+              Order placed
+            </div>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#8A8375", marginBottom: 16 }}>
+              Table {myOrder.table} · {timeAgo(myOrder.createdAt)}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+              {STATUS_FLOW.map((s, i) => (
+                <div key={s} style={{ textAlign: "center", flex: 1, opacity: i <= stepIdx ? 1 : 0.35 }}>
+                  <div
+                    style={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: "50%",
+                      background: i <= stepIdx ? STATUS_COLOR[myOrder.status] : COLORS.line,
+                      margin: "0 auto 6px",
+                    }}
+                  />
+                  <div style={{ fontSize: 10, fontFamily: "'IBM Plex Mono', monospace", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    {STATUS_LABEL[s]}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ borderTop: `1px dashed ${COLORS.line}`, paddingTop: 12 }}>
+              {myOrder.items.map((it) => (
+                <div key={it.itemId} style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 4 }}>
+                  <span>{it.qty}× {it.name}</span>
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{inr(it.price * it.qty)}</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${COLORS.line}` }}>
+                <span>Total</span>
+                <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{inr(myOrder.items.reduce((s, it) => s + it.price * it.qty, 0))}</span>
+              </div>
+              <div style={{ fontSize: 12, color: "#8A8375", marginTop: 8 }}>
+                Pay at counter · {myOrder.payment === "cash" ? "Cash" : "UPI"}
+                {myOrder.paid && <span style={{ color: COLORS.sage, fontWeight: 600 }}> · Paid</span>}
+              </div>
+            </div>
+          </Ticket>
+          <button
+            onClick={() => setMyOrderId(null)}
+            style={{ ...primaryBtn, background: "transparent", color: COLORS.copper, border: `1px solid ${COLORS.copper}`, marginTop: 18, width: "100%" }}
+          >
+            Order more
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: cartCount ? 90 : 30 }}>
+      <div style={{ padding: "28px 16px 0" }}>
+        <Header table={table} setTable={setTable} />
+      </div>
+
+      <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "18px 16px 10px", scrollbarWidth: "none" }}>
+        {CATEGORIES.map((c) => (
+          <button
+            key={c}
+            onClick={() => setCategory(c)}
+            style={{
+              whiteSpace: "nowrap",
+              padding: "8px 14px",
+              borderRadius: 999,
+              border: `1px solid ${category === c ? COLORS.copper : COLORS.line}`,
+              background: category === c ? COLORS.copper : "transparent",
+              color: category === c ? "#fff" : COLORS.ink,
+              fontFamily: "Inter, sans-serif",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding: "6px 16px" }}>
+        {availableInCat.length === 0 && (
+          <div style={{ color: "#8A8375", fontSize: 14, padding: "24px 0", textAlign: "center" }}>Nothing here right now — try another category.</div>
+        )}
+        {availableInCat.map((item) => (
+          <div
+            key={item.id}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "14px 0",
+              borderBottom: `1px solid ${COLORS.line}`,
+              gap: 12,
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <VegDot veg={item.veg} />
+                <div style={{ fontFamily: "Fraunces, serif", fontSize: 17, color: COLORS.ink }}>{item.name}</div>
+              </div>
+              {item.desc && <div style={{ fontSize: 13, color: "#8A8375", marginTop: 2 }}>{item.desc}</div>}
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: COLORS.copperDark, marginTop: 6, fontWeight: 600 }}>
+                {inr(item.price)}
+              </div>
+            </div>
+            <Stepper qty={cart[item.id] || 0} onChange={(q) => setQty(item.id, q)} />
+          </div>
+        ))}
+      </div>
+
+      <div style={{ textAlign: "center", padding: "22px 16px 4px", fontSize: 12, color: "#8A8375", lineHeight: 1.7 }}>
+        {RESTAURANT.address}
+        <br />
+        {RESTAURANT.phones.join(" · ")}
+      </div>
+
+      {cartCount > 0 && !cartOpen && (
+        <button
+          onClick={() => setCartOpen(true)}
+          style={{
+            position: "fixed",
+            bottom: 18,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "calc(100% - 32px)",
+            maxWidth: 448,
+            background: COLORS.ink,
+            color: COLORS.paper,
+            border: "none",
+            borderRadius: 14,
+            padding: "15px 20px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontFamily: "Inter, sans-serif",
+            fontWeight: 600,
+            fontSize: 15,
+            cursor: "pointer",
+            boxShadow: "0 8px 24px rgba(32,38,31,0.28)",
+          }}
+        >
+          <span>{cartCount} item{cartCount > 1 ? "s" : ""}</span>
+          <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{inr(cartTotal)} · View cart</span>
+        </button>
+      )}
+
+      {cartOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(32,38,31,0.45)",
+            display: "flex",
+            alignItems: "flex-end",
+            zIndex: 20,
+          }}
+          onClick={() => setCartOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: COLORS.paper,
+              width: "100%",
+              maxWidth: 480,
+              margin: "0 auto",
+              borderRadius: "18px 18px 0 0",
+              padding: "20px 18px 26px",
+              maxHeight: "82vh",
+              overflowY: "auto",
+            }}
+          >
+            <div style={{ fontFamily: "Fraunces, serif", fontSize: 20, marginBottom: 14 }}>Your order</div>
+            {cartItems.map(([id, q]) => {
+              const item = menu.find((m) => m.id === id);
+              return (
+                <div key={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontSize: 14 }}>{item.name}</div>
+                  <Stepper qty={q} onChange={(nq) => setQty(id, nq)} />
+                </div>
+              );
+            })}
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Notes for the kitchen (allergies, spice level...)"
+              style={{
+                width: "100%",
+                marginTop: 12,
+                border: `1px solid ${COLORS.line}`,
+                borderRadius: 10,
+                padding: 10,
+                fontFamily: "Inter, sans-serif",
+                fontSize: 13,
+                resize: "none",
+                background: "#fff",
+              }}
+              rows={2}
+            />
+
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.05em", color: "#8A8375", marginBottom: 8 }}>
+                Pay at counter
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {["cash", "upi"].map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPayment(p)}
+                    style={{
+                      flex: 1,
+                      padding: "10px 0",
+                      borderRadius: 10,
+                      border: `1px solid ${payment === p ? COLORS.copper : COLORS.line}`,
+                      background: payment === p ? COLORS.copper : "#fff",
+                      color: payment === p ? "#fff" : COLORS.ink,
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {p === "cash" ? "Cash" : "UPI"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, marginTop: 16, fontSize: 15 }}>
+              <span>Total</span>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{inr(cartTotal)}</span>
+            </div>
+
+            <button onClick={handlePlaceOrder} disabled={placing} style={{ ...primaryBtn, width: "100%", marginTop: 16 }}>
+              {placing ? "Placing order…" : "Place order"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Header({ table, setTable }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+      <div>
+        <div style={{ fontFamily: "Fraunces, serif", fontStyle: "italic", fontSize: 13, color: COLORS.copper }}>{RESTAURANT.tagline}</div>
+        <div style={{ fontFamily: "Fraunces, serif", fontSize: 28, color: COLORS.ink, lineHeight: 1.1 }}>{RESTAURANT.name}</div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        <div style={{ fontSize: 11, color: "#8A8375", textTransform: "uppercase", letterSpacing: "0.05em" }}>Table</div>
+        {setTable ? (
+          <select
+            value={table}
+            onChange={(e) => setTable(Number(e.target.value))}
+            style={{
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontWeight: 700,
+              fontSize: 18,
+              border: "none",
+              background: "transparent",
+              color: COLORS.ink,
+              textAlign: "right",
+            }}
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+        ) : (
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 18 }}>{table}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const primaryBtn = {
+  background: COLORS.copper,
+  color: "#fff",
+  border: "none",
+  borderRadius: 12,
+  padding: "13px 20px",
+  fontFamily: "Inter, sans-serif",
+  fontWeight: 700,
+  fontSize: 14,
+  cursor: "pointer",
+};
+
+/* =========================================================
+   STAFF / KITCHEN VIEW
+========================================================= */
+function StaffView({ orders, advanceStatus }) {
+  const active = orders.filter((o) => o.status !== "served").sort((a, b) => a.createdAt - b.createdAt);
+  const columns = ["new", "preparing", "ready"];
+
+  return (
+    <div style={{ padding: "22px 16px 60px", maxWidth: 1100, margin: "0 auto" }}>
+      <div style={{ fontFamily: "Fraunces, serif", fontSize: 26, color: COLORS.ink, marginBottom: 4 }}>Kitchen board</div>
+      <div style={{ fontSize: 13, color: "#8A8375", marginBottom: 20 }}>{active.length} active order{active.length !== 1 ? "s" : ""}</div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
+        {columns.map((status) => {
+          const list = active.filter((o) => o.status === status);
+          return (
+            <div key={status}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLOR[status] }} />
+                <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>
+                  {STATUS_LABEL[status]} · {list.length}
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {list.map((o) => (
+                  <Ticket key={o.id} code={"T" + o.table} stampColor={STATUS_COLOR[o.status]}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                      <div style={{ fontFamily: "Fraunces, serif", fontSize: 16 }}>Table {o.table}</div>
+                      <div style={{ fontSize: 11, color: "#8A8375", fontFamily: "'IBM Plex Mono', monospace" }}>{timeAgo(o.createdAt)}</div>
+                    </div>
+                    {o.items.map((it) => (
+                      <div key={it.itemId} style={{ fontSize: 13, marginBottom: 2 }}>
+                        {it.qty}× {it.name}
+                      </div>
+                    ))}
+                    {o.notes && (
+                      <div style={{ fontSize: 12, color: COLORS.rust, marginTop: 6, fontStyle: "italic" }}>“{o.notes}”</div>
+                    )}
+                    <button
+                      onClick={() => advanceStatus(o.id)}
+                      style={{ ...primaryBtn, width: "100%", marginTop: 12, padding: "9px 0", fontSize: 12.5, background: COLORS.ink }}
+                    >
+                      {status === "new" ? "Start preparing" : status === "preparing" ? "Mark ready" : "Mark served"}
+                    </button>
+                  </Ticket>
+                ))}
+                {list.length === 0 && <div style={{ fontSize: 12, color: "#B7AF9E", padding: "10px 0" }}>Empty</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   ADMIN VIEW
+========================================================= */
+function AdminView({ menu, setMenu, orders, markPaid, clearOrders }) {
+  const [tab, setTab] = useState("overview");
+  const today = new Date().toDateString();
+  const todaysOrders = orders.filter((o) => new Date(o.createdAt).toDateString() === today);
+  const revenue = todaysOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0), 0);
+  const itemCounts = {};
+  todaysOrders.forEach((o) => o.items.forEach((it) => { itemCounts[it.name] = (itemCounts[it.name] || 0) + it.qty; }));
+  const topItems = Object.entries(itemCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+  return (
+    <div style={{ padding: "22px 16px 60px", maxWidth: 1000, margin: "0 auto" }}>
+      <div style={{ fontFamily: "Fraunces, serif", fontSize: 26, color: COLORS.ink, marginBottom: 16 }}>Admin</div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 22, borderBottom: `1px solid ${COLORS.line}` }}>
+        {["overview", "menu", "orders"].map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: "10px 4px",
+              marginRight: 18,
+              fontFamily: "Inter, sans-serif",
+              fontWeight: 600,
+              fontSize: 14,
+              textTransform: "capitalize",
+              color: tab === t ? COLORS.ink : "#8A8375",
+              borderBottom: tab === t ? `2px solid ${COLORS.copper}` : "2px solid transparent",
+              cursor: "pointer",
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {tab === "overview" && (
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14, marginBottom: 24 }}>
+            <StatCard label="Orders today" value={todaysOrders.length} />
+            <StatCard label="Revenue (paid)" value={inr(revenue)} />
+            <StatCard label="Avg order value" value={todaysOrders.length ? inr(Math.round(revenue / Math.max(1, todaysOrders.filter(o => o.paid).length))) : inr(0)} />
+          </div>
+          <div style={{ fontFamily: "Fraunces, serif", fontSize: 18, marginBottom: 10 }}>Top items today</div>
+          {topItems.length === 0 && <div style={{ color: "#8A8375", fontSize: 13 }}>No orders yet today.</div>}
+          {topItems.map(([name, qty]) => (
+            <div key={name} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${COLORS.line}`, fontSize: 14 }}>
+              <span>{name}</span>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 600 }}>{qty}×</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "menu" && <MenuEditor menu={menu} setMenu={setMenu} />}
+
+      {tab === "orders" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+            <button
+              onClick={() => { if (window.confirm("Clear all order history? This can't be undone.")) clearOrders(); }}
+              style={{ background: "none", border: `1px solid ${COLORS.rust}`, color: COLORS.rust, borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" }}
+            >
+              Clear all orders
+            </button>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ textAlign: "left", color: "#8A8375", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <th style={th}>Table</th>
+                  <th style={th}>Items</th>
+                  <th style={th}>Total</th>
+                  <th style={th}>Status</th>
+                  <th style={th}>Payment</th>
+                  <th style={th}>Paid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...orders].sort((a, b) => b.createdAt - a.createdAt).map((o) => (
+                  <tr key={o.id} style={{ borderTop: `1px solid ${COLORS.line}` }}>
+                    <td style={td}>{o.table}</td>
+                    <td style={td}>{o.items.map((it) => `${it.qty}×${it.name}`).join(", ")}</td>
+                    <td style={{ ...td, fontFamily: "'IBM Plex Mono', monospace" }}>{inr(o.items.reduce((s, it) => s + it.price * it.qty, 0))}</td>
+                    <td style={td}><Badge color={STATUS_COLOR[o.status]}>{STATUS_LABEL[o.status]}</Badge></td>
+                    <td style={td}>{o.payment === "cash" ? "Cash" : "UPI"}</td>
+                    <td style={td}>
+                      <button
+                        onClick={() => markPaid(o.id, !o.paid)}
+                        style={{
+                          border: `1px solid ${o.paid ? COLORS.sage : COLORS.line}`,
+                          background: o.paid ? COLORS.sage : "transparent",
+                          color: o.paid ? "#fff" : COLORS.ink,
+                          borderRadius: 8,
+                          padding: "4px 10px",
+                          fontSize: 12,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {o.paid ? "Paid" : "Mark paid"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {orders.length === 0 && <div style={{ color: "#8A8375", fontSize: 13, padding: "20px 0" }}>No orders yet.</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+const th = { padding: "8px 10px" };
+const td = { padding: "8px 10px" };
+
+function StatCard({ label, value }) {
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: "14px 16px" }}>
+      <div style={{ fontSize: 11, color: "#8A8375", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ fontFamily: "Fraunces, serif", fontSize: 24, color: COLORS.ink, marginTop: 4 }}>{value}</div>
+    </div>
+  );
+}
+
+function MenuEditor({ menu, setMenu }) {
+  const [newItem, setNewItem] = useState({ name: "", price: "", category: CATEGORIES[0], desc: "", veg: true });
+
+  function update(id, patch) {
+    setMenu(menu.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  }
+  function remove(id) {
+    setMenu(menu.filter((m) => m.id !== id));
+  }
+  function add() {
+    if (!newItem.name || !newItem.price) return;
+    setMenu([...menu, { id: uid("m"), name: newItem.name, desc: newItem.desc, price: Number(newItem.price), category: newItem.category, veg: newItem.veg, available: true }]);
+    setNewItem({ name: "", price: "", category: newItem.category, desc: "", veg: true });
+  }
+
+  return (
+    <div>
+      {CATEGORIES.map((cat) => (
+        <div key={cat} style={{ marginBottom: 22 }}>
+          <div style={{ fontFamily: "Fraunces, serif", fontSize: 17, marginBottom: 8 }}>{cat}</div>
+          {menu.filter((m) => m.category === cat).map((item) => (
+            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${COLORS.line}` }}>
+              <VegDot veg={item.veg} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, opacity: item.available ? 1 : 0.4 }}>{item.name}</div>
+                <div style={{ fontSize: 12, color: "#8A8375" }}>{item.desc}</div>
+              </div>
+              <input
+                type="number"
+                value={item.price}
+                onChange={(e) => update(item.id, { price: Number(e.target.value) })}
+                style={{ width: 70, padding: "5px 7px", border: `1px solid ${COLORS.line}`, borderRadius: 6, fontFamily: "'IBM Plex Mono', monospace", fontSize: 13 }}
+              />
+              <button
+                onClick={() => update(item.id, { available: !item.available })}
+                style={{
+                  border: `1px solid ${item.available ? COLORS.sage : COLORS.line}`,
+                  background: item.available ? COLORS.sage : "transparent",
+                  color: item.available ? "#fff" : "#8A8375",
+                  borderRadius: 8,
+                  padding: "5px 10px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {item.available ? "Available" : "86'd"}
+              </button>
+              <button onClick={() => remove(item.id)} style={{ border: "none", background: "none", color: COLORS.rust, cursor: "pointer", fontSize: 13 }}>
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+
+      <div style={{ background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: 16, marginTop: 10 }}>
+        <div style={{ fontFamily: "Fraunces, serif", fontSize: 16, marginBottom: 10 }}>Add menu item</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <input placeholder="Name" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={inputStyle} />
+          <input placeholder="Description" value={newItem.desc} onChange={(e) => setNewItem({ ...newItem, desc: e.target.value })} style={{ ...inputStyle, flex: 2 }} />
+          <input placeholder="Price" type="number" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: e.target.value })} style={{ ...inputStyle, width: 90 }} />
+          <select value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} style={inputStyle}>
+            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={newItem.veg ? "veg" : "nonveg"} onChange={(e) => setNewItem({ ...newItem, veg: e.target.value === "veg" })} style={{ ...inputStyle, flex: "none", minWidth: 90 }}>
+            <option value="veg">Veg</option>
+            <option value="nonveg">Non-veg</option>
+          </select>
+          <button onClick={add} style={{ ...primaryBtn, padding: "9px 16px" }}>Add</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+const inputStyle = { padding: "9px 10px", border: `1px solid ${COLORS.line}`, borderRadius: 8, fontSize: 13, fontFamily: "Inter, sans-serif", flex: 1, minWidth: 100 };
+
+/* =========================================================
+   APP SHELL
+========================================================= */
+function readUrlParams() {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const role = p.get("role");
+    const table = p.get("table");
+    return {
+      role: ["customer", "staff", "admin"].includes(role) ? role : null,
+      table: table ? Number(table) : null,
+    };
+  } catch (e) {
+    return { role: null, table: null };
+  }
+}
+
+export default function App() {
+  const urlParams = useRef(readUrlParams()).current;
+  const [role, setRole] = useState(urlParams.role || "customer");
+  const [table, setTable] = useState(urlParams.table || 4);
+  const forcedRole = !!urlParams.role; // true when opened from a table/staff/admin QR link — hides the demo switcher
+  const lockedTable = !!urlParams.table; // true when a specific table was passed in the link
+  const [menu, setMenuState] = useState(DEFAULT_MENU);
+  const [orders, setOrdersState] = useState([]);
+  const [ready, setReady] = useState(false);
+  const pollRef = useRef(null);
+
+  useEffect(() => {
+    (async () => {
+      const [m, o] = await Promise.all([loadShared("cf-menu", DEFAULT_MENU), loadShared("cf-orders", [])]);
+      setMenuState(m);
+      setOrdersState(o);
+      setReady(true);
+    })();
+  }, []);
+
+  useEffect(() => {
+    pollRef.current = setInterval(async () => {
+      const o = await loadShared("cf-orders", []);
+      setOrdersState(o);
+    }, 3500);
+    return () => clearInterval(pollRef.current);
+  }, []);
+
+  const setMenu = useCallback((next) => {
+    setMenuState(next);
+    saveShared("cf-menu", next);
+  }, []);
+
+  const placeOrder = useCallback(async (order) => {
+    const latest = await loadShared("cf-orders", []);
+    const next = [...latest, order];
+    setOrdersState(next);
+    await saveShared("cf-orders", next);
+  }, []);
+
+  const advanceStatus = useCallback(async (orderId) => {
+    const latest = await loadShared("cf-orders", []);
+    const next = latest.map((o) => {
+      if (o.id !== orderId) return o;
+      const idx = STATUS_FLOW.indexOf(o.status);
+      return { ...o, status: STATUS_FLOW[Math.min(idx + 1, STATUS_FLOW.length - 1)] };
+    });
+    setOrdersState(next);
+    await saveShared("cf-orders", next);
+  }, []);
+
+  const markPaid = useCallback(async (orderId, paid) => {
+    const latest = await loadShared("cf-orders", []);
+    const next = latest.map((o) => (o.id === orderId ? { ...o, paid } : o));
+    setOrdersState(next);
+    await saveShared("cf-orders", next);
+  }, []);
+
+  const clearOrders = useCallback(async () => {
+    setOrdersState([]);
+    await saveShared("cf-orders", []);
+  }, []);
+
+  if (!ready) {
+    return (
+      <div style={{ minHeight: "100vh", background: COLORS.paper, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter, sans-serif", color: "#8A8375" }}>
+        Loading…
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.paper, color: COLORS.ink, fontFamily: "Inter, sans-serif" }}>
+      <style>{FONTS}</style>
+      {!forcedRole && (
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+          background: COLORS.ink,
+          color: COLORS.paper,
+          display: "flex",
+          justifyContent: "center",
+          gap: 4,
+          padding: "8px",
+        }}
+      >
+        {[
+          ["customer", "Customer (QR view)"],
+          ["staff", "Kitchen"],
+          ["admin", "Admin"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setRole(key)}
+            style={{
+              background: role === key ? COLORS.copper : "transparent",
+              color: role === key ? "#fff" : COLORS.paper,
+              border: "none",
+              borderRadius: 8,
+              padding: "7px 14px",
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "Inter, sans-serif",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      )}
+
+      {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} table={table} setTable={lockedTable ? null : setTable} />}
+      {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} />}
+      {role === "admin" && <AdminView menu={menu} setMenu={setMenu} orders={orders} markPaid={markPaid} clearOrders={clearOrders} />}
+    </div>
+  );
+}
