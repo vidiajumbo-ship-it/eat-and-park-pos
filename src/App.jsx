@@ -3,7 +3,7 @@ import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.3 (WITH ORDER/COIN HISTORY & ADD MENU)
+   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.4 (FULL RESTORED ADMIN FEATURES)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
@@ -66,18 +66,20 @@ const CATEGORIES = [
 
 const VEG = COLORS.sage; const NONVEG = COLORS.rust;
 
-function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true) {
-  let img = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; 
-  if (category.includes("Drinks") || category.includes("Tea")) img = "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=400&q=80";
-  else if (category.includes("Fun Food") || category.includes("Snacks")) img = "https://images.unsplash.com/photo-1626082895617-2c6ad36f568a?auto=format&fit=crop&w=400&q=80";
-  else if (category.includes("Indian Bread")) img = "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=400&q=80";
-  else if (category.includes("Paneer")) img = "https://images.unsplash.com/photo-1631452180519-c014fe946bc0?auto=format&fit=crop&w=400&q=80";
-  else if (category.includes("Mushroom") || category.includes("Soup") || category.includes("Dal") || category.includes("Aloo")) img = "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80";
-  else if (category.includes("Biryani") || category.includes("Pulao")) img = "https://images.unsplash.com/photo-1589302168068-964664d93cb0?auto=format&fit=crop&w=400&q=80";
-  else if (category.includes("Chinese") || category.includes("Momo")) img = "https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=400&q=80";
-  else if (category.includes("Tandoori") || category.includes("Mughlai")) img = "https://images.unsplash.com/photo-1599487405702-3e28c42b9370?auto=format&fit=crop&w=400&q=80";
-  else if (category.includes("Chicken") || category.includes("Mutton") || category.includes("Egg") || category.includes("Fish")) img = "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80";
-  else if (category.includes("Thali")) img = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=400&q=80";
+function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true, customImg = "") {
+  let img = customImg || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; 
+  if (!customImg) {
+    if (category.includes("Drinks") || category.includes("Tea")) img = "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Fun Food") || category.includes("Snacks")) img = "https://images.unsplash.com/photo-1626082895617-2c6ad36f568a?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Indian Bread")) img = "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Paneer")) img = "https://images.unsplash.com/photo-1631452180519-c014fe946bc0?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Mushroom") || category.includes("Soup") || category.includes("Dal") || category.includes("Aloo")) img = "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Biryani") || category.includes("Pulao")) img = "https://images.unsplash.com/photo-1589302168068-964664d93cb0?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Chinese") || category.includes("Momo")) img = "https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Tandoori") || category.includes("Mughlai")) img = "https://images.unsplash.com/photo-1599487405702-3e28c42b9370?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Chicken") || category.includes("Mutton") || category.includes("Egg") || category.includes("Fish")) img = "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Thali")) img = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=400&q=80";
+  }
   return { id, name, desc: desc || "Freshly prepared with premium ingredients.", price, category, veg, available, image: img, portion: portion || "", isBestseller };
 }
 
@@ -102,6 +104,12 @@ const DEFAULT_MENU = [
 const DEFAULT_OFFERS = [
   { id: "off1", title: "Flat 20% OFF 🍜", desc: "Enjoy flat 20% off on all Chinese items today!" },
   { id: "off2", title: "Free Cold Drink 🥤", desc: "Get a free cold drink on orders above ₹499." }
+];
+
+const DEFAULT_GALLERY = [
+  "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80",
+  "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80",
+  "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=400&q=80"
 ];
 
 const STATUS_FLOW = ["new", "preparing", "ready", "served"];
@@ -263,7 +271,7 @@ function EmptyState({ reason }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   1. ENHANCED CUSTOMER VIEW (WITH ORDER HISTORY & COIN HISTORY MODALS)
+   1. CUSTOMER VIEW (WITH GALLERY MODAL)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, setRole, promo, settings, installApp, handlePrint, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory }) {
@@ -542,6 +550,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
             
             <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
               <SidebarBtn icon={isDark ? "☀️" : "🌙"} text={isDark ? "Switch to Light Mode" : "VIP Dark Mode"} onClick={() => { setIsDark(!isDark); setShowSidebar(false); showToast(isDark ? "☀️ Light Mode Active" : "🌙 VIP Dark Mode Active", "success"); }} highlight />
+              <SidebarBtn icon="🖼️" text="Photo Gallery" onClick={() => { setShowSidebar(false); setActiveModal('gallery'); }} />
               <SidebarBtn icon="📜" text="My Order History" onClick={() => { setShowSidebar(false); setActiveModal('orderHistory'); }} />
               <SidebarBtn icon="🪙" text="My Coin History" onClick={() => { setShowSidebar(false); setActiveModal('coinHistory'); }} />
               <SidebarBtn icon="🎁" text="Today's Offers" onClick={() => {setShowSidebar(false); setActiveModal('offers');}} />
@@ -684,6 +693,17 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   </div>
                 )}
                 <button onClick={handlePlaceOrder} style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 14, padding: "16px", fontWeight: 800, fontSize: 16, cursor: "pointer", width: "100%", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }} className="hover-lift smooth-transition">🎉 Place Order</button>
+              </>
+            )}
+
+            {activeModal === 'gallery' && (
+              <>
+                <ModalHeader title="🖼️ Photo Gallery" onClose={() => setActiveModal(null)} />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+                  {gallery.map((imgUrl, idx) => (
+                    <img key={idx} src={imgUrl} alt="Gallery item" style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }} />
+                  ))}
+                </div>
               </>
             )}
 
@@ -1049,7 +1069,7 @@ function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   3. ADMIN VIEW (WITH ADD NEW DISH FORM)
+   3. ADMIN VIEW (WITH HERO IMAGE, MENU ITEM IMAGE, AND GALLERY PHOTO MANAGEMENT)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 function KitchenMetrics({ filteredOrders }) {
@@ -1096,7 +1116,7 @@ function InventoryAlertBanner({ inventory }) {
   );
 }
 
-function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder, setRole, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers }) {
+function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder, setRole, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery }) {
   const [tab, setTab] = useState("overview");
   const [filterDate, setFilterDate] = useState(toLocalISODate(Date.now()));
   const [newInv, setNewInv] = useState({ name: "", stock: "", unit: "kg" });
@@ -1107,13 +1127,19 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemCat, setNewItemCat] = useState(CATEGORIES[0]);
+  const [newItemImage, setNewItemImage] = useState("");
 
-  // ✨ New state for adding a brand new menu item
   const [addMenuName, setAddMenuName] = useState("");
   const [addMenuPrice, setAddMenuPrice] = useState("");
   const [addMenuCat, setAddMenuCat] = useState(CATEGORIES[0]);
   const [addMenuVeg, setAddMenuVeg] = useState(true);
   const [addMenuDesc, setAddMenuDesc] = useState("");
+  const [addMenuImage, setAddMenuImage] = useState("");
+
+  // ✨ Gallery image input state
+  const [newGalleryImg, setNewGalleryImg] = useState("");
+  // ✨ Hero image input state
+  const [heroImgInput, setHeroImgInput] = useState(settings?.heroImage || "");
 
   const filteredOrders = orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
   const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0), 0);
@@ -1130,8 +1156,9 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
 
   const handleSaveMenuItem = () => {
     if (!editingItem) return;
-    setMenuState(menu.map(m => m.id === editingItem.id ? { ...m, name: newItemName, price: Number(newItemPrice), category: newItemCat } : m));
+    setMenuState(menu.map(m => m.id === editingItem.id ? { ...m, name: newItemName, price: Number(newItemPrice), category: newItemCat, ...(newItemImage ? { image: newItemImage } : {}) } : m));
     setEditingItem(null);
+    setNewItemImage("");
   };
 
   const handleDeleteMenuItem = (id) => {
@@ -1140,7 +1167,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
     }
   };
 
-  // ✨ Handler to add a brand new dish to the menu
   const handleAddNewDish = () => {
     if (!addMenuName.trim() || !addMenuPrice) {
       alert("Please enter dish name and price.");
@@ -1155,13 +1181,34 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
       addMenuDesc.trim(),
       "",
       false,
-      true
+      true,
+      addMenuImage.trim()
     );
     setMenuState([newDish, ...menu]);
     setAddMenuName("");
     setAddMenuPrice("");
     setAddMenuDesc("");
+    setAddMenuImage("");
     alert("✅ New dish added successfully!");
+  };
+
+  // ✨ Handle adding image to gallery
+  const handleAddGalleryPhoto = () => {
+    if (!newGalleryImg.trim()) return;
+    setGallery([...gallery, newGalleryImg.trim()]);
+    setNewGalleryImg("");
+    alert("✅ Photo added to gallery!");
+  };
+
+  const handleDeleteGalleryPhoto = (index) => {
+    setGallery(gallery.filter((_, i) => i !== index));
+  };
+
+  // ✨ Handle saving hero image
+  const handleSaveHeroImage = () => {
+    if (!heroImgInput.trim()) return;
+    setSettings({ ...settings, heroImage: heroImgInput.trim() });
+    alert("✅ Hero front image updated successfully!");
   };
 
   const handleExportCSV = () => {
@@ -1188,7 +1235,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, alignItems: 'center' }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>📊 Admin Dashboard</div><button onClick={() => setRole("customer")} style={{ background: COLORS.paper2, border: "none", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontWeight: 700 }}>← Exit</button></div>
       
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto", scrollbarWidth: "none" }}>
-        {["overview", "menu", "offers", "loyalty", "inventory", "orders", "bookings"].map((t) => ( <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", marginRight: 10, fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button> ))}
+        {["overview", "menu", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings"].map((t) => ( <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", marginRight: 10, fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button> ))}
       </div>
 
       {tab === "overview" && (
@@ -1207,11 +1254,51 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
         </>
       )}
 
-      {/* ✨ MENU EDITOR & ADD NEW DISH TAB */}
+      {/* ✨ SETTINGS TAB (FOR HERO FRONT IMAGE) */}
+      {tab === "settings" && (
+        <div className="slide-up" style={{ background: COLORS.paper, padding: 24, borderRadius: 16, border: `1px solid ${COLORS.line}` }}>
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", marginTop: 0, marginBottom: 16 }}>🖼️ Change Hero Front Image</h3>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 20 }}>
+            <input type="url" placeholder="Paste Image URL here..." value={heroImgInput} onChange={e => setHeroImgInput(e.target.value)} style={{ ...inputStyle, flex: 2, minWidth: 260 }} />
+            <button onClick={handleSaveHeroImage} style={{ ...primaryBtn, flex: 1, minWidth: 140 }}>Save Hero Image</button>
+          </div>
+          {heroImgInput && (
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: COLORS.textLight }}>Preview:</div>
+              <img src={heroImgInput} alt="Hero Preview" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12 }} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ✨ GALLERY MANAGEMENT TAB */}
+      {tab === "gallery" && (
+        <div className="slide-up">
+          <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30, border: `1px solid ${COLORS.line}` }}>
+            <h3 style={{ fontFamily: "'Outfit', sans-serif", marginTop: 0, marginBottom: 16 }}>📸 Add Photo to Gallery</h3>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <input type="url" placeholder="Paste Image URL here..." value={newGalleryImg} onChange={e => setNewGalleryImg(e.target.value)} style={{ ...inputStyle, flex: 2, minWidth: 260 }} />
+              <button onClick={handleAddGalleryPhoto} style={{ ...primaryBtn, flex: 1, minWidth: 140 }}>+ Add Photo</button>
+            </div>
+          </div>
+
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", marginBottom: 16 }}>Manage Photo Gallery</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+            {gallery.map((imgUrl, idx) => (
+              <div key={idx} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 14, overflow: 'hidden', padding: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
+                <img src={imgUrl} alt="Gallery item" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 10, marginBottom: 10 }} />
+                <button onClick={() => handleDeleteGalleryPhoto(idx)} style={{ width: "100%", background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 0', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Delete Photo</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ✨ MENU MANAGEMENT & ADD NEW DISH TAB */}
       {tab === "menu" && (
         <div className="slide-up">
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30, border: `1px solid ${COLORS.line}` }}>
-            <h3 style={{ fontFamily: "'Outfit', sans-serif", marginTop: 0, marginBottom: 16 }}>➕ Add New Menu Item</h3>
+            <h3 style={{ fontFamily: "'Outfit', sans-serif", marginTop: 0, marginBottom: 16 }}>➕ Add New Menu Item (with Image)</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
               <input type="text" placeholder="Dish Name *" value={addMenuName} onChange={e => setAddMenuName(e.target.value)} style={inputStyle} />
               <input type="number" placeholder="Price (₹) *" value={addMenuPrice} onChange={e => setAddMenuPrice(e.target.value)} style={inputStyle} />
@@ -1223,20 +1310,24 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
                 <option value="false">🔴 Non-Vegetarian</option>
               </select>
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, marginBottom: 12 }}>
+              <input type="url" placeholder="Dish Image URL (optional)" value={addMenuImage} onChange={e => setAddMenuImage(e.target.value)} style={inputStyle} />
+            </div>
             <textarea placeholder="Short description (optional)" value={addMenuDesc} onChange={e => setAddMenuDesc(e.target.value)} style={{ ...inputStyle, marginBottom: 16, resize: 'none' }} rows={2} />
             <button onClick={handleAddNewDish} style={primaryBtn}>+ Add Dish to Menu</button>
           </div>
 
-          <h3 style={{ fontFamily: "'Outfit', sans-serif", marginBottom: 16 }}>Existing Menu Management (Edit & Delete)</h3>
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", marginBottom: 16 }}>Existing Menu Management (Edit Images & Details)</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
             {menu.map(item => (
-              <div key={item.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
+              <div key={item.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <img src={item.image} alt={item.name} style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 10 }} />
+                <div style={{ flex: 1 }}>
                   <div style={{fontWeight: 800, fontSize: 16, color: COLORS.ink}}>{item.name} <span style={{fontSize: 12, color: COLORS.textLight}}>({item.category})</span></div>
                   <div style={{fontFamily: "'JetBrains Mono', monospace", color: COLORS.copper, fontWeight: 800}}>{inr(item.price)}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => { setEditingItem(item); setNewItemName(item.name); setNewItemPrice(item.price); setNewItemCat(item.category); }} style={{ background: COLORS.paper2, border: 'none', padding: '8px 14px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                  <button onClick={() => { setEditingItem(item); setNewItemName(item.name); setNewItemPrice(item.price); setNewItemCat(item.category); setNewItemImage(item.image); }} style={{ background: COLORS.paper2, border: 'none', padding: '8px 14px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
                   <button onClick={() => handleDeleteMenuItem(item.id)} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '8px 14px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
                 </div>
               </div>
@@ -1246,12 +1337,13 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
           {editingItem && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99 }}>
               <div style={{ background: '#fff', padding: 24, borderRadius: 20, width: '90%', maxWidth: 400 }}>
-                <h3 style={{ marginTop: 0 }}>Edit Menu Item</h3>
+                <h3 style={{ marginTop: 0 }}>Edit Menu Item & Image</h3>
                 <input type="text" value={newItemName} onChange={e=>setNewItemName(e.target.value)} style={{...inputStyle, marginBottom: 12}} />
                 <input type="number" value={newItemPrice} onChange={e=>setNewItemPrice(e.target.value)} style={{...inputStyle, marginBottom: 12}} />
-                <select value={newItemCat} onChange={e=>setNewItemCat(e.target.value)} style={{...inputStyle, marginBottom: 20}}>
+                <select value={newItemCat} onChange={e=>setNewItemCat(e.target.value)} style={{...inputStyle, marginBottom: 12}}>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
+                <input type="url" placeholder="Image URL" value={newItemImage} onChange={e=>setNewItemImage(e.target.value)} style={{...inputStyle, marginBottom: 20}} />
                 <div style={{ display: 'flex', gap: 12 }}>
                   <button onClick={() => setEditingItem(null)} style={{ flex: 1, padding: 12, border: `1px solid ${COLORS.line}`, background: 'transparent', borderRadius: 10, fontWeight: 700 }}>Cancel</button>
                   <button onClick={handleSaveMenuItem} style={{ flex: 1, padding: 12, background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800 }}>Save</button>
@@ -1408,7 +1500,7 @@ function StatCard({ label, value, icon, color }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   4. MAIN APP COMPONENT (WITH COIN HISTORY STATE TRACKING)
+   4. MAIN APP COMPONENT
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 export default function App() {
@@ -1417,6 +1509,7 @@ export default function App() {
   const [calls, setCalls] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [offersList, setOffersList] = useState(DEFAULT_OFFERS);
+  const [gallery, setGallery] = useState(DEFAULT_GALLERY);
 
   const [loyaltyRules, setLoyaltyRules] = useState({
     rate: 10, 
@@ -1492,10 +1585,11 @@ export default function App() {
     <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <style>{FONTS}</style>
       <div className="app-content">
-        {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} offersList={offersList} table={table} setTable={setTable} setRole={setRole} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} />}
+        {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} setRole={setRole} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} />}
         {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} setRole={setRole} calls={calls} resolveCall={resolveCall} />}
-        {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} setRole={setRole} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} />}
+        {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} setRole={setRole} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} />}
       </div>
     </div>
   );
 }
+
