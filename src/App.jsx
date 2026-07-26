@@ -3,9 +3,7 @@ import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.2 (ULTIMATE INTEGRATED + ENHANCED)
-   ✨ FULL MENU | OTP LOGIN | GET LOCATION | BOOKINGS | KITCHEN BOARD | THERMAL PRINT
-   🚀 ENHANCED: Smart Toasts | AI Recommendations | Keyboard Shortcuts | Analytics
+   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.3 (WITH ORDER/COIN HISTORY & ADD MENU)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
@@ -34,13 +32,8 @@ const FONTS = `
 .skeleton-loading { background: linear-gradient(90deg, #f0efeb 25%, #e8e6dc 50%, #f0efeb 75%); background-size: 1000px 100%; animation: shimmer 2s infinite; }
 .success-pulse { animation: successPulse 0.8s infinite; }
 
-/* ✨ VIP Dark Mode Styling */
 .dark-theme { filter: invert(0.92) hue-rotate(180deg); background: #111; min-height: 100vh; }
 .dark-theme img, .dark-theme .keep-color { filter: invert(1) hue-rotate(180deg); }
-
-@media (prefers-reduced-motion: reduce) {
-  .pulse-anim, .scale-bounce, .smooth-transition, .smooth-slide-up, .fade-scale, .skeleton-loading, .success-pulse { animation: none !important; transition: none !important; }
-}
 
 @media print {
   .app-content { display: none !important; }
@@ -88,10 +81,9 @@ function mi(id, name, price, category, veg, desc, portion, isBestseller = false,
   return { id, name, desc: desc || "Freshly prepared with premium ingredients.", price, category, veg, available, image: img, portion: portion || "", isBestseller };
 }
 
-// ✨ FULL MENU RESTORED
 const DEFAULT_MENU = [
   mi("d1", "Mint Mojito", 90, "Drinks", true, "Refreshing blend of fresh mint, lemon, and sparkling soda.", "", true), mi("d2", "Blue Lagoon", 90, "Drinks", true, "Tropical blue curacao cooler with a citrusy kick."), mi("d3", "Vanilla Shake", 120, "Drinks", true, "Classic thick and creamy vanilla milkshake."), mi("d4", "Chocolate Shake", 130, "Drinks", true, "Rich cocoa blended with milk and ice cream."), mi("d5", "Kitkat Oreo Shake", 150, "Drinks", true, "Ultimate crunch of KitKat and Oreo cookies."), mi("d9", "Cold Coffee", 120, "Drinks", true, "Chilled, frothy coffee perfection.", "", true), mi("d10", "Cold Drink", 50, "Drinks", true, "Chilled aerated beverage."),
-  mi("f1", "Veg Burger", 90, "Fun Food", true, "Crispy veggie patty with fresh lettuce and creamy mayo."), mi("f2", "Eat & Park Special Pizza", 280, "Fun Food", true, "Loaded with exotic veggies, extra cheese and secret sauce.", "", true), mi("f3", "Veg Roll", 90, "Fun Food", true, "Spiced veggies wrapped in a soft, flaky paratha."), mi("f4", "Paneer Roll", 100, "Fun Food", true, "Tandoori paneer chunks rolled to perfection."), mi("f8", "Eat & Park Egg Roll", 100, "Fun Food", false, "Double egg wrapped with crispy onions and sauces."), mi("f9", "Eat & Park Chicken Roll", 150, "Fun Food", false, "Juicy chicken tikka wrapped in a crispy paratha."), mi("f11", "White Sauce Pasta", 180, "Fun Food", true, "Penne in a rich, creamy, and cheesy garlic sauce."), mi("f14", "Veg Sandwich", 120, "Fun Food", true, "Freshly grilled with layers of healthy veggies and cheese."), mi("f15", "Chicken Sandwich", 150, "Fun Food", false, "Grilled sandwich stuffed with creamy chicken filling."),
+  mi("f1", "Veg Burger", 90, "Fun Food", true, "Crispy veggie patty with fresh lettuce and creamy mayo."), mi("f2", "Eat & Park Special Pizza", 280, "Fun Food", true, "Loaded with exotic veggies, extra cheese and secret sauce.", "", true), mi("f3", "Veg Roll", 90, "Fun Food", true, "Spiced veggies wrapped in a soft, flaky paratha."), mi("f4", "Paneer Roll", 100, "Fun Food", true, "Tandoori paneer chunks rolled to perfection."), mi("f8", "Eat & Park Egg Roll", 100, "Fun Food", false, "Double egg wrapped with crispy onions and sauces."), mi("f9", "Eat & Park Chicken Roll", 150, "Fun Food", false, "Juicy chicken tikka rolled in a crispy paratha."), mi("f11", "White Sauce Pasta", 180, "Fun Food", true, "Penne in a rich, creamy, and cheesy garlic sauce."), mi("f14", "Veg Sandwich", 120, "Fun Food", true, "Freshly grilled with layers of healthy veggies and cheese."), mi("f15", "Chicken Sandwich", 150, "Fun Food", false, "Grilled sandwich stuffed with creamy chicken filling."),
   mi("cs1", "Paneer Chilli", 240, "Chinese Starter", true, "Crispy paneer tossed in spicy soy and garlic sauce.", "Dry / Gravy", true), mi("cs2", "Mushroom Chilli", 250, "Chinese Starter", true, "Fresh button mushrooms in a tangy chili glaze.", "Dry / Gravy"), mi("cs3", "Veg Manchurian", 180, "Chinese Starter", true, "Vegetable dumplings in a classic dark soy gravy.", "Dry / Gravy"), mi("cs8", "Chicken Chilli", 240, "Chinese Starter", false, "Diced chicken tossed with capsicum, onion, and hot sauces.", "Dry / Gravy", true), mi("cs9", "Chicken Manchurian", 260, "Chinese Starter", false, "Minced chicken balls in sweet and savory Chinese sauce.", "Dry / Gravy"), mi("cs10", "Chicken Lollipop", 300, "Chinese Starter", false, "Crispy fried chicken wings served with hot garlic dip.", "Dry / Gravy"), 
   mi("mg1", "Tandoori Chicken", 450, "Mughlai", false, "Classic bone-in chicken marinated in yogurt and Indian spices, roasted in clay oven."), mi("mg3", "Chicken Tikka", 350, "Mughlai", false, "Boneless chicken chunks marinated in fiery spices and grilled."), 
   mi("t1", "Paneer Tikka", 299, "Tandoori", true, "Cottage cheese marinated in spices and grilled in a tandoor.", "", true), mi("t2", "Mushroom Tikka", 285, "Tandoori", true, "Juicy mushrooms roasted with smoky tandoori flavors."),
@@ -118,14 +110,12 @@ const STATUS_COLOR = { new: COLORS.rust, preparing: COLORS.copper, ready: COLORS
 
 const PREP_TIME_ESTIMATES = { "Drinks": 3, "Fun Food": 10, "Chinese Starter": 12, "Tandoori": 20, "Biryani & Thali": 25 };
 
-// ✨ NEW: Contextual empty states for better UX guidance
 const EMPTY_STATES = {
   veg_filtered: { icon: "🥬", title: "No vegetarian options here", subtitle: "Try 'All Items' or check our Paneer & Mushroom section!" },
   search_no_results: { icon: "🔍", title: "Dish not found", subtitle: "Try searching 'paneer', 'chicken', 'biryani', or 'tandoori'" },
   category_empty: { icon: "📂", title: "This category is empty", subtitle: "Check out our bestsellers in Fun Food or Tandoori!" },
 };
 
-// ✨ NEW: Smart toast configuration with priority & duration
 const TOAST_CONFIG = {
   success: { duration: 2200, bg: COLORS.success, icon: "✅" },
   error: { duration: 4500, bg: COLORS.error, icon: "❌" },
@@ -134,7 +124,6 @@ const TOAST_CONFIG = {
   warning: { duration: 4000, bg: COLORS.warning, icon: "⚠️" },
 };
 
-// ✨ NEW: Simple client-side rate limiter (prevents OTP spam/brute force)
 class RateLimiter {
   constructor() { this.attempts = {}; }
   check(action, identifier, maxAttempts = 3, windowMs = 900000) {
@@ -164,7 +153,6 @@ function getEstimatedTime(items) {
 }
 function getOrderProgress(status) { const map = { new: 15, preparing: 50, ready: 85, served: 100 }; return map[status] || 0; }
 
-// ✨ NEW: Time-of-day aware smart suggestion pool picker
 function getSmartSuggestionPool(menu, cart) {
   const hour = new Date().getHours();
   let pool = [];
@@ -227,7 +215,7 @@ function SearchBar({ value, onChange, placeholder = "Search menu..." }) {
     const q = e.target.value;
     setLocalValue(q);
     clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => onChange(q), 250); // ✨ debounced search
+    timeoutRef.current = setTimeout(() => onChange(q), 250);
   };
   return (
     <div style={{ position: "relative", flex: 1 }}>
@@ -253,7 +241,6 @@ function SlideButton({ onComplete, text, bg = COLORS.sage }) {
 
 function ModalHeader({ title, onClose }) { return <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 16 }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 700 }}>{title}</div><button onClick={onClose} aria-label="Close" style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", fontSize: 18 }}>✕</button></div>; }
 
-// ✨ ENHANCED: Smart toast with priority-based styling and haptic feedback
 function Toast({ message, type = 'info' }) {
   const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
   return (
@@ -264,21 +251,6 @@ function Toast({ message, type = 'info' }) {
   );
 }
 
-// ✨ NEW: Skeleton loader for perceived performance
-function MenuSkeleton() {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "16px 0", gap: 12 }}>
-      <div style={{ flex: 1 }}>
-        <div className="skeleton-loading" style={{ height: 20, marginBottom: 8, borderRadius: 8, width: '70%' }} />
-        <div className="skeleton-loading" style={{ height: 14, marginBottom: 8, borderRadius: 8, width: '40%' }} />
-        <div className="skeleton-loading" style={{ height: 12, borderRadius: 8, width: '90%' }} />
-      </div>
-      <div className="skeleton-loading" style={{ width: 90, height: 90, borderRadius: 14, flexShrink: 0 }} />
-    </div>
-  );
-}
-
-// ✨ NEW: Contextual empty state component
 function EmptyState({ reason }) {
   const state = EMPTY_STATES[reason] || EMPTY_STATES.category_empty;
   return (
@@ -291,10 +263,10 @@ function EmptyState({ reason }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   1. ENHANCED CUSTOMER VIEW (WITH OTP LOGIN & GET LOCATION)
+   1. ENHANCED CUSTOMER VIEW (WITH ORDER HISTORY & COIN HISTORY MODALS)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, setRole, promo, settings, installApp, handlePrint, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers }) {
+function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, setRole, promo, settings, installApp, handlePrint, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory }) {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
@@ -313,8 +285,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [claimedReward, setClaimedReward] = useState(null);
 
-  // ✨ OTP & Location State
-  const [otpStep, setOtpStep] = useState("phone"); // 'phone' | 'verify'
+  const [otpStep, setOtpStep] = useState("phone");
   const [otpCode, setOtpCode] = useState("");
   const [generatedOtp, setGeneratedOtp] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -333,21 +304,19 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     return true;
   });
 
-  // ✨ NEW: determine which empty-state reason applies
   const emptyReason = searchQuery.trim() ? "search_no_results" : (vegOnly ? "veg_filtered" : "category_empty");
 
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
   const cartCount = cartItems.reduce((s, [, q]) => s + q, 0);
   const subtotal = cartItems.reduce((s, [id, q]) => { const item = menu.find((m) => m.id === id); return s + (item ? item.price * q : 0); }, 0);
   
-  // ✨ Dynamic Discount & Delivery Charge (₹40)
   const deliveryFee = orderType === "parcel" ? 40 : 0;
   const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
   const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
 
   const showToast = useCallback((msg, type = 'info') => {
     const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
-    if (type === 'reward' && navigator.vibrate) navigator.vibrate([100, 50, 100]); // ✨ haptic feedback
+    if (type === 'reward' && navigator.vibrate) navigator.vibrate([100, 50, 100]);
     setToast(msg); setToastType(type);
     setTimeout(() => setToast(null), config.duration);
   }, []);
@@ -356,7 +325,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     const oldQ = cart[id] || 0;
     setCart((c) => ({ ...c, [id]: q }));
     if (q > oldQ && q === 1) {
-       // ✨ ENHANCED: Time-of-day aware smart recommendations
        const options = getSmartSuggestionPool(menu, cart);
        if (options.length > 0) {
           const randomSug = options[Math.floor(Math.random() * options.length)];
@@ -367,7 +335,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   };
 
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served");
-  const myOrders = orders.filter(o => myOrderIds.includes(o.id)); // ✨ all own orders (for stats)
+  const myOrders = orders.filter(o => myOrderIds.includes(o.id));
+  const myCoinLogs = coinHistory.filter(c => c.phone === custPhone);
+
   const cartQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${cartTotal}&cu=INR`)}`;
   const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
 
@@ -375,7 +345,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const currentCoins = activeUser ? activeUser.coins : 0;
   const newEarnedCoins = Math.floor(cartTotal / loyaltyRules.rate);
 
-  // ✨ ENHANCED: OTP with rate limiting (prevents brute-force / spam)
   const handleSendOtp = () => {
     if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid 10-digit phone", 'error'); return; }
     const check = otpLimiter.check('otp', custPhone, 3);
@@ -396,7 +365,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   };
 
-  // ✨ Get Location Function
   const handleGetLocation = () => {
     if (!navigator.geolocation) { showToast("Geolocation not supported", 'error'); return; }
     showToast("📍 Fetching your GPS location...", 'info');
@@ -406,13 +374,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         setCustAddress(`Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)} (Auto-detected GPS Location)`);
         showToast("✅ Location fetched successfully!", 'success');
       },
-      (error) => {
-        showToast("⚠️ Unable to retrieve location", 'error');
-      }
+      () => { showToast("⚠️ Unable to retrieve location", 'error'); }
     );
   };
 
-  // ✨ ENHANCED: Dynamic coupon rules (welcome / comeback / VIP tiers)
   const handleApplyCoupon = () => {
     const code = couponCode.toUpperCase().trim();
     const coupons = {
@@ -577,6 +542,8 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
             
             <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
               <SidebarBtn icon={isDark ? "☀️" : "🌙"} text={isDark ? "Switch to Light Mode" : "VIP Dark Mode"} onClick={() => { setIsDark(!isDark); setShowSidebar(false); showToast(isDark ? "☀️ Light Mode Active" : "🌙 VIP Dark Mode Active", "success"); }} highlight />
+              <SidebarBtn icon="📜" text="My Order History" onClick={() => { setShowSidebar(false); setActiveModal('orderHistory'); }} />
+              <SidebarBtn icon="🪙" text="My Coin History" onClick={() => { setShowSidebar(false); setActiveModal('coinHistory'); }} />
               <SidebarBtn icon="🎁" text="Today's Offers" onClick={() => {setShowSidebar(false); setActiveModal('offers');}} />
               <SidebarBtn icon="🍽️" text="Table Booking" onClick={() => {setShowSidebar(false); setBookType("table"); setActiveModal('booking');}} />
               <SidebarBtn icon="🎉" text="Party Booking" onClick={() => {setShowSidebar(false); setBookType("party"); setActiveModal('booking');}} />
@@ -607,7 +574,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <button onClick={() => setOrderType("parcel")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "parcel" ? COLORS.copper : COLORS.line}`, background: orderType === "parcel" ? COLORS.copper : "#fff", color: orderType === "parcel" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer", transition: "all 0.2s ease" }}>🛍️ Parcel (+₹40)</button>
                 </div>
 
-                {/* ✨ OTP LOGIN UI IN CHECKOUT */}
                 <div style={{ background: COLORS.paper2, padding: 16, borderRadius: 16, marginBottom: 16, border: `1px solid ${COLORS.line}` }}>
                   <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10, color: COLORS.ink }}>🔐 Quick OTP Authentication</div>
                   {!isLoggedIn ? (
@@ -643,13 +609,11 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   )}
                 </div>
 
-                {/* ✨ COUPON / DISCOUNT INPUT */}
                 <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                   <input type="text" placeholder="Coupon Code (e.g. EAT20)" value={couponCode} onChange={(e) => setCouponCode(e.target.value)} style={inputStyle} />
                   <button onClick={handleApplyCoupon} style={{ background: COLORS.gold, color: COLORS.ink, border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer" }}>Apply</button>
                 </div>
 
-                {/* 🪙 EATCOIN LOYALTY SYSTEM UI */}
                 <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', borderRadius: 16, padding: 16, marginBottom: 20, border: `1.5px solid ${COLORS.gold}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div style={{fontWeight: 800, fontSize: 16, color: COLORS.ink}}>🪙 EatCoins</div>
@@ -723,6 +687,55 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               </>
             )}
 
+            {activeModal === 'orderHistory' && (
+              <>
+                <ModalHeader title="📜 My Order History" onClose={() => setActiveModal(null)} />
+                {myOrders.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: "40px 0", color: COLORS.textLight, fontWeight: 600 }}>No past orders found.</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {[...myOrders].reverse().map(o => (
+                      <div key={o.id} style={{ background: COLORS.paper, border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 14 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontWeight: 800 }}>
+                          <span>Order #{o.id.toUpperCase()}</span>
+                          <span style={{ color: STATUS_COLOR[o.status] || COLORS.ink, textTransform: 'uppercase', fontSize: 12 }}>{o.status}</span>
+                        </div>
+                        <div style={{ fontSize: 13, color: COLORS.textLight, marginBottom: 8 }}>{new Date(o.createdAt).toLocaleString('en-IN')}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{o.items.map(i => `${i.qty}x ${i.name}`).join(", ")}</div>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, color: COLORS.copper }}>Total: {inr(o.items.reduce((s,i)=>s+(i.price*i.qty),0) + (o.deliveryFee||0))}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeModal === 'coinHistory' && (
+              <>
+                <ModalHeader title="🪙 My Coin History" onClose={() => setActiveModal(null)} />
+                {!custPhone || custPhone.length < 10 ? (
+                  <div style={{ textAlign: 'center', padding: "30px 0", color: COLORS.textLight, fontWeight: 600 }}>Please enter your phone number during checkout or login to view coin history.</div>
+                ) : myCoinLogs.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: "40px 0", color: COLORS.textLight, fontWeight: 600 }}>No coin transactions recorded yet. (Current Balance: {currentCoins})</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 8, color: COLORS.gold }}>Current Balance: {currentCoins} EatCoins</div>
+                    {[...myCoinLogs].reverse().map((log, idx) => (
+                      <div key={idx} style={{ background: COLORS.paper, border: `1px solid ${COLORS.line}`, padding: 14, borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.ink }}>{log.reason}</div>
+                          <div style={{ fontSize: 11, color: COLORS.textLight }}>{new Date(log.timestamp).toLocaleString('en-IN')}</div>
+                        </div>
+                        <div style={{ fontWeight: 800, fontSize: 15, color: log.coins > 0 ? COLORS.success : COLORS.error }}>
+                          {log.coins > 0 ? `+${log.coins}` : log.coins} 🪙
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
             {activeModal === 'offers' && (
               <>
                 <ModalHeader title="🎁 Today's Offers" onClose={() => setActiveModal(null)} />
@@ -780,7 +793,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               <>
                 <ModalHeader title="Your Active Orders" onClose={() => setActiveModal(null)} />
                 {myActiveOrders.length === 0 ? <div style={{textAlign: 'center', padding: "50px 0", color: COLORS.textLight, fontWeight: 600}}>No active orders right now.</div> : myActiveOrders.map(o => {
-                  const stepIdx = STATUS_FLOW.indexOf(o.status); const estimatedTime = getEstimatedTime(o.items);
+                  const estimatedTime = getEstimatedTime(o.items);
                   return (
                     <div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, marginBottom: 16, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
                       <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, color: COLORS.ink, marginBottom: 6 }}>Order #{o.id.slice(1,5).toUpperCase()}</div>
@@ -815,7 +828,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   );
 }
 
-// ✨ NEW: Customer-facing order stats/gamification widget (shown in sidebar)
 function MyOrderStats({ myOrders, loyaltyCoins }) {
   if (!myOrders || myOrders.length === 0) return null;
   const totalSpent = myOrders.reduce((s, o) => s + o.items.reduce((a, i) => a + i.price * i.qty, 0), 0);
@@ -860,10 +872,9 @@ function SidebarBtn({ icon, text, onClick, highlight }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   2. STAFF VIEW (KITCHEN BOARD & THERMAL PRINT)
+   2. STAFF VIEW
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
-// ✨ NEW: Keyboard shortcuts reference, shown in a help modal (triggered by '?')
 const STAFF_SHORTCUTS = {
   'Ctrl+K': 'Focus first order',
   '↑ / ↓': 'Navigate between orders',
@@ -900,7 +911,7 @@ function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
   const activeCallsCount = activeCalls.length;
   const prevCallsCountRef = useRef(activeCallsCount);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
-  const [showHelpModal, setShowHelpModal] = useState(false); // ✨ NEW
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   useEffect(() => {
     if (newOrderCount > prevCountRef.current) {
@@ -925,13 +936,12 @@ function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
       if (e.key === 'ArrowDown') { const currentIndex = active.findIndex(o => o.id === selectedOrderId); if (currentIndex < active.length - 1) setSelectedOrderId(active[currentIndex + 1].id); }
       if ((e.key === 'p' || e.key === 'P') && selectedOrderId && !e.ctrlKey) { const order = active.find(o => o.id === selectedOrderId); if (order && order.status === "new") advanceStatus(selectedOrderId, "new"); }
       if ((e.key === 'r' || e.key === 'R') && selectedOrderId && !e.ctrlKey) { const order = active.find(o => o.id === selectedOrderId); if (order && order.status === "preparing") advanceStatus(selectedOrderId, "preparing"); }
-      if ((e.key === '?' || e.key === '/') && e.shiftKey) { e.preventDefault(); setShowHelpModal(v => !v); } // ✨ NEW
+      if ((e.key === '?' || e.key === '/') && e.shiftKey) { e.preventDefault(); setShowHelpModal(v => !v); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedOrderId, active]);
 
-  // ✨ Thermal KOT & Bill Print Handler
   const handlePrintReceipt = (order) => {
     const printWindow = window.open('', '_blank', 'width=300,height=600');
     if (!printWindow) return;
@@ -1039,10 +1049,9 @@ function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   3. ADMIN VIEW (MENU EDITOR, BOOKINGS, ORDER HISTORY, LOYALTY)
+   3. ADMIN VIEW (WITH ADD NEW DISH FORM)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
-// ✨ NEW: Kitchen performance metrics widget for Admin Overview
 function KitchenMetrics({ filteredOrders }) {
   const servedOrders = filteredOrders.filter(o => o.status === "served");
   if (servedOrders.length === 0) return null;
@@ -1064,7 +1073,6 @@ function KitchenMetrics({ filteredOrders }) {
   );
 }
 
-// ✨ NEW: Inventory low-stock alert banner
 function InventoryAlertBanner({ inventory }) {
   const critical = inventory.filter(i => i.stock < 2);
   const warning = inventory.filter(i => i.stock >= 2 && i.stock < 5);
@@ -1095,17 +1103,21 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
   const [newOffer, setNewOffer] = useState({ title: "", desc: "" });
   const [newReward, setNewReward] = useState({ cost: "", item: "" });
 
-  // ✨ Menu Editor state
   const [editingItem, setEditingItem] = useState(null);
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemCat, setNewItemCat] = useState(CATEGORIES[0]);
 
+  // ✨ New state for adding a brand new menu item
+  const [addMenuName, setAddMenuName] = useState("");
+  const [addMenuPrice, setAddMenuPrice] = useState("");
+  const [addMenuCat, setAddMenuCat] = useState(CATEGORIES[0]);
+  const [addMenuVeg, setAddMenuVeg] = useState(true);
+  const [addMenuDesc, setAddMenuDesc] = useState("");
+
   const filteredOrders = orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
   const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0), 0);
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0), 0) / filteredOrders.length) : 0;
-  const paidOrders = filteredOrders.filter(o => o.paid).length;
-  const dineInOrders = filteredOrders.filter(o => o.orderType === "dine_in").length;
 
   const handleAddOffer = () => { if(newOffer.title) { addOffer({ id: uid("off"), title: newOffer.title, desc: newOffer.desc }); setNewOffer({ title: "", desc: "" }); } }
 
@@ -1116,7 +1128,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
     }
   }
 
-  // ✨ Menu Edit & Delete Handlers
   const handleSaveMenuItem = () => {
     if (!editingItem) return;
     setMenuState(menu.map(m => m.id === editingItem.id ? { ...m, name: newItemName, price: Number(newItemPrice), category: newItemCat } : m));
@@ -1129,7 +1140,30 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
     }
   };
 
-  // ✨ NEW: Export report as CSV
+  // ✨ Handler to add a brand new dish to the menu
+  const handleAddNewDish = () => {
+    if (!addMenuName.trim() || !addMenuPrice) {
+      alert("Please enter dish name and price.");
+      return;
+    }
+    const newDish = mi(
+      uid("m"),
+      addMenuName.trim(),
+      Number(addMenuPrice),
+      addMenuCat,
+      addMenuVeg,
+      addMenuDesc.trim(),
+      "",
+      false,
+      true
+    );
+    setMenuState([newDish, ...menu]);
+    setAddMenuName("");
+    setAddMenuPrice("");
+    setAddMenuDesc("");
+    alert("✅ New dish added successfully!");
+  };
+
   const handleExportCSV = () => {
     const rows = [["Time", "Type", "Items", "Total", "Paid"]];
     filteredOrders.forEach(o => {
@@ -1173,10 +1207,27 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
         </>
       )}
 
-      {/* ✨ MENU EDITOR TAB */}
+      {/* ✨ MENU EDITOR & ADD NEW DISH TAB */}
       {tab === "menu" && (
         <div className="slide-up">
-          <h3 style={{ fontFamily: "'Outfit', sans-serif", marginBottom: 16 }}>Menu Management (Edit & Delete)</h3>
+          <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30, border: `1px solid ${COLORS.line}` }}>
+            <h3 style={{ fontFamily: "'Outfit', sans-serif", marginTop: 0, marginBottom: 16 }}>➕ Add New Menu Item</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
+              <input type="text" placeholder="Dish Name *" value={addMenuName} onChange={e => setAddMenuName(e.target.value)} style={inputStyle} />
+              <input type="number" placeholder="Price (₹) *" value={addMenuPrice} onChange={e => setAddMenuPrice(e.target.value)} style={inputStyle} />
+              <select value={addMenuCat} onChange={e => setAddMenuCat(e.target.value)} style={inputStyle}>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={addMenuVeg} onChange={e => setAddMenuVeg(e.target.value === 'true')} style={inputStyle}>
+                <option value="true">🟢 Vegetarian</option>
+                <option value="false">🔴 Non-Vegetarian</option>
+              </select>
+            </div>
+            <textarea placeholder="Short description (optional)" value={addMenuDesc} onChange={e => setAddMenuDesc(e.target.value)} style={{ ...inputStyle, marginBottom: 16, resize: 'none' }} rows={2} />
+            <button onClick={handleAddNewDish} style={primaryBtn}>+ Add Dish to Menu</button>
+          </div>
+
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", marginBottom: 16 }}>Existing Menu Management (Edit & Delete)</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
             {menu.map(item => (
               <div key={item.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1211,7 +1262,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
         </div>
       )}
 
-      {/* LOYALTY MANAGER */}
       {tab === "loyalty" && (
         <div className="slide-up">
           <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', padding: 24, borderRadius: 16, marginBottom: 24, border: `1.5px solid ${COLORS.gold}` }}>
@@ -1256,7 +1306,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
         </div>
       )}
 
-      {/* OFFERS TAB */}
       {tab === "offers" && (
         <div className="slide-up">
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 24, border: `1px solid ${COLORS.line}` }}>
@@ -1281,7 +1330,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
         </div>
       )}
 
-      {/* INVENTORY TAB */}
       {tab === "inventory" && (
         <div className="slide-up">
           <InventoryAlertBanner inventory={inventory} />
@@ -1341,7 +1389,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
                   <td style={td}>{b.type === "party" ? "🎉 Party" : "🍽️ Table"}</td>
                   <td style={td}><strong>{b.name}</strong><br/>{b.phone}<br/>{b.guests} Guests</td>
                   <td style={td}>{b.date} at {b.time}</td>
-                  <td style={td}><button onClick={() => deleteBooking(b.id)} style={{background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700}}>Delete</button></td>
+                  <td style={td}><button onClick={() => deleteBooking(b.id)} style={{background: 'transparent', border: `1.5px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700}}>Delete</button></td>
                 </tr>
               ))}
             </tbody>
@@ -1360,7 +1408,7 @@ function StatCard({ label, value, icon, color }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   4. MAIN APP COMPONENT 
+   4. MAIN APP COMPONENT (WITH COIN HISTORY STATE TRACKING)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 export default function App() {
@@ -1376,6 +1424,9 @@ export default function App() {
   });
   const [loyaltyUsers, setLoyaltyUsers] = useState([
     { phone: "9876543210", name: "Demo User", coins: 350 }
+  ]);
+  const [coinHistory, setCoinHistory] = useState([
+    { phone: "9876543210", coins: 350, reason: "Initial Bonus", timestamp: Date.now() - 86400000 }
   ]);
 
   const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); return params.has("table") ? Number(params.get("table")) : 1; });
@@ -1408,6 +1459,13 @@ export default function App() {
        } else if (netCoins > 0) {
           setLoyaltyUsers([...loyaltyUsers, { phone: order.customer.phone, name: order.customer.name, coins: netCoins }]);
        }
+
+       if (order.earnedCoins > 0) {
+         setCoinHistory(prev => [...prev, { phone: order.customer.phone, coins: order.earnedCoins, reason: `Earned from Order #${order.id.slice(1,5).toUpperCase()}`, timestamp: Date.now() }]);
+       }
+       if (order.rewardUsedCoins > 0) {
+         setCoinHistory(prev => [...prev, { phone: order.customer.phone, coins: -order.rewardUsedCoins, reason: `Redeemed for ${order.claimedReward}`, timestamp: Date.now() }]);
+       }
     }
 
     order.items.forEach(cartItem => {
@@ -1434,7 +1492,7 @@ export default function App() {
     <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <style>{FONTS}</style>
       <div className="app-content">
-        {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} offersList={offersList} table={table} setTable={setTable} setRole={setRole} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} />}
+        {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} offersList={offersList} table={table} setTable={setTable} setRole={setRole} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} />}
         {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} setRole={setRole} calls={calls} resolveCall={resolveCall} />}
         {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} setRole={setRole} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} />}
       </div>
