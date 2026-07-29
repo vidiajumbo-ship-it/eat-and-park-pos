@@ -92,7 +92,6 @@ const CONSTANTS = {
 // 3. CUSTOM HOOKS (ENHANCED)
 // ============================================
 
-// Local Storage Hook for offline persistence
 const useLocalStorage = (key, initialValue) => {
   const [storedValue, setStoredValue] = useState(() => {
     try {
@@ -115,49 +114,6 @@ const useLocalStorage = (key, initialValue) => {
   }, [key, storedValue]);
 
   return [storedValue, setValue];
-};
-
-// Form Validation Hook
-const useFormValidation = (initialValues, validate) => {
-  const [values, setValues] = useState(initialValues);
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({});
-
-  const handleChange = useCallback((e) => {
-    const { name, value } = e.target;
-    setValues(prev => ({ ...prev, [name]: value }));
-    if (touched[name]) {
-      const validationErrors = validate({ ...values, [name]: value });
-      setErrors(prev => ({ ...prev, [name]: validationErrors[name] || '' }));
-    }
-  }, [values, touched, validate]);
-
-  const handleBlur = useCallback((e) => {
-    const { name } = e.target;
-    setTouched(prev => ({ ...prev, [name]: true }));
-    const validationErrors = validate(values);
-    setErrors(prev => ({ ...prev, [name]: validationErrors[name] || '' }));
-  }, [values, validate]);
-
-  const handleSubmit = useCallback((callback) => (e) => {
-    e.preventDefault();
-    const validationErrors = validate(values);
-    setErrors(validationErrors);
-    if (Object.keys(validationErrors).length === 0) {
-      callback(values);
-    }
-  }, [values, validate]);
-
-  return {
-    values,
-    errors,
-    touched,
-    handleChange,
-    handleBlur,
-    handleSubmit,
-    setValues,
-    setErrors
-  };
 };
 
 // ============================================
@@ -186,7 +142,6 @@ function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
 function timeAgo(ts) { const s = Math.floor((Date.now() - ts)/1000); if (s < 60) return s + "s ago"; const m = Math.floor(s/60); if (m < 60) return m + "m ago"; return Math.floor(m/60) + "h ago"; }
 function toLocalISODate(timestamp) { const d = new Date(timestamp); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]; }
 
-// Enhanced: Get loyalty tier based on points
 function getLoyaltyTier(points) {
   let tier = CONSTANTS.LOYALTY_TIERS[0];
   for (const t of CONSTANTS.LOYALTY_TIERS) {
@@ -239,72 +194,6 @@ const EMPTY_STATES = {
 // 5. REUSABLE COMPONENTS (ENHANCED)
 // ============================================
 
-const Button = React.memo(({ children, variant = 'primary', size = 'md', className = '', ...props }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
-  
-  const variantStyles = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
-    secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-500',
-    success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500',
-    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
-    outline: 'border-2 border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-blue-500'
-  };
-
-  const sizeStyles = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-base',
-    lg: 'px-6 py-3 text-lg'
-  };
-
-  return (
-    <button 
-      className={`${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-});
-
-const Card = React.memo(({ children, className = '', ...props }) => (
-  <div className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow ${className}`} {...props}>
-    {children}
-  </div>
-));
-
-const InputField = React.memo(({ 
-  label, name, type = 'text', value, onChange, onBlur, 
-  error, touched, placeholder, required = false, className = '', 
-  ...props 
-}) => (
-  <div className={`mb-4 ${className}`}>
-    {label && (
-      <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-    )}
-    <input
-      id={name}
-      name={name}
-      type={type}
-      value={value}
-      onChange={onChange}
-      onBlur={onBlur}
-      placeholder={placeholder}
-      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-        error && touched ? 'border-red-500' : 'border-gray-300'
-      }`}
-      aria-invalid={error && touched ? 'true' : 'false'}
-      aria-describedby={error && touched ? `${name}-error` : undefined}
-      {...props}
-    />
-    {error && touched && (
-      <p id={`${name}-error`} className="mt-1 text-sm text-red-500">{error}</p>
-    )}
-  </div>
-));
-
-// Error Boundary Component (AREA 3 & 5)
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -326,17 +215,13 @@ class ErrorBoundary extends React.Component {
           <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>😅</div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: COLORS.ink, marginBottom: '0.5rem' }}>Something went wrong</h2>
           <p style={{ color: COLORS.textLight, marginBottom: '1rem' }}>Please try refreshing the page</p>
-          <Button onClick={() => window.location.reload()}>Refresh Page</Button>
+          <button onClick={() => window.location.reload()} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>Refresh Page</button>
         </div>
       );
     }
     return this.props.children;
   }
 }
-
-// ============================================
-// 6. EXISTING COMPONENTS (KEEP YOUR STRUCTURE)
-// ============================================
 
 function Badge({ children, color }) { 
   return <span style={{ background: color, color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", padding: "5px 10px", borderRadius: 999, fontWeight: 700, display: "inline-block" }}>{children}</span>; 
@@ -395,7 +280,7 @@ function SearchBar({ value, onChange, placeholder = "Search menu..." }) {
   };
   return (
     <div style={{ position: "relative", flex: 1 }}>
-      <input type="text" value={localValue} onChange={handleChange} placeholder={placeholder} aria-label="Search menu items" style={{...inputStyle, paddingLeft: 42, background: "#fff"}} onFocus={(e) => { e.target.style.borderColor = COLORS.copper; }} onBlur={(e) => { e.target.style.borderColor = COLORS.line; }} />
+      <input type="text" value={localValue} onChange={handleChange} placeholder={placeholder} aria-label="Search menu items" style={{ padding: "12px 16px 12px 42px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", background: "#fff" }} />
       <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 18, color: COLORS.textLight }}>🔍</span>
       {localValue && ( <button onClick={() => { setLocalValue(""); onChange(""); }} aria-label="Clear search" style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: COLORS.textLight, padding: "4px 8px" }}>✕</button> )}
     </div>
@@ -440,20 +325,12 @@ function EmptyState({ reason }) {
   );
 }
 
-// ============================================
-// 7. STAT CARD COMPONENT
-// ============================================
-
 function StatCard({ label, value, icon, color }) { 
   return <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 18, padding: "24px 20px", transition: "all 0.3s ease", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }} className="smooth-transition hover-lift">
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}><div style={{ fontSize: 13, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.05em" }}>{label}</div><span style={{ fontSize: 28 }}>{icon}</span></div>
     <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, fontWeight: 800, color: color }}>{value}</div>
   </div>; 
 }
-
-// ============================================
-// 8. SIDEBAR BUTTON
-// ============================================
 
 function SidebarBtn({ icon, text, onClick, highlight }) {
   return (
@@ -462,10 +339,6 @@ function SidebarBtn({ icon, text, onClick, highlight }) {
     </button>
   );
 }
-
-// ============================================
-// 9. MY ORDER STATS
-// ============================================
 
 function MyOrderStats({ myOrders, loyaltyCoins }) {
   if (!myOrders || myOrders.length === 0) return null;
@@ -503,7 +376,7 @@ function MyOrderStats({ myOrders, loyaltyCoins }) {
 }
 
 // ============================================
-// 10. CUSTOMER VIEW (ENHANCED)
+// 6. CUSTOMER VIEW (ENHANCED)
 // ============================================
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory }) {
@@ -536,7 +409,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [bookData, setBookData] = useState({ name: "", phone: "", date: "", time: "", guests: "" });
   const [confirmedBooking, setConfirmedBooking] = useState(null);
 
-  // Enhanced: Favorites feature (AREA 1)
   const [favorites, setFavorites] = useLocalStorage('favorites', []);
 
   const filteredItems = useMemo(() => {
@@ -559,7 +431,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
   const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
 
-  // Enhanced: Loyalty tier discount (AREA 1)
   const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
   const currentCoins = activeUser ? activeUser.coins : 0;
   const loyaltyTier = getLoyaltyTier(currentCoins);
@@ -586,7 +457,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   };
 
-  // Enhanced: Toggle favorites (AREA 1)
   const toggleFavorite = useCallback((itemId) => {
     setFavorites(prev => {
       if (prev.includes(itemId)) {
@@ -665,7 +535,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     const orderId = uid("o");
     const itemStrings = cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return `${qty}x ${m.name}` }).join(", ");
     const claimedText = claimedReward ? `\n🎁 *Free Reward Claimed:* ${claimedReward.item}` : "";
-    const loyaltyText = loyaltyDiscount > 0 ? `\n*Loyalty Discount:* ${loyaltyTier.name} (${loyaltyTier.discount * 100}%)` : "";
 
     const waText = `🚨 *NEW ORDER ALERT* (#${orderId.slice(1,5).toUpperCase()})\n\n`
                + `*Type:* ${orderType === 'parcel' ? '🛍️ Parcel (Delivery ₹40)' : `🍽️ Table ${table}`}\n`
@@ -715,15 +584,12 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     await bookEvent(newBooking); setConfirmedBooking(newBooking); setBookData({ name: "", phone: "", date: "", time: "", guests: "" }); showToast("✅ Booking Request Sent!", 'success');
   }
 
-  const primaryBtn = { background: COLORS.copper, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.3s ease", boxShadow: "0 4px 12px rgba(226,89,56,0.2)" };
   const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", transition: "all 0.2s ease" };
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: cartCount ? 120 : 60, background: "var(--bg-color, #fff)", minHeight: "100vh", position: "relative" }}>
       {toast && <Toast message={toast} type={toastType} />}
 
-      {promo && promo.show && promo.text && ( <div className="flash-banner" style={{ color: "#fff", padding: "10px 16px", textAlign: "center", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700 }}>🎉 {promo.text}</div> )}
-      
       <button onClick={() => {requestWaiter(table); showToast("🔔 Waiter has been notified!", 'success');}} aria-label="Call waiter to your table" style={{ position: "fixed", top: 80, right: 16, background: COLORS.rust, color: "#fff", border: "none", borderRadius: 20, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 8px 24px rgba(192,57,43,0.4)", cursor: "pointer", zIndex: 60, fontSize: 13, fontWeight: 800 }} className="smooth-transition hover-lift scale-bounce" title="Call Waiter">🔔 Waiter Call</button>
 
       <div style={{ position: "relative", height: 220, borderRadius: "0 0 24px 24px", overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", marginBottom: 16 }}>
@@ -777,11 +643,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               <div style={{ position: "relative", width: 90, height: 90, flexShrink: 0 }}>
                 <img src={item.image} alt={item.name} loading="lazy" decoding="async" className="keep-color" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 14, filter: item.available ? 'none' : 'grayscale(100%)' }} />
                 <div style={{ position: "absolute", top: -4, right: -4 }}>
-                  <button
-                    onClick={() => toggleFavorite(item.id)}
-                    style={{ background: 'white', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', cursor: 'pointer' }}
-                    aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                  >
+                  <button onClick={() => toggleFavorite(item.id)} style={{ background: 'white', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', cursor: 'pointer' }} aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
                     <span style={{ fontSize: 16, color: isFavorite ? '#FFD700' : '#CCC' }}>{isFavorite ? '⭐' : '☆'}</span>
                   </button>
                 </div>
@@ -844,9 +706,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               <SidebarBtn icon="🍽️" text="Table Booking" onClick={() => {setShowSidebar(false); setBookType("table"); setActiveModal('booking');}} />
               <SidebarBtn icon="🎉" text="Party Booking" onClick={() => {setShowSidebar(false); setBookType("party"); setActiveModal('booking');}} />
               <SidebarBtn icon="👑" text="VIP Loyalty Partner" onClick={() => {setShowSidebar(false); setActiveModal('loyalty');}} />
-              <div style={{ borderTop: `1px solid ${COLORS.line}`, marginTop: 10, paddingTop: 14 }}>
-                <SidebarBtn icon="📱" text="Install App" onClick={() => {setShowSidebar(false); installApp();}} />
-              </div>
             </div>
           </div>
           <div style={{ flex: 1, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(3px)" }} onClick={() => setShowSidebar(false)} className="fade-in" />
@@ -911,7 +770,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <button onClick={handleApplyCoupon} style={{ background: COLORS.gold, color: COLORS.ink, border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer" }}>Apply</button>
                 </div>
 
-                {/* Enhanced: Loyalty Display with Tier */}
                 <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', borderRadius: 16, padding: 16, marginBottom: 20, border: `1.5px solid ${COLORS.gold}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div style={{fontWeight: 800, fontSize: 16, color: COLORS.ink}}>🪙 EatCoins</div>
@@ -936,10 +794,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                               <div style={{fontWeight: 700, fontSize: 14, color: COLORS.ink}}>{r.item}</div>
                               <div style={{fontSize: 12, color: COLORS.gold, fontWeight: 800}}>{r.cost} Coins</div>
                             </div>
-                            <button 
-                              onClick={() => { setClaimedReward(isClaimed ? null : r); if(!isClaimed) showToast(`🎁 ${r.item} claimed!`, 'reward'); }}
-                              disabled={!canAfford && !isClaimed} 
-                              style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: isClaimed ? COLORS.success : (canAfford ? COLORS.ink : COLORS.paper2), color: isClaimed || canAfford ? '#fff' : COLORS.textLight, fontWeight: 800, cursor: canAfford ? 'pointer' : 'not-allowed' }}>
+                            <button onClick={() => { setClaimedReward(isClaimed ? null : r); if(!isClaimed) showToast(`🎁 ${r.item} claimed!`, 'reward'); }} disabled={!canAfford && !isClaimed} style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: isClaimed ? COLORS.success : (canAfford ? COLORS.ink : COLORS.paper2), color: isClaimed || canAfford ? '#fff' : COLORS.textLight, fontWeight: 800, cursor: canAfford ? 'pointer' : 'not-allowed' }}>
                               {isClaimed ? "✓ Claimed" : "Claim"}
                             </button>
                           </div>
@@ -998,7 +853,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               </>
             )}
 
-            {/* Gallery Modal */}
             {activeModal === 'gallery' && (
               <>
                 <ModalHeader title="🖼️ Photo Gallery" onClose={() => setActiveModal(null)} />
@@ -1091,6 +945,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 </div>
               </>
             )}
+
             {activeModal === 'booking' && (
               <>
                 <ModalHeader title={bookType === "party" ? "Party Booking 🎉" : "Table Booking 🍽️"} onClose={() => {setActiveModal(null); setConfirmedBooking(null);}} />
@@ -1099,7 +954,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     <div style={{fontSize: 56, marginBottom: 16, animation: 'scaleInBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)'}}>✅</div>
                     <h3 style={{fontFamily: "'Outfit', sans-serif", fontSize: 28, fontWeight: 800, color: COLORS.ink, marginBottom: 10}}>Request Sent!</h3>
                     <p style={{fontSize: 15, color: COLORS.textLight, marginBottom: 28, fontWeight: 500}}>Your booking has been sent successfully.</p>
-                    <button onClick={() => {setActiveModal(null); setConfirmedBooking(null);}} style={{ ...primaryBtn, width: "100%", background: COLORS.paper2, color: COLORS.ink, boxShadow: "none" }}>Close</button>
+                    <button onClick={() => {setActiveModal(null); setConfirmedBooking(null);}} style={{ background: COLORS.paper2, color: COLORS.ink, border: 'none', padding: '12px', borderRadius: 12, width: '100%', fontWeight: 800, cursor: 'pointer' }}>Close</button>
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
@@ -1107,11 +962,12 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     <input type="tel" placeholder="Phone Number" value={bookData.phone} onChange={(e) => setBookData({...bookData, phone: e.target.value})} style={inputStyle} />
                     <div style={{ display: "flex", gap: 14 }}><input type="date" value={bookData.date} onChange={(e) => setBookData({...bookData, date: e.target.value})} style={inputStyle} /><input type="time" value={bookData.time} onChange={(e) => setBookData({...bookData, time: e.target.value})} style={inputStyle} /></div>
                     <input type="number" placeholder="Number of Guests" value={bookData.guests} onChange={(e) => setBookData({...bookData, guests: e.target.value})} style={inputStyle} />
-                    <button onClick={handleBooking} style={{ ...primaryBtn, width: "100%", marginTop: 10 }}>Send Request</button>
+                    <button onClick={handleBooking} style={{ background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 14, padding: '13px 20px', fontWeight: 800, width: "100%", marginTop: 10, cursor: 'pointer' }}>Send Request</button>
                   </div>
                 )}
               </>
             )}
+
             {activeModal === 'track' && (
               <>
                 <ModalHeader title="Your Active Orders" onClose={() => setActiveModal(null)} />
@@ -1122,7 +978,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                       <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, color: COLORS.ink, marginBottom: 6 }}>Order #{o.id.slice(1,5).toUpperCase()}</div>
                       <OrderTimer createdAt={o.createdAt} estimatedTime={estimatedTime} />
                       <div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}><ProgressRing progress={getOrderProgress(o.status)} size={80} /></div>
-                      <button onClick={() => setActiveModal(null)} style={{ ...primaryBtn, width: "100%", background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, boxShadow: "none", marginTop: 16 }}>Back to Menu</button>
+                      <button onClick={() => setActiveModal(null)} style={{ background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, width: "100%", cursor: 'pointer', marginTop: 16 }}>Back to Menu</button>
                     </div>
                   )
                 })}
@@ -1137,7 +993,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 }
 
 // ============================================
-// 11. STAFF VIEW (ENHANCED WITH KEYBOARD SHORTCUTS)
+// 7. STAFF VIEW (ENHANCED WITH KEYBOARD SHORTCUTS)
 // ============================================
 
 const STAFF_SHORTCUTS = {
@@ -1161,7 +1017,7 @@ function KeyboardHelpModal({ onClose }) {
             </div>
           ))}
         </div>
-        <button onClick={onClose} style={{ ...primaryBtn, width: '100%', marginTop: 20 }}>Close</button>
+        <button onClick={onClose} style={{ background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 14, padding: '13px 20px', fontWeight: 800, width: '100%', marginTop: 20, cursor: 'pointer' }}>Close</button>
       </div>
     </div>
   );
@@ -1194,7 +1050,6 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
     prevCallsCountRef.current = activeCallsCount;
   }, [activeCallsCount]);
 
-  // Enhanced: Keyboard shortcuts for staff (AREA 2)
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'k' && e.ctrlKey) { e.preventDefault(); const firstOrder = active[0]; if (firstOrder) setSelectedOrderId(firstOrder.id); }
@@ -1225,7 +1080,6 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th, td { padding: 4px 0; border-bottom: 1px dashed #000; }
             .total { font-weight: bold; font-size: 14px; text-align: right; margin-top: 10px; }
-            .discount { color: green; text-align: right; }
           </style>
         </head>
         <body>
@@ -1238,7 +1092,6 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
           </table>
           ${order.deliveryFee ? `<p>Delivery Fee: ₹${order.deliveryFee}</p>` : ''}
           ${order.loyaltyDiscount ? `<p style="color:green">Loyalty Discount: -₹${order.loyaltyDiscount}</p>` : ''}
-          ${order.loyaltyTier ? `<p style="color:green">Tier: ${order.loyaltyTier}</p>` : ''}
           <div class="total">Total: ₹${totalAmount}</div>
           <script>window.print(); setTimeout(() => window.close(), 500);</script>
         </body>
@@ -1247,15 +1100,13 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
     printWindow.document.close();
   };
 
-  const primaryBtn = { background: COLORS.copper, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.3s ease", boxShadow: "0 4px 12px rgba(226,89,56,0.2)" };
-
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1200, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: 'center' }}>
         <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>🍳 Kitchen Board</div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={() => setShowHelpModal(true)} aria-label="Show keyboard shortcuts" title="Keyboard Shortcuts (Shift + ?)" style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 12, padding: "10px 16px", cursor: "pointer", fontWeight: 700 }}>⌨️ Shortcuts</button>
-          <button onClick={() => requestPinPrompt("admin")} style={{ ...primaryBtn, background: COLORS.ink }}>⚙️ Admin</button>
+          <button onClick={() => requestPinPrompt("admin")} style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontWeight: 700, cursor: 'pointer' }}>⚙️ Admin</button>
         </div>
       </div>
       <div style={{ fontSize: 15, color: COLORS.textLight, marginBottom: 24, fontWeight: 600 }}>Use ↑↓ to navigate, P/R to advance, Shift+? for help</div>
@@ -1264,7 +1115,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
 
       {activeCalls.length > 0 && (
         <div style={{ background: "rgba(239, 68, 68, 0.1)", border: `2px solid ${COLORS.error}`, borderRadius: 16, padding: 16, marginBottom: 24 }} className="slide-up">
-          <h3 style={{ color: COLORS.error, margin: "0 0 12px 0", display: 'flex', alignItems: 'center', gap: 8 }}>🚨 Waiter Requested!</h3>
+          <h3 style={{ color: COLORS.error, margin: "0 0 12px 0" }}>🚨 Waiter Requested!</h3>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             {activeCalls.map(c => (
               <div key={c.id} style={{ background: '#fff', padding: "12px 16px", borderRadius: 12, display: 'flex', alignItems: 'center', gap: 16, boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
@@ -1302,11 +1153,6 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
                             🎁 FREE: {o.claimedReward}
                           </div>
                         )}
-                        {o.loyaltyTier && (
-                          <div style={{ fontSize: 12, marginTop: 4, padding: '4px 10px', background: isSelected ? 'rgba(255,255,255,0.15)' : COLORS.gold, color: isSelected ? '#fff' : COLORS.ink, borderRadius: 6, fontWeight: 700, display: 'inline-block' }}>
-                            👑 {o.loyaltyTier}
-                          </div>
-                        )}
                       </div>
                       <div style={{ display: 'flex', gap: 12, marginTop: 20, alignItems: 'center' }}>
                         <div style={{ flex: 1 }}><SlideButton text={status === "new" ? "Slide to Prep (P)" : status === "preparing" ? "Slide to Ready (R)" : "Slide to Serve"} bg={isSelected ? '#fff' : STATUS_COLOR[status]} onComplete={() => advanceStatus(o.id, status)} /></div>
@@ -1325,7 +1171,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
 }
 
 // ============================================
-// 12. ADMIN VIEW (ENHANCED)
+// 8. ADMIN VIEW (ENHANCED)
 // ============================================
 
 function KitchenMetrics({ filteredOrders }) {
@@ -1395,7 +1241,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const [newGalleryImg, setNewGalleryImg] = useState("");
   const [heroImgInput, setHeroImgInput] = useState(settings?.heroImage || "");
 
-  // Enhanced: Memoized filtered orders for performance (AREA 4)
   const filteredOrders = useMemo(() => {
     return orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
   }, [orders, filterDate]);
@@ -1571,7 +1416,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
             <button onClick={handleAddNewDish} style={primaryBtn}>+ Add Dish to Menu</button>
           </div>
 
-          <h3 style={{ fontFamily: "'Outfit', sans-serif", marginBottom: 16 }}>Existing Menu Management (Edit Images & Details)</h3>
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", marginBottom: 16 }}>Existing Menu Management</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
             {menu.map(item => (
               <div key={item.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -1599,8 +1444,8 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
                 </select>
                 <input type="url" placeholder="Image URL" value={newItemImage} onChange={e=>setNewItemImage(e.target.value)} style={{...inputStyle, marginBottom: 20}} />
                 <div style={{ display: 'flex', gap: 12 }}>
-                  <button onClick={() => setEditingItem(null)} style={{ flex: 1, padding: 12, border: `1px solid ${COLORS.line}`, background: 'transparent', borderRadius: 10, fontWeight: 700 }}>Cancel</button>
-                  <button onClick={handleSaveMenuItem} style={{ flex: 1, padding: 12, background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800 }}>Save</button>
+                  <button onClick={() => setEditingItem(null)} style={{ flex: 1, padding: 12, border: `1px solid ${COLORS.line}`, background: 'transparent', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={handleSaveMenuItem} style={{ flex: 1, padding: 12, background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>Save</button>
                 </div>
               </div>
             </div>
@@ -1726,6 +1571,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           </table>
         </div>
       )}
+
       {tab === "bookings" && (
         <div style={{ overflowX: "auto", borderRadius: 16, border: `1px solid ${COLORS.line}` }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
@@ -1865,7 +1711,6 @@ export default function App() {
   const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80", adminPin: "9876", staffPin: "5432" });
   const [loading, setLoading] = useState(true);
 
-  // Security PIN Modal State
   const [showPinModal, setShowPinModal] = useState(false);
   const [targetRole, setTargetRole] = useState("staff");
   const [pinInput, setPinInput] = useState("");
@@ -1898,7 +1743,6 @@ export default function App() {
     }
   };
 
-  // 🔄 Firebase Permanent Data Sync on Load
   useEffect(() => {
     const fetchAllData = async () => {
       try {
@@ -2042,7 +1886,7 @@ export default function App() {
             <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center", boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }} className="slide-up">
               <div style={{fontSize: 36, marginBottom: 16}}>🔒</div>
               <h3 style={{ margin: "0 0 20px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700 }}>Enter Security PIN ({targetRole.toUpperCase()})</h3>
-              <input type="password" placeholder="••••" autoFocus value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }} aria-label="Security PIN" style={{ ...inputStyle, textAlign: "center", fontSize: 32, letterSpacing: 12, marginBottom: 24, fontWeight: 800, padding: "16px" }} />
+              <input type="password" placeholder="••••" autoFocus value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }} aria-label="Security PIN" style={{ padding: "16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 32, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", textAlign: "center", letterSpacing: 12, marginBottom: 24, fontWeight: 800 }} />
               <div style={{ display: "flex", gap: 12 }}>
                 <button onClick={() => { setShowPinModal(false); setPinInput(""); }} style={{ flex: 1, padding: "14px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
                 <button onClick={handlePinSubmit} style={{ flex: 1, padding: "14px", borderRadius: 12, background: COLORS.ink, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Login</button>
