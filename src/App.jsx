@@ -1487,7 +1487,7 @@ export default function App() {
   const [inventory, setInventory] = useState([]);
   const [offersList, setOffersList] = useState(DEFAULT_OFFERS);
   const [gallery, setGallery] = useState(DEFAULT_GALLERY);
-  const [loading, setLoading] = useState(true); // 👈 Added loading state to prevent blank screen
+  const [loading, setLoading] = useState(true);
 
   const [loyaltyRules, setLoyaltyRules] = useState({
     rate: 10, 
@@ -1540,14 +1540,17 @@ export default function App() {
 
         const menuSnap = await getDocs(collection(db, "settings"));
         menuSnap.forEach(docSnap => {
-          if (docSnap.id === "menu" && docSnap.data().items) setMenuState(docSnap.data().items);
-          if (docSnap.id === "gallery" && docSnap.data().images) setGallery(docSnap.data().images);
-          if (docSnap.id === "appSettings" && docSnap.data().appSettings) setSettings(docSnap.data().appSettings);
+          const data = docSnap.data();
+          if (docSnap.id === "menu" && data.items) setMenuState(data.items);
+          if (docSnap.id === "gallery" && data.images) setGallery(data.images);
+          if (docSnap.id === "appSettings") {
+            setSettings(prev => ({ ...prev, ...data }));
+          }
         });
       } catch (e) { 
         console.error("Firebase fetch error:", e); 
       } finally {
-        setLoading(false); // 👈 Stop loading once data is fetched
+        setLoading(false);
       }
     };
     fetchAllData();
@@ -1646,7 +1649,6 @@ export default function App() {
     setBookings([...bookings, booking]); 
   };
 
-  // 🛡️ Safe Loading Check to prevent Vercel blank screen
   if (loading) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: COLORS.paper, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 18, color: COLORS.copper }}>
