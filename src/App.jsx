@@ -58,6 +58,54 @@ const RESTAURANT = {
   address: "Girja More, Ara – Buxar Main Road, Pakri, Ara", 
   phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "apnanumber@upi" 
 };
+// ============================================
+// AFTER: const COLORS = { ... }
+// AFTER: const RESTAURANT = { ... }
+// BEFORE: const CATEGORIES = [ ... ]
+// ============================================
+
+const LOYALTY_TIERS = [
+  { name: 'Bronze', points: 0, discount: 0.05, emoji: '🥉' },
+  { name: 'Silver', points: 500, discount: 0.10, emoji: '🥈' },
+  { name: 'Gold', points: 1000, discount: 0.15, emoji: '🥇' },
+  { name: 'Platinum', points: 2000, discount: 0.25, emoji: '💎' }
+];
+
+// Add this helper function after LOYALTY_TIERS
+function getLoyaltyTier(points) {
+  let tier = LOYALTY_TIERS[0];
+  for (const t of LOYALTY_TIERS) {
+    if (points >= t.points) {
+      tier = t;
+    }
+  }
+  return tier;
+}
+
+// Add this function after getLoyaltyTier
+function useLocalStorage(key, initialValue) {
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error('LocalStorage error:', error);
+      return initialValue;
+    }
+  });
+
+  const setValue = (value) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+    } catch (error) {
+      console.error('LocalStorage set error:', error);
+    }
+  };
+
+  return [storedValue, setValue];
+}
 
 const CATEGORIES = [
   "Drinks", "Fun Food", "Chinese Starter", "Mughlai", "Tandoori", 
