@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs, getDoc } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V11.0 (WITH GOOGLE REVIEW)
+   🍽️ EAT & PARK RESTAURANT — COMPLETE POS V12.0 (ALL FEATURES)
    ═══════════════════════════════════════════════════════════════════════════════════ */
 
 // ============================================
@@ -20,8 +20,7 @@ const FONTS = `
 @keyframes smoothSlideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes fadeInScale { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-@keyframes progressFill { from { width: 0%; } to { width: var(--progress); } }
+@keyframes notificationPulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(226,89,56,0.7); } 70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(226,89,56,0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(226,89,56,0); } }
 
 .flash-banner { animation: flash 2s infinite; }
 .slide-up { animation: slideUp 0.4s ease-out; }
@@ -33,8 +32,7 @@ const FONTS = `
 .smooth-slide-up { animation: smoothSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .fade-scale { animation: fadeInScale 0.3s ease-out; }
 .pulse { animation: pulse 2s ease-in-out infinite; }
-.shimmer { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
-.progress-fill { animation: progressFill 0.8s ease-out forwards; }
+.notification-pulse { animation: notificationPulse 2s ease-in-out infinite; }
 
 .dark-theme { filter: invert(0.92) hue-rotate(180deg); background: #111; min-height: 100vh; }
 .dark-theme img, .dark-theme .keep-color { filter: invert(1) hue-rotate(180deg); }
@@ -53,7 +51,7 @@ const COLORS = {
   rust: "#C0392B", sage: "#4A7C59", sageDark: "#2F5C3F", sageLight: "#E8F0EB",
   gold: "#D4A574", line: "#E8E6DC", text: "#3C3C3C", textLight: "#8A8375",
   success: "#10B981", error: "#EF4444", warning: "#FF9800", info: "#3B82F6",
-  google: "#4285F4"
+  google: "#4285F4", razorpay: "#0B4F6C", phonepe: "#5F259F"
 };
 
 const RESTAURANT = {
@@ -68,7 +66,13 @@ const RESTAURANT = {
 
 const GOOGLE_PLACE_ID = "ChIJc8jv-j9fjTkRYFQLM7KK1aA";
 const GOOGLE_REVIEW_URL = `https://search.google.com/local/writereview?placeid=${GOOGLE_PLACE_ID}`;
-const GOOGLE_SEARCH_URL = `https://www.google.com/search?q=${encodeURIComponent(RESTAURANT.name + ' ' + RESTAURANT.address)}`;
+
+// ============================================
+// RAZORPAY CONFIGURATION (Add your keys)
+// ============================================
+
+const RAZORPAY_KEY = "YOUR_RAZORPAY_KEY_ID"; // Replace with your actual key
+const PHONEPE_MERCHANT_ID = "YOUR_MERCHANT_ID"; // Replace with your PhonePe merchant ID
 
 const CATEGORIES = [
   "Drinks", "Fun Food", "Chinese Starter", "Mughlai", "Tandoori", 
@@ -80,7 +84,7 @@ const CATEGORIES = [
 const VEG = COLORS.sage; const NONVEG = COLORS.rust;
 
 // ============================================
-// 2. LOYALTY SYSTEM WITH PROGRESS
+// 2. LOYALTY SYSTEM
 // ============================================
 
 const LOYALTY_TIERS = [
@@ -169,7 +173,21 @@ const useLocalStorage = (key, initialValue) => {
 };
 
 // ============================================
-// 5. HELPER FUNCTIONS
+// 5. NOTIFICATION SOUND
+// ============================================
+
+const playNotificationSound = () => {
+  try {
+    const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+    audio.volume = 0.5;
+    audio.play().catch(e => console.log("Sound play error:", e));
+  } catch(e) {
+    console.log("Sound error:", e);
+  }
+};
+
+// ============================================
+// 6. HELPER FUNCTIONS
 // ============================================
 
 function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true, customImg = "") {
@@ -224,6 +242,7 @@ const TOAST_CONFIG = {
   info: { duration: 3000, bg: COLORS.ink, icon: "ℹ️" },
   reward: { duration: 5000, bg: COLORS.gold, icon: "🎁" },
   warning: { duration: 4000, bg: COLORS.warning, icon: "⚠️" },
+  order: { duration: 6000, bg: COLORS.copper, icon: "🛎️" },
 };
 
 const EMPTY_STATES = {
@@ -233,7 +252,7 @@ const EMPTY_STATES = {
 };
 
 // ============================================
-// 6. REUSABLE COMPONENTS
+// 7. REUSABLE COMPONENTS
 // ============================================
 
 class ErrorBoundary extends React.Component {
@@ -382,75 +401,6 @@ function SidebarBtn({ icon, text, onClick, highlight }) {
   );
 }
 
-// ============================================
-// 7. GOOGLE REVIEW BUTTON COMPONENT
-// ============================================
-
-function GoogleReviewButton({ variant = 'primary', size = 'md', showText = true, onClick }) {
-  const buttonStyles = {
-    primary: {
-      background: '#4285F4',
-      color: '#fff',
-      border: 'none',
-      boxShadow: '0 4px 12px rgba(66, 133, 244, 0.3)'
-    },
-    secondary: {
-      background: 'transparent',
-      color: '#4285F4',
-      border: `2px solid #4285F4`,
-      boxShadow: 'none'
-    },
-    outline: {
-      background: '#fff',
-      color: '#4285F4',
-      border: `1.5px solid #4285F4`,
-      boxShadow: 'none'
-    },
-    gold: {
-      background: 'linear-gradient(135deg, #FFD700, #FFA500)',
-      color: '#1A1A1A',
-      border: 'none',
-      boxShadow: '0 4px 12px rgba(255, 215, 0, 0.3)'
-    }
-  };
-
-  const sizeStyles = {
-    sm: { padding: '4px 12px', fontSize: 11, borderRadius: 16 },
-    md: { padding: '8px 18px', fontSize: 13, borderRadius: 20 },
-    lg: { padding: '12px 24px', fontSize: 16, borderRadius: 24 }
-  };
-
-  const styles = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    textDecoration: 'none',
-    fontWeight: 700,
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    ...buttonStyles[variant],
-    ...sizeStyles[size]
-  };
-
-  return (
-    <a 
-      href={GOOGLE_REVIEW_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={styles}
-      className="smooth-transition hover-lift"
-      onClick={onClick}
-    >
-      <span style={{ fontSize: size === 'lg' ? 24 : size === 'sm' ? 14 : 18 }}>⭐</span>
-      {showText && <span>Rate on Google</span>}
-    </a>
-  );
-}
-
-// ============================================
-// 8. MY ORDER STATS
-// ============================================
-
 function MyOrderStats({ myOrders, loyaltyCoins }) {
   if (!myOrders || myOrders.length === 0) return null;
   const totalSpent = myOrders.reduce((s, o) => s + o.items.reduce((a, i) => a + i.price * i.qty, 0), 0);
@@ -487,10 +437,119 @@ function MyOrderStats({ myOrders, loyaltyCoins }) {
 }
 
 // ============================================
-// 9. CUSTOMER VIEW (WITH ALL FEATURES)
+// 8. GOOGLE REVIEW BUTTON
 // ============================================
 
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory }) {
+function GoogleReviewButton({ variant = 'primary', size = 'md', showText = true }) {
+  const buttonStyles = {
+    primary: {
+      background: '#4285F4',
+      color: '#fff',
+      border: 'none',
+      boxShadow: '0 4px 12px rgba(66, 133, 244, 0.3)'
+    },
+    secondary: {
+      background: 'transparent',
+      color: '#4285F4',
+      border: `2px solid #4285F4`,
+      boxShadow: 'none'
+    },
+    gold: {
+      background: 'linear-gradient(135deg, #FFD700, #FFA500)',
+      color: '#1A1A1A',
+      border: 'none',
+      boxShadow: '0 4px 12px rgba(255, 215, 0, 0.3)'
+    }
+  };
+
+  const sizeStyles = {
+    sm: { padding: '4px 12px', fontSize: 11, borderRadius: 16 },
+    md: { padding: '8px 18px', fontSize: 13, borderRadius: 20 },
+    lg: { padding: '12px 24px', fontSize: 16, borderRadius: 24 }
+  };
+
+  const styles = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    textDecoration: 'none',
+    fontWeight: 700,
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    ...buttonStyles[variant],
+    ...sizeStyles[size]
+  };
+
+  return (
+    <a 
+      href={GOOGLE_REVIEW_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={styles}
+      className="smooth-transition hover-lift"
+    >
+      <span style={{ fontSize: size === 'lg' ? 24 : size === 'sm' ? 14 : 18 }}>⭐</span>
+      {showText && <span>Rate on Google</span>}
+    </a>
+  );
+}
+
+// ============================================
+// 9. RAZORPAY PAYMENT COMPONENT
+// ============================================
+
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
+async function processRazorpayPayment(amount, orderId, customerName, customerPhone) {
+  const isScriptLoaded = await loadRazorpayScript();
+  if (!isScriptLoaded) {
+    alert("⚠️ Payment gateway could not load. Please try again.");
+    return false;
+  }
+
+  const options = {
+    key: RAZORPAY_KEY,
+    amount: Math.round(amount * 100),
+    currency: "INR",
+    name: RESTAURANT.name,
+    description: `Order #${orderId}`,
+    prefill: {
+      name: customerName,
+      contact: customerPhone,
+    },
+    theme: {
+      color: COLORS.copper,
+    },
+    handler: function(response) {
+      console.log("Payment successful:", response);
+      return true;
+    },
+    modal: {
+      ondismiss: function() {
+        console.log("Payment cancelled");
+        return false;
+      }
+    }
+  };
+
+  const razorpay = new window.Razorpay(options);
+  razorpay.open();
+  return true;
+}
+
+// ============================================
+// 10. CUSTOMER VIEW (WITH ALL FEATURES)
+// ============================================
+
+function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState }) {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
@@ -523,11 +582,25 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [favorites, setFavorites] = useLocalStorage('favorites', []);
 
   // ============================================
+  // SCHEDULED ORDER (NEW)
+  // ============================================
+  
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [isScheduled, setIsScheduled] = useState(false);
+
+  // ============================================
+  // PAYMENT METHOD (NEW)
+  // ============================================
+  
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+  // ============================================
   // PERSISTENCE: Load saved data on mount
   // ============================================
   
   useEffect(() => {
-    // Restore customer data
     const savedCustomer = localStorage.getItem('eatpark_customer');
     if (savedCustomer) {
       try {
@@ -539,7 +612,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       } catch(e) {}
     }
     
-    // Restore cart
     const savedCart = localStorage.getItem('eatpark_cart');
     if (savedCart) {
       try {
@@ -548,7 +620,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       } catch(e) {}
     }
     
-    // Restore order IDs
     const savedOrders = localStorage.getItem('eatpark_orders');
     if (savedOrders) {
       try {
@@ -556,6 +627,11 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         const orderIds = ordersData.map(o => o.id);
         setMyOrderIds(orderIds);
       } catch(e) {}
+    }
+
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
     }
   }, []);
 
@@ -613,6 +689,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const showToast = useCallback((msg, type = 'info') => {
     const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
     if (type === 'reward' && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    if (type === 'order') playNotificationSound();
     setToast(msg); setToastType(type);
     setTimeout(() => setToast(null), config.duration);
   }, []);
@@ -642,7 +719,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     });
   }, [setFavorites, showToast]);
 
-  const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served");
+  const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served" && o.status !== "cancelled");
   const myOrders = orders.filter(o => myOrderIds.includes(o.id));
   const myCoinLogs = coinHistory.filter(c => c.phone === custPhone);
 
@@ -650,6 +727,99 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
 
   const newEarnedCoins = Math.floor(finalTotal / loyaltyRules.rate);
+
+  // ============================================
+  // PUSH NOTIFICATION (NEW)
+  // ============================================
+
+  const sendPushNotification = useCallback((title, message) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, {
+        body: message,
+        icon: '/icon-192.png',
+        vibrate: [200, 100, 200],
+        requireInteraction: true
+      });
+    }
+  }, []);
+
+  // ============================================
+  // ORDER CANCELLATION (NEW)
+  // ============================================
+
+  const cancelOrder = useCallback(async (orderId) => {
+    if (!window.confirm("Are you sure you want to cancel this order?")) return;
+    
+    try {
+      // Update in Firebase
+      await updateDoc(doc(db, "orders", orderId), { 
+        status: "cancelled",
+        cancelledAt: Date.now()
+      });
+      
+      // Update local state
+      setOrdersState(prev => prev.map(o => 
+        o.id === orderId ? { ...o, status: "cancelled", cancelledAt: Date.now() } : o
+      ));
+      
+      showToast("❌ Order cancelled successfully", 'warning');
+      sendPushNotification("Order Cancelled", `Order #${orderId.slice(1,5)} has been cancelled`);
+    } catch(e) {
+      console.error("Cancel error:", e);
+      showToast("⚠️ Failed to cancel order", 'error');
+    }
+  }, [setOrdersState, showToast, sendPushNotification]);
+
+  // ============================================
+  // ORDER REORDER (NEW)
+  // ============================================
+
+  const reorderOrder = useCallback((order) => {
+    const newCart = {};
+    order.items.forEach(item => {
+      newCart[item.itemId] = (newCart[item.itemId] || 0) + item.qty;
+    });
+    setCart(newCart);
+    setCartOpen(true);
+    showToast("🔄 Order items added to cart!", 'success');
+  }, [setCart, showToast]);
+
+  // ============================================
+  // ADD TO EXISTING ORDER (NEW)
+  // ============================================
+
+  const addToExistingOrder = useCallback(async (orderId, items) => {
+    try {
+      const orderRef = doc(db, "orders", orderId);
+      const orderSnap = await getDoc(orderRef);
+      if (orderSnap.exists()) {
+        const orderData = orderSnap.data();
+        const existingItems = orderData.items || [];
+        const newItems = [...existingItems];
+        
+        items.forEach(item => {
+          const existing = newItems.find(i => i.itemId === item.id);
+          if (existing) {
+            existing.qty += 1;
+          } else {
+            newItems.push({ itemId: item.id, name: item.name, price: item.price, qty: 1, portion: item.portion || "" });
+          }
+        });
+        
+        await updateDoc(orderRef, { 
+          items: newItems,
+          updatedAt: Date.now()
+        });
+        
+        showToast("✅ Items added to existing order!", 'success');
+        playNotificationSound();
+        sendPushNotification("Order Updated", `New items added to order #${orderId.slice(1,5)}`);
+      }
+    } catch(e) {
+      console.error("Add to order error:", e);
+      showToast("⚠️ Failed to add items", 'error');
+    }
+  }, [showToast, sendPushNotification]);
 
   // ============================================
   // HANDLE SEND OTP
@@ -664,7 +834,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   };
 
   // ============================================
-  // HANDLE VERIFY OTP (WITH FIREBASE REGISTRATION)
+  // HANDLE VERIFY OTP
   // ============================================
 
   const handleVerifyOtp = () => {
@@ -672,15 +842,12 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       setIsLoggedIn(true);
       setOtpStep("phone");
       
-      // SAVE USER TO FIREBASE
       const saveUserToFirebase = async () => {
         try {
-          // Check if user already exists
           const userRef = doc(db, "customers", custPhone);
           const userSnap = await getDoc(userRef);
           
           if (!userSnap.exists()) {
-            // New user - save to Firebase
             await setDoc(userRef, {
               phone: custPhone,
               name: custName || "Guest",
@@ -692,7 +859,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
             });
             showToast("✅ New customer registered!", 'success');
           } else {
-            // Update existing user
             await updateDoc(userRef, {
               lastLogin: Date.now(),
               name: custName || userSnap.data().name
@@ -700,7 +866,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
             showToast("✅ Welcome back!", 'success');
           }
           
-          // Save to localStorage
           localStorage.setItem('eatpark_customer', JSON.stringify({
             name: custName,
             phone: custPhone,
@@ -721,7 +886,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   };
 
   // ============================================
-  // CHECK EXISTING CUSTOMER ON PHONE INPUT
+  // CHECK EXISTING CUSTOMER
   // ============================================
 
   const checkExistingCustomer = async (phone) => {
@@ -773,7 +938,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   };
 
   // ============================================
-  // HANDLE PLACE ORDER (WITH PERSISTENCE)
+  // HANDLE PLACE ORDER (WITH ALL NEW FEATURES)
   // ============================================
 
   async function handlePlaceOrder() {
@@ -782,83 +947,127 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     if (!custPhone.trim() || custPhone.length < 10) { showToast("⚠️ Please enter valid 10-digit Phone", 'error'); return; }
     if (orderType === "parcel" && !custAddress.trim()) { showToast("⚠️ Please enter Delivery Address", 'error'); return; }
 
-    const orderId = uid("o");
-    const itemStrings = cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return `${qty}x ${m.name}` }).join(", ");
-    const claimedText = claimedReward ? `\n🎁 *Free Reward Claimed:* ${claimedReward.item}` : "";
+    setIsProcessingPayment(true);
 
-    const waText = `🚨 *NEW ORDER ALERT* (#${orderId.slice(1,5).toUpperCase()})\n\n`
-               + `*Type:* ${orderType === 'parcel' ? '🛍️ Parcel (Delivery ₹40)' : `🍽️ Table ${table}`}\n`
-               + `*Customer:* ${custName} (${custPhone})\n`
-               + (orderType === 'parcel' ? `*Address:* ${custAddress}\n\n` : `\n`)
-               + `*Items:* ${itemStrings}${claimedText}\n`
-               + (appliedDiscount > 0 ? `*Coupon Discount:* ${appliedDiscount}%\n` : ``)
-               + (loyaltyDiscount > 0 ? `*Loyalty Discount:* ${loyaltyTier.name} (${loyaltyTier.discount * 100}%)\n` : ``)
-               + `*Total Bill:* ₹${finalTotal}\n`
-               + (notes ? `*Notes:* ${notes}` : ``);
-               
-    const link = document.createElement('a'); link.href = `https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`; link.target = '_blank'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
-
-    const order = { 
-      id: orderId, 
-      table, 
-      orderType, 
-      customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "" }, 
-      items: cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty }; }), 
-      claimedReward: claimedReward ? claimedReward.item : null, 
-      rewardUsedCoins: claimedReward ? claimedReward.cost : 0, 
-      earnedCoins: newEarnedCoins, 
-      discount: appliedDiscount, 
-      loyaltyDiscount: loyaltyDiscount,
-      loyaltyTier: loyaltyTier.name,
-      deliveryFee, 
-      notes, 
-      payment: "cash", 
-      status: "new", 
-      paid: false, 
-      createdAt: Date.now() 
-    };
-    
-    // SAVE TO LOCAL STORAGE FOR PERSISTENCE
-    const orderHistory = JSON.parse(localStorage.getItem('eatpark_orders') || '[]');
-    orderHistory.push(order);
-    localStorage.setItem('eatpark_orders', JSON.stringify(orderHistory));
-    localStorage.setItem('eatpark_last_order', JSON.stringify(order));
-    
-    // Update customer stats
-    const customerData = JSON.parse(localStorage.getItem('eatpark_customer') || '{}');
-    customerData.totalOrders = (customerData.totalOrders || 0) + 1;
-    customerData.totalSpent = (customerData.totalSpent || 0) + finalTotal;
-    customerData.lastOrderDate = Date.now();
-    localStorage.setItem('eatpark_customer', JSON.stringify(customerData));
-    
-    // Save to Firebase
-    await placeOrder(order, claimedReward ? claimedReward.cost : 0); 
-    
-    // Update Firebase customer record
     try {
-      const userRef = doc(db, "customers", custPhone);
-      await updateDoc(userRef, {
-        totalOrders: customerData.totalOrders,
-        totalSpent: customerData.totalSpent,
-        lastOrderDate: Date.now()
-      });
+      // Process payment based on selected method
+      if (paymentMethod === "razorpay") {
+        const success = await processRazorpayPayment(finalTotal, uid("o"), custName, custPhone);
+        if (!success) {
+          setIsProcessingPayment(false);
+          return;
+        }
+      } else if (paymentMethod === "phonepe") {
+        // PhonePe integration - redirect to PhonePe page
+        showToast("📱 Redirecting to PhonePe...", 'info');
+        // window.location.href = `https://phone.pe/pay?merchant=${PHONEPE_MERCHANT_ID}&amount=${finalTotal}`;
+        // For demo, we'll simulate
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+
+      const orderId = uid("o");
+      const itemStrings = cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return `${qty}x ${m.name}` }).join(", ");
+      const claimedText = claimedReward ? `\n🎁 *Free Reward Claimed:* ${claimedReward.item}` : "";
+      const scheduleText = isScheduled && scheduleDate && scheduleTime ? `\n📅 *Scheduled:* ${scheduleDate} at ${scheduleTime}` : "";
+
+      const waText = `🚨 *NEW ORDER ALERT* (#${orderId.slice(1,5).toUpperCase()})\n\n`
+                 + `*Type:* ${orderType === 'parcel' ? '🛍️ Parcel (Delivery ₹40)' : `🍽️ Table ${table}`}\n`
+                 + `*Customer:* ${custName} (${custPhone})\n`
+                 + (orderType === 'parcel' ? `*Address:* ${custAddress}\n\n` : `\n`)
+                 + `*Items:* ${itemStrings}${claimedText}\n`
+                 + (appliedDiscount > 0 ? `*Coupon Discount:* ${appliedDiscount}%\n` : ``)
+                 + (loyaltyDiscount > 0 ? `*Loyalty Discount:* ${loyaltyTier.name} (${loyaltyTier.discount * 100}%)\n` : ``)
+                 + `*Total Bill:* ₹${finalTotal}\n`
+                 + `*Payment:* ${paymentMethod}\n`
+                 + scheduleText
+                 + (notes ? `*Notes:* ${notes}` : ``);
+                 
+      const link = document.createElement('a'); link.href = `https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`; link.target = '_blank'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+
+      const order = { 
+        id: orderId, 
+        table, 
+        orderType, 
+        customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "" }, 
+        items: cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty }; }), 
+        claimedReward: claimedReward ? claimedReward.item : null, 
+        rewardUsedCoins: claimedReward ? claimedReward.cost : 0, 
+        earnedCoins: newEarnedCoins, 
+        discount: appliedDiscount, 
+        loyaltyDiscount: loyaltyDiscount,
+        loyaltyTier: loyaltyTier.name,
+        deliveryFee, 
+        notes, 
+        payment: paymentMethod,
+        paymentStatus: paymentMethod === "cash" ? "pending" : "paid",
+        status: "new", 
+        paid: paymentMethod !== "cash",
+        createdAt: Date.now(),
+        scheduledDate: isScheduled ? scheduleDate : null,
+        scheduledTime: isScheduled ? scheduleTime : null,
+        isScheduled: isScheduled
+      };
+      
+      // SAVE TO LOCAL STORAGE
+      const orderHistory = JSON.parse(localStorage.getItem('eatpark_orders') || '[]');
+      orderHistory.push(order);
+      localStorage.setItem('eatpark_orders', JSON.stringify(orderHistory));
+      localStorage.setItem('eatpark_last_order', JSON.stringify(order));
+      
+      // Update customer stats
+      const customerData = JSON.parse(localStorage.getItem('eatpark_customer') || '{}');
+      customerData.totalOrders = (customerData.totalOrders || 0) + 1;
+      customerData.totalSpent = (customerData.totalSpent || 0) + finalTotal;
+      customerData.lastOrderDate = Date.now();
+      localStorage.setItem('eatpark_customer', JSON.stringify(customerData));
+      
+      // Save to Firebase
+      await placeOrder(order, claimedReward ? claimedReward.cost : 0); 
+      
+      // Update Firebase customer record
+      try {
+        const userRef = doc(db, "customers", custPhone);
+        await updateDoc(userRef, {
+          totalOrders: customerData.totalOrders,
+          totalSpent: customerData.totalSpent,
+          lastOrderDate: Date.now()
+        });
+      } catch(e) {
+        console.log("Customer update error:", e);
+      }
+      
+      // Play notification sound
+      playNotificationSound();
+      
+      // Send push notification
+      sendPushNotification(
+        "🛎️ New Order Received!",
+        `Order #${orderId.slice(1,5)} from ${custName} - ₹${finalTotal}`
+      );
+      
+      setMyOrderIds([...myOrderIds, order.id]); 
+      setCart({}); 
+      localStorage.removeItem('eatpark_cart');
+      setNotes(""); 
+      setClaimedReward(null);
+      setCartOpen(false); 
+      setActiveModal('track'); 
+      setIsScheduled(false);
+      setScheduleDate("");
+      setScheduleTime("");
+      showToast("🎉 Order Placed Successfully!", 'success');
+      
+      // GOOGLE REVIEW REMINDER
+      setTimeout(() => {
+        showToast("⭐ Love our food? Rate us on Google!", 'info');
+      }, 4000);
+      
     } catch(e) {
-      console.log("Customer update error:", e);
+      console.error("Order error:", e);
+      showToast("⚠️ Failed to place order. Please try again.", 'error');
+    } finally {
+      setIsProcessingPayment(false);
     }
-    
-    setMyOrderIds([...myOrderIds, order.id]); 
-    setCart({}); 
-    localStorage.removeItem('eatpark_cart');
-    setNotes(""); 
-    setClaimedReward(null);
-    setCartOpen(false); 
-    setActiveModal('track'); 
-    showToast("🎉 Order Placed Successfully!", 'success');
-    
-    // GOOGLE REVIEW REMINDER
-    setTimeout(() => {
-      showToast("⭐ Love our food? Rate us on Google!", 'info');
-    }, 4000);
   }
 
   async function handleBooking() {
@@ -877,6 +1086,26 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: cartCount ? 120 : 60, background: "var(--bg-color, #fff)", minHeight: "100vh", position: "relative" }}>
       {toast && <Toast message={toast} type={toastType} />}
 
+      {/* New Order Notification Badge */}
+      {orders.filter(o => o.status === "new" && !myOrderIds.includes(o.id)).length > 0 && (
+        <div style={{ 
+          position: "fixed", 
+          top: 16, 
+          right: 16, 
+          background: COLORS.copper, 
+          color: "#fff",
+          padding: "8px 16px",
+          borderRadius: 20,
+          fontSize: 12,
+          fontWeight: 700,
+          zIndex: 100,
+          boxShadow: "0 4px 12px rgba(226,89,56,0.4)",
+          animation: "notificationPulse 2s ease-in-out infinite"
+        }} className="notification-pulse">
+          🔔 New Order!
+        </div>
+      )}
+
       <button onClick={() => {requestWaiter(table); showToast("🔔 Waiter has been notified!", 'success');}} aria-label="Call waiter to your table" style={{ position: "fixed", top: 80, right: 16, background: COLORS.rust, color: "#fff", border: "none", borderRadius: 20, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 8px 24px rgba(192,57,43,0.4)", cursor: "pointer", zIndex: 60, fontSize: 13, fontWeight: 800 }} className="smooth-transition hover-lift scale-bounce" title="Call Waiter">🔔 Waiter Call</button>
 
       <div style={{ position: "relative", height: 220, borderRadius: "0 0 24px 24px", overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", marginBottom: 16 }}>
@@ -889,6 +1118,25 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         <div className="keep-color" style={{ position: "absolute", bottom: 20, left: 20, right: 20 }}>
           <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: "#fff", margin: "0 0 4px", textShadow: "0 4px 12px rgba(0,0,0,0.6)", fontWeight: 800 }}>{RESTAURANT.name}</h1>
           <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, color: "rgba(255,255,255,0.9)", margin: 0, fontWeight: 500 }}>{RESTAURANT.tagline}</p>
+        </div>
+      </div>
+
+      {/* Daily Specials Banner (NEW) */}
+      <div style={{ padding: "0 16px", marginBottom: 12 }}>
+        <div style={{ 
+          background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
+          padding: '12px 16px',
+          borderRadius: 12,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          color: '#fff'
+        }}>
+          <span style={{ fontSize: 24 }}>🌟</span>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>Today's Special</div>
+            <div style={{ fontSize: 12, opacity: 0.9 }}>Chicken Butter Masala with Garlic Naan - ₹350</div>
+          </div>
         </div>
       </div>
 
@@ -993,24 +1241,13 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               <SidebarBtn icon="🍽️" text="Table Booking" onClick={() => {setShowSidebar(false); setBookType("table"); setActiveModal('booking');}} />
               <SidebarBtn icon="🎉" text="Party Booking" onClick={() => {setShowSidebar(false); setBookType("party"); setActiveModal('booking');}} />
               <SidebarBtn icon="👑" text="VIP Loyalty Partner" onClick={() => {setShowSidebar(false); setActiveModal('loyalty');}} />
-              
-              {/* GOOGLE REVIEW BUTTON IN SIDEBAR */}
-              <SidebarBtn 
-                icon="⭐" 
-                text="Rate us on Google" 
-                onClick={() => {
-                  setShowSidebar(false);
-                  window.open(GOOGLE_REVIEW_URL, '_blank');
-                }} 
-                highlight={true}
-              />
+              <SidebarBtn icon="⭐" text="Rate us on Google" onClick={() => { setShowSidebar(false); window.open(GOOGLE_REVIEW_URL, '_blank'); }} highlight={true} />
             </div>
           </div>
           <div style={{ flex: 1, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(3px)" }} onClick={() => setShowSidebar(false)} className="fade-in" />
         </div>
       )}
 
-      {/* Floating Google Review Button - Only for users with completed orders */}
       {myOrders.filter(o => o.status === "served").length > 0 && !cartOpen && !activeModal && (
         <div style={{ position: "fixed", bottom: 80, right: 16, zIndex: 50 }}>
           <a 
@@ -1055,6 +1292,36 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 <div style={{ display: "flex", gap: 12, marginTop: 20, marginBottom: 16 }}>
                   <button onClick={() => setOrderType("dine_in")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "dine_in" ? COLORS.copper : COLORS.line}`, background: orderType === "dine_in" ? COLORS.copper : "#fff", color: orderType === "dine_in" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer", transition: "all 0.2s ease" }}>🍽️ Dine-in</button>
                   <button onClick={() => setOrderType("parcel")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "parcel" ? COLORS.copper : COLORS.line}`, background: orderType === "parcel" ? COLORS.copper : "#fff", color: orderType === "parcel" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer", transition: "all 0.2s ease" }}>🛍️ Parcel (+₹40)</button>
+                </div>
+
+                {/* SCHEDULED ORDER TOGGLE (NEW) */}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={isScheduled} 
+                      onChange={(e) => setIsScheduled(e.target.checked)}
+                      style={{ width: 18, height: 18, accentColor: COLORS.copper }}
+                    />
+                    <span style={{ fontWeight: 700, fontSize: 14 }}>📅 Schedule Order</span>
+                  </label>
+                  {isScheduled && (
+                    <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+                      <input 
+                        type="date" 
+                        value={scheduleDate} 
+                        onChange={(e) => setScheduleDate(e.target.value)}
+                        style={{ ...inputStyle, flex: 1 }}
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                      <input 
+                        type="time" 
+                        value={scheduleTime} 
+                        onChange={(e) => setScheduleTime(e.target.value)}
+                        style={{ ...inputStyle, flex: 1 }}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ background: COLORS.paper2, padding: 16, borderRadius: 16, marginBottom: 16, border: `1px solid ${COLORS.line}` }}>
@@ -1107,7 +1374,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <button onClick={handleApplyCoupon} style={{ background: COLORS.gold, color: COLORS.ink, border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer" }}>Apply</button>
                 </div>
 
-                {/* EatCoins Section with Progress */}
+                {/* EatCoins Section */}
                 <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', borderRadius: 16, padding: 16, marginBottom: 20, border: `1.5px solid ${COLORS.gold}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div style={{fontWeight: 800, fontSize: 16, color: COLORS.ink}}>🪙 EatCoins</div>
@@ -1121,7 +1388,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     )}
                   </div>
                   
-                  {/* Next Level Progress */}
                   {custPhone.length >= 10 && (
                     <LoyaltyProgress 
                       currentPoints={currentCoins} 
@@ -1130,7 +1396,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     />
                   )}
                   
-                  {/* Rewards with Progress */}
                   {custPhone.length >= 10 && (
                     <div style={{ marginTop: 12 }}>
                       {loyaltyRules.rewards.map(r => {
@@ -1175,7 +1440,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                               </button>
                             </div>
                             
-                            {/* Reward Progress */}
                             {!isClaimed && !canAfford && (
                               <div style={{ marginTop: 8 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
@@ -1214,6 +1478,65 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special cooking instructions?" style={{ ...inputStyle, marginBottom: 20, resize: "none" }} rows={2} />
                 
+                {/* PAYMENT METHOD SELECTION (NEW) */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Payment Method</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                    <button 
+                      onClick={() => setPaymentMethod('cash')}
+                      style={{ 
+                        padding: '10px', 
+                        borderRadius: 10, 
+                        border: `2px solid ${paymentMethod === 'cash' ? COLORS.copper : COLORS.line}`,
+                        background: paymentMethod === 'cash' ? COLORS.copperLight : 'transparent',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      💵 Cash
+                    </button>
+                    <button 
+                      onClick={() => setPaymentMethod('razorpay')}
+                      style={{ 
+                        padding: '10px', 
+                        borderRadius: 10, 
+                        border: `2px solid ${paymentMethod === 'razorpay' ? COLORS.copper : COLORS.line}`,
+                        background: paymentMethod === 'razorpay' ? COLORS.copperLight : 'transparent',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      💳 Razorpay
+                    </button>
+                    <button 
+                      onClick={() => setPaymentMethod('phonepe')}
+                      style={{ 
+                        padding: '10px', 
+                        borderRadius: 10, 
+                        border: `2px solid ${paymentMethod === 'phonepe' ? COLORS.copper : COLORS.line}`,
+                        background: paymentMethod === 'phonepe' ? COLORS.copperLight : 'transparent',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      📱 PhonePe
+                    </button>
+                    <button 
+                      onClick={() => setPaymentMethod('gpay')}
+                      style={{ 
+                        padding: '10px', 
+                        borderRadius: 10, 
+                        border: `2px solid ${paymentMethod === 'gpay' ? COLORS.copper : COLORS.line}`,
+                        background: paymentMethod === 'gpay' ? COLORS.copperLight : 'transparent',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🟢 Google Pay
+                    </button>
+                  </div>
+                </div>
+                
                 <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.textLight }}>
                     <span>Subtotal</span><span>{inr(subtotal)}</span>
@@ -1233,6 +1556,12 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                       <span>Delivery Charge</span><span>+{inr(deliveryFee)}</span>
                     </div>
                   )}
+                  {isScheduled && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.info }}>
+                      <span>📅 Scheduled</span>
+                      <span>{scheduleDate} {scheduleTime}</span>
+                    </div>
+                  )}
                   <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 18, borderTop: `1px solid ${COLORS.line}`, paddingTop: 8, marginTop: 4 }}>
                     <span>Grand Total</span><span style={{ fontFamily: "'JetBrains Mono', monospace", color: COLORS.copper }}>{inr(finalTotal)}</span>
                   </div>
@@ -1243,13 +1572,27 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   )}
                 </div>
                 
-                {orderType === "parcel" && (
+                {orderType === "parcel" && paymentMethod === "cash" && (
                   <div style={{ textAlign: "center", padding: "20px", background: COLORS.paper, border: `2px dashed ${COLORS.line}`, borderRadius: 16, marginBottom: 20 }}>
                     <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.ink, marginBottom: 12 }}>Scan to Pay {inr(finalTotal)}</div>
                     <img src={cartQrSrc} alt="UPI QR Code" loading="lazy" style={{ width: 160, height: 160, borderRadius: 14, border: '4px solid #fff', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }} />
                   </div>
                 )}
-                <button onClick={handlePlaceOrder} style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 14, padding: "16px", fontWeight: 800, fontSize: 16, cursor: "pointer", width: "100%", boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }} className="hover-lift smooth-transition">🎉 Place Order</button>
+                <button onClick={handlePlaceOrder} disabled={isProcessingPayment} style={{ 
+                  background: COLORS.ink, 
+                  color: "#fff", 
+                  border: "none", 
+                  borderRadius: 14, 
+                  padding: "16px", 
+                  fontWeight: 800, 
+                  fontSize: 16, 
+                  cursor: isProcessingPayment ? 'not-allowed' : 'pointer', 
+                  width: "100%", 
+                  opacity: isProcessingPayment ? 0.6 : 1,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.2)" 
+                }} className="hover-lift smooth-transition">
+                  {isProcessingPayment ? '⏳ Processing...' : '🎉 Place Order'}
+                </button>
               </>
             )}
 
@@ -1268,7 +1611,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               <>
                 <ModalHeader title="📜 My Order History" onClose={() => setActiveModal(null)} />
                 
-                {/* Stats Summary */}
                 {myOrders.length > 0 && (
                   <div style={{ 
                     display: 'grid', 
@@ -1276,37 +1618,16 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     gap: 10, 
                     marginBottom: 16 
                   }}>
-                    <div style={{ 
-                      background: COLORS.paper, 
-                      padding: 12, 
-                      borderRadius: 10, 
-                      textAlign: 'center' 
-                    }}>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.copper }}>
-                        {myOrders.length}
-                      </div>
+                    <div style={{ background: COLORS.paper, padding: 12, borderRadius: 10, textAlign: 'center' }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.copper }}>{myOrders.length}</div>
                       <div style={{ fontSize: 11, color: COLORS.textLight }}>Total Orders</div>
                     </div>
-                    <div style={{ 
-                      background: COLORS.paper, 
-                      padding: 12, 
-                      borderRadius: 10, 
-                      textAlign: 'center' 
-                    }}>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.sage }}>
-                        {myOrders.filter(o => o.status === "served").length}
-                      </div>
+                    <div style={{ background: COLORS.paper, padding: 12, borderRadius: 10, textAlign: 'center' }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.sage }}>{myOrders.filter(o => o.status === "served").length}</div>
                       <div style={{ fontSize: 11, color: COLORS.textLight }}>Completed</div>
                     </div>
-                    <div style={{ 
-                      background: COLORS.paper, 
-                      padding: 12, 
-                      borderRadius: 10, 
-                      textAlign: 'center' 
-                    }}>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: '#4285F4' }}>
-                        {myOrders.filter(o => o.status === "served").length > 0 ? '⭐' : '—'}
-                      </div>
+                    <div style={{ background: COLORS.paper, padding: 12, borderRadius: 10, textAlign: 'center' }}>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: '#4285F4' }}>{myOrders.filter(o => o.status === "served").length > 0 ? '⭐' : '—'}</div>
                       <div style={{ fontSize: 11, color: COLORS.textLight }}>Ready to Review</div>
                     </div>
                   </div>
@@ -1323,27 +1644,29 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     {[...myOrders].reverse().map(o => {
                       const orderTotal = o.items.reduce((s,i)=>s+(i.price*i.qty),0) + (o.deliveryFee||0) - (o.loyaltyDiscount||0);
                       const isCompleted = o.status === "served";
+                      const isCancelled = o.status === "cancelled";
                       
                       return (
                         <div key={o.id} style={{ 
                           background: COLORS.paper, 
-                          border: `1px solid ${isCompleted ? COLORS.sage : COLORS.line}`, 
+                          border: `1px solid ${isCancelled ? COLORS.error : isCompleted ? COLORS.sage : COLORS.line}`, 
                           padding: 16, 
                           borderRadius: 14,
                           transition: 'all 0.2s ease',
-                          borderLeft: isCompleted ? `4px solid ${COLORS.sage}` : `4px solid ${COLORS.copper}`
+                          borderLeft: isCancelled ? `4px solid ${COLORS.error}` : isCompleted ? `4px solid ${COLORS.sage}` : `4px solid ${COLORS.copper}`,
+                          opacity: isCancelled ? 0.6 : 1
                         }} className="smooth-transition hover-lift">
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontWeight: 800 }}>
                             <span style={{ fontSize: 15 }}>#{o.id.slice(1,5).toUpperCase()}</span>
                             <span style={{ 
-                              color: isCompleted ? COLORS.sage : STATUS_COLOR[o.status] || COLORS.ink, 
+                              color: isCancelled ? COLORS.error : isCompleted ? COLORS.sage : STATUS_COLOR[o.status] || COLORS.ink, 
                               textTransform: 'uppercase', 
                               fontSize: 11,
-                              background: isCompleted ? COLORS.sageLight : COLORS.paper2,
+                              background: isCancelled ? 'rgba(239,68,68,0.1)' : isCompleted ? COLORS.sageLight : COLORS.paper2,
                               padding: '2px 10px',
                               borderRadius: 12
                             }}>
-                              {isCompleted ? "✅ Completed" : 
+                              {isCancelled ? "❌ Cancelled" : isCompleted ? "✅ Completed" : 
                                o.status === "new" ? "🆕 New" : 
                                o.status === "preparing" ? "👨‍🍳 Cooking" : 
                                o.status === "ready" ? "✅ Ready" : o.status}
@@ -1358,6 +1681,11 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                               hour: '2-digit',
                               minute: '2-digit'
                             })}
+                            {o.isScheduled && (
+                              <span style={{ display: 'block', color: COLORS.info, fontSize: 11 }}>
+                                📅 Scheduled: {o.scheduledDate} at {o.scheduledTime}
+                              </span>
+                            )}
                           </div>
                           
                           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.ink }}>
@@ -1375,7 +1703,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                             gap: 8
                           }}>
                             <div>
-                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, color: COLORS.copper }}>
+                              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, color: isCancelled ? COLORS.error : COLORS.copper }}>
                                 💰 {inr(orderTotal)}
                               </div>
                               {o.loyaltyDiscount > 0 && (
@@ -1383,23 +1711,59 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                                   👑 {o.loyaltyTier || 'Loyalty'} discount applied
                                 </div>
                               )}
+                              {o.payment && (
+                                <div style={{ fontSize: 10, color: COLORS.textLight }}>
+                                  💳 {o.payment}
+                                </div>
+                              )}
                             </div>
                             
-                            {/* GOOGLE REVIEW BUTTON - Only for completed orders */}
-                            {isCompleted ? (
-                              <GoogleReviewButton variant="primary" size="sm" />
-                            ) : (
-                              <span style={{ 
-                                fontSize: 11, 
-                                color: COLORS.copper, 
-                                fontWeight: 700,
-                                background: COLORS.copperLight,
-                                padding: '4px 12px',
-                                borderRadius: 12
-                              }}>
-                                ⏳ In Progress
-                              </span>
-                            )}
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                              {/* REORDER BUTTON (NEW) */}
+                              {!isCancelled && (
+                                <button 
+                                  onClick={() => reorderOrder(o)}
+                                  style={{
+                                    padding: '4px 12px',
+                                    borderRadius: 8,
+                                    border: `1px solid ${COLORS.sage}`,
+                                    background: 'transparent',
+                                    color: COLORS.sage,
+                                    fontWeight: 700,
+                                    fontSize: 11,
+                                    cursor: 'pointer'
+                                  }}
+                                  className="smooth-transition hover-lift"
+                                >
+                                  🔄 Reorder
+                                </button>
+                              )}
+                              
+                              {/* GOOGLE REVIEW BUTTON */}
+                              {isCompleted && (
+                                <GoogleReviewButton variant="primary" size="sm" />
+                              )}
+                              
+                              {/* CANCEL BUTTON (NEW) - Only show if order is new/preparing */}
+                              {!isCompleted && !isCancelled && (o.status === "new" || o.status === "preparing") && (
+                                <button 
+                                  onClick={() => cancelOrder(o.id)}
+                                  style={{
+                                    padding: '4px 12px',
+                                    borderRadius: 8,
+                                    border: `1px solid ${COLORS.error}`,
+                                    background: 'transparent',
+                                    color: COLORS.error,
+                                    fontWeight: 700,
+                                    fontSize: 11,
+                                    cursor: 'pointer'
+                                  }}
+                                  className="smooth-transition hover-lift"
+                                >
+                                  ❌ Cancel
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -1501,6 +1865,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   </div>
                 ) : myActiveOrders.map(o => {
                   const estimatedTime = getEstimatedTime(o.items);
+                  const isCancellable = o.status === "new" || o.status === "preparing";
                   
                   return (
                     <div key={o.id} style={{ 
@@ -1515,13 +1880,17 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                         <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, color: COLORS.ink }}>
                           Order #{o.id.slice(1,5).toUpperCase()}
                         </div>
+                        {o.isScheduled && (
+                          <span style={{ fontSize: 11, color: COLORS.info, fontWeight: 600 }}>
+                            📅 Scheduled
+                          </span>
+                        )}
                       </div>
                       <OrderTimer createdAt={o.createdAt} estimatedTime={estimatedTime} />
                       <div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}>
                         <ProgressRing progress={getOrderProgress(o.status)} size={80} />
                       </div>
                       
-                      {/* Order Items */}
                       <div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 12 }}>
                         {o.items.map(i => `${i.qty}x ${i.name}`).join(", ")}
                       </div>
@@ -1539,6 +1908,43 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                         }}>
                           Back to Menu
                         </button>
+                        
+                        {/* ADD TO ORDER BUTTON (NEW) */}
+                        <button 
+                          onClick={() => {
+                            setActiveModal(null);
+                            setCartOpen(true);
+                          }}
+                          style={{
+                            padding: "13px 20px",
+                            background: COLORS.sage,
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: 14,
+                            fontWeight: 800,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ➕ Add Items
+                        </button>
+                        
+                        {/* CANCEL ORDER BUTTON (NEW) */}
+                        {isCancellable && (
+                          <button 
+                            onClick={() => cancelOrder(o.id)}
+                            style={{
+                              padding: "13px 20px",
+                              background: 'transparent',
+                              color: COLORS.error,
+                              border: `2px solid ${COLORS.error}`,
+                              borderRadius: 14,
+                              fontWeight: 800,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ❌ Cancel
+                          </button>
+                        )}
                       </div>
                     </div>
                   )
@@ -1554,7 +1960,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 }
 
 // ============================================
-// 10. STAFF VIEW (WITH KEYBOARD SHORTCUTS)
+// 11. STAFF VIEW (WITH SOUND NOTIFICATIONS)
 // ============================================
 
 const STAFF_SHORTCUTS = {
@@ -1585,7 +1991,7 @@ function KeyboardHelpModal({ onClose }) {
 }
 
 function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall }) {
-  const active = orders.filter((o) => o.status !== "served").sort((a, b) => a.createdAt - b.createdAt);
+  const active = orders.filter((o) => o.status !== "served" && o.status !== "cancelled").sort((a, b) => a.createdAt - b.createdAt);
   const activeCalls = calls.filter(c => c.status === 'active');
   const columns = ["new", "preparing", "ready"];
   const newOrderCount = active.filter(o => o.status === "new").length;
@@ -1595,10 +2001,18 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
 
+  // PLAY SOUND ON NEW ORDER
   useEffect(() => {
     if (newOrderCount > prevCountRef.current) {
-      const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
-      audio.play().catch(e => console.log(e));
+      playNotificationSound();
+      // Also show browser notification
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('🛎️ New Order Received!', {
+          body: `${newOrderCount} new order${newOrderCount > 1 ? 's' : ''} waiting`,
+          icon: '/icon-192.png',
+          vibrate: [200, 100, 200]
+        });
+      }
     }
     prevCountRef.current = newOrderCount;
   }, [newOrderCount]);
@@ -1611,6 +2025,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
     prevCallsCountRef.current = activeCallsCount;
   }, [activeCallsCount]);
 
+  // KEYBOARD SHORTCUTS
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'k' && e.ctrlKey) { e.preventDefault(); const firstOrder = active[0]; if (firstOrder) setSelectedOrderId(firstOrder.id); }
@@ -1647,6 +2062,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
           <h2>${RESTAURANT.name}</h2>
           <h4>${order.orderType === 'parcel' ? '🛍️ PARCEL ORDER' : `🍽️ TABLE ${order.table}`}</h4>
           <p>Order ID: #${order.id.toUpperCase()}<br/>Customer: ${order.customer.name} (${order.customer.phone})</p>
+          ${order.isScheduled ? `<p>📅 Scheduled: ${order.scheduledDate} at ${order.scheduledTime}</p>` : ''}
           <table>
             <tr><th>Item</th><th style="text-align:right">Amt</th></tr>
             ${itemsHtml}
@@ -1671,6 +2087,30 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
         </div>
       </div>
       <div style={{ fontSize: 15, color: COLORS.textLight, marginBottom: 24, fontWeight: 600 }}>Use ↑↓ to navigate, P/R to advance, Shift+? for help</div>
+
+      {/* New Order Alert Banner */}
+      {newOrderCount > 0 && (
+        <div style={{ 
+          background: 'rgba(226,89,56,0.1)', 
+          border: `2px solid ${COLORS.copper}`,
+          borderRadius: 16, 
+          padding: 16, 
+          marginBottom: 24,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12
+        }} className="slide-up">
+          <span style={{ fontSize: 24 }}>🛎️</span>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.copper }}>
+              {newOrderCount} New Order{newOrderCount > 1 ? 's' : ''}!
+            </div>
+            <div style={{ fontSize: 13, color: COLORS.textLight }}>
+              {newOrderCount === 1 ? 'Order is waiting for your attention' : 'Orders are waiting for your attention'}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showHelpModal && <KeyboardHelpModal onClose={() => setShowHelpModal(false)} />}
 
@@ -1704,7 +2144,14 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
                   return (
                     <div key={o.id} onClick={() => setSelectedOrderId(o.id)} style={{ background: isSelected ? COLORS.copper : '#fff', border: `2px solid ${isSelected ? COLORS.copper : COLORS.line}`, borderRadius: 16, padding: 20, boxShadow: isSelected ? '0 12px 24px rgba(226,89,56,0.2)' : '0 8px 24px rgba(0,0,0,0.05)', cursor: 'pointer', transition: 'all 0.2s ease' }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800, color: isSelected ? '#fff' : (o.orderType === "parcel" ? COLORS.rust : COLORS.ink) }}>{o.orderType === "parcel" ? "🛍️ PARCEL" : `🍽️ Table ${o.table}`}</div>
+                        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800, color: isSelected ? '#fff' : (o.orderType === "parcel" ? COLORS.rust : COLORS.ink) }}>
+                          {o.orderType === "parcel" ? "🛍️ PARCEL" : `🍽️ Table ${o.table}`}
+                          {o.isScheduled && (
+                            <span style={{ fontSize: 12, marginLeft: 8, color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.info }}>
+                              📅
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 13, color: isSelected ? 'rgba(255,255,255,0.8)' : COLORS.textLight, fontWeight: 700, background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, padding: '4px 10px', borderRadius: 12 }}>{timeAgo(o.createdAt)}</div>
                       </div>
                       <div style={{ borderTop: isSelected ? `1px solid rgba(255,255,255,0.3)` : `1.5px dashed ${COLORS.line}`, paddingTop: 16, marginBottom: 16 }}>
@@ -1712,6 +2159,16 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
                         {o.claimedReward && (
                           <div style={{ fontSize: 15, marginTop: 12, padding: '8px 12px', background: isSelected ? 'rgba(255,255,255,0.2)' : COLORS.sageLight, color: isSelected ? '#fff' : COLORS.sageDark, borderRadius: 8, fontWeight: 800 }}>
                             🎁 FREE: {o.claimedReward}
+                          </div>
+                        )}
+                        {o.isScheduled && (
+                          <div style={{ fontSize: 12, marginTop: 8, color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.info, fontWeight: 600 }}>
+                            📅 Scheduled: {o.scheduledDate} at {o.scheduledTime}
+                          </div>
+                        )}
+                        {o.payment && (
+                          <div style={{ fontSize: 12, marginTop: 4, color: isSelected ? 'rgba(255,255,255,0.6)' : COLORS.textLight, fontWeight: 500 }}>
+                            💳 {o.payment} {o.paid ? '✅' : '⏳'}
                           </div>
                         )}
                       </div>
@@ -1732,7 +2189,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
 }
 
 // ============================================
-// 11. ADMIN VIEW
+// 12. ADMIN VIEW (WITH PDF REPORT)
 // ============================================
 
 function KitchenMetrics({ filteredOrders }) {
@@ -1802,12 +2259,47 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const [newGalleryImg, setNewGalleryImg] = useState("");
   const [heroImgInput, setHeroImgInput] = useState(settings?.heroImage || "");
 
+  // PDF Report Generation (NEW)
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
   const filteredOrders = useMemo(() => {
     return orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
   }, [orders, filterDate]);
 
   const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0), 0);
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
+
+  // PDF Export Function
+  const generatePDFReport = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      // Dynamic import for html2canvas and jsPDF
+      const html2canvas = (await import('html2canvas')).default;
+      const jsPDF = (await import('jspdf')).default;
+      
+      const reportElement = document.getElementById('report-content');
+      if (!reportElement) return;
+      
+      const canvas = await html2canvas(reportElement, {
+        scale: 2,
+        useCORS: true,
+        logging: false
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 210;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      pdf.save(`Sales_Report_${filterDate}.pdf`);
+    } catch(e) {
+      console.error("PDF Error:", e);
+      alert("⚠️ Could not generate PDF. Please try again.");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
 
   const handleAddOffer = () => { if(newOffer.title) { addOffer({ id: uid("off"), title: newOffer.title, desc: newOffer.desc }); setNewOffer({ title: "", desc: "" }); } }
 
@@ -1869,7 +2361,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   };
 
   const handleExportCSV = () => {
-    const rows = [["Time", "Type", "Items", "Total", "Paid", "Loyalty Tier"]];
+    const rows = [["Time", "Type", "Items", "Total", "Paid", "Loyalty Tier", "Payment Method"]];
     filteredOrders.forEach(o => {
       const total = o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0);
       rows.push([
@@ -1878,7 +2370,8 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
         o.items.map(it => `${it.qty}x ${it.name}`).join("; "),
         total,
         o.paid ? "Yes" : "No",
-        o.loyaltyTier || "—"
+        o.loyaltyTier || "—",
+        o.payment || "cash"
       ]);
     });
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -1906,14 +2399,46 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             <span style={{fontWeight: 700, fontSize: 15}}>📅 Select Date:</span>
             <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} style={{...inputStyle, width: 150, background: COLORS.paper}} />
-            <button onClick={handleExportCSV} style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontWeight: 700, marginLeft: "auto" }}>📊 Export CSV</button>
+            
+            <button onClick={handleExportCSV} style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontWeight: 700 }}>📊 Export CSV</button>
+            
+            {/* PDF Report Button (NEW) */}
+            <button 
+              onClick={generatePDFReport} 
+              disabled={isGeneratingPDF}
+              style={{ 
+                background: COLORS.copper, 
+                color: "#fff", 
+                border: "none", 
+                borderRadius: 10, 
+                padding: "10px 16px", 
+                cursor: isGeneratingPDF ? 'not-allowed' : 'pointer',
+                fontWeight: 700,
+                opacity: isGeneratingPDF ? 0.6 : 1
+              }}
+            >
+              {isGeneratingPDF ? '⏳ Generating...' : '📄 PDF Report'}
+            </button>
           </div>
+          
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, marginBottom: 28 }}>
             <StatCard label={`Orders (${filterDate})`} value={filteredOrders.length} icon="📋" color={COLORS.copper} />
             <StatCard label="Revenue (paid)" value={inr(revenue)} icon="💰" color={COLORS.sage} />
             <StatCard label="Avg Order Value" value={inr(avgOrderValue)} icon="📈" color={COLORS.gold} />
           </div>
+          
           <KitchenMetrics filteredOrders={filteredOrders} />
+
+          {/* Hidden Report Content for PDF */}
+          <div id="report-content" style={{ display: 'none' }}>
+            <div style={{ padding: 20 }}>
+              <h2>{RESTAURANT.name} - Sales Report</h2>
+              <p>Date: {filterDate}</p>
+              <p>Total Orders: {filteredOrders.length}</p>
+              <p>Revenue: {inr(revenue)}</p>
+              <p>Average Order Value: {inr(avgOrderValue)}</p>
+            </div>
+          </div>
         </>
       )}
 
@@ -2113,19 +2638,31 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
       {tab === "orders" && (
         <div style={{ overflowX: "auto", borderRadius: 16, border: `1px solid ${COLORS.line}`, boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
-            <thead><tr style={{ textAlign: "left", color: COLORS.textLight, fontSize: 13, background: COLORS.paper, fontWeight: 800 }}><th style={th}>Time</th><th style={th}>Table/Type</th><th style={th}>Items</th><th style={th}>Total</th><th style={th}>Tier</th><th style={th}>Action</th></tr></thead>
+            <thead><tr style={{ textAlign: "left", color: COLORS.textLight, fontSize: 13, background: COLORS.paper, fontWeight: 800 }}><th style={th}>Time</th><th style={th}>Table/Type</th><th style={th}>Items</th><th style={th}>Total</th><th style={th}>Tier</th><th style={th}>Payment</th><th style={th}>Action</th></tr></thead>
             <tbody>
               {[...filteredOrders].sort((a, b) => b.createdAt - a.createdAt).map((o, idx) => (
-                <tr key={o.id} style={{ background: idx % 2 === 0 ? "#fff" : COLORS.paper }}>
+                <tr key={o.id} style={{ background: idx % 2 === 0 ? "#fff" : COLORS.paper, opacity: o.status === "cancelled" ? 0.5 : 1 }}>
                   <td style={{...td, fontSize: 13, color: COLORS.textLight, fontWeight: 600}}>{new Date(o.createdAt).toLocaleTimeString('en-IN', {hour: '2-digit', minute:'2-digit'})}</td>
-                  <td style={td}>{o.orderType === "parcel" ? <Badge color={COLORS.copper}>Parcel</Badge> : <span style={{ fontWeight: 800, fontSize: 15 }}>T-{o.table}</span>}</td>
+                  <td style={td}>
+                    {o.orderType === "parcel" ? <Badge color={COLORS.copper}>Parcel</Badge> : <span style={{ fontWeight: 800, fontSize: 15 }}>T-{o.table}</span>}
+                    {o.isScheduled && <span style={{ fontSize: 10, color: COLORS.info, display: 'block' }}>📅 Scheduled</span>}
+                    {o.status === "cancelled" && <span style={{ color: COLORS.error, fontSize: 11, fontWeight: 700 }}>❌ Cancelled</span>}
+                  </td>
                   <td style={{...td, fontSize: 14, fontWeight: 500}}>
                     {o.items.map((it) => `${it.qty}×${it.name}`).join(", ")}
                     {o.claimedReward && <span style={{display: 'block', color: COLORS.sageDark, fontWeight: 800, fontSize: 12, marginTop: 4}}>🎁 Free: {o.claimedReward}</span>}
                   </td>
                   <td style={{...td, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 15}}>{inr(o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0))}</td>
                   <td style={td}>{o.loyaltyTier || "—"}</td>
-                  <td style={td}><button onClick={() => markPaid(o.id, !o.paid)} style={{ border: `1.5px solid ${o.paid ? COLORS.sage : COLORS.line}`, background: o.paid ? COLORS.sage : "transparent", color: o.paid ? "#fff" : COLORS.ink, borderRadius: 10, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>{o.paid ? "✓ Paid" : "Mark paid"}</button></td>
+                  <td style={td}>
+                    {o.payment || "cash"}
+                    <span style={{ fontSize: 11, color: o.paid ? COLORS.sage : COLORS.textLight, display: 'block' }}>
+                      {o.paid ? "✅ Paid" : "⏳ Pending"}
+                    </span>
+                  </td>
+                  <td style={td}>
+                    <button onClick={() => markPaid(o.id, !o.paid)} style={{ border: `1.5px solid ${o.paid ? COLORS.sage : COLORS.line}`, background: o.paid ? COLORS.sage : "transparent", color: o.paid ? "#fff" : COLORS.ink, borderRadius: 10, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>{o.paid ? "✓ Paid" : "Mark paid"}</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -2155,7 +2692,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
 }
 
 // ============================================
-// 12. DEFAULT MENU DATA
+// 13. DEFAULT MENU DATA
 // ============================================
 
 const DEFAULT_MENU = [
@@ -2247,7 +2784,7 @@ const DEFAULT_GALLERY = [
 ];
 
 // ============================================
-// 13. MAIN APP COMPONENT
+// 14. MAIN APP COMPONENT
 // ============================================
 
 export default function App() {
@@ -2433,12 +2970,12 @@ export default function App() {
       <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <style>{FONTS}</style>
         <div className="app-content">
-          {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} />}
+          {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} />}
           {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} />}
           {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} />}
           
           {!["customer", "staff", "admin"].includes(role) && (
-            <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} />
+            <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} />
           )}
         </div>
 
