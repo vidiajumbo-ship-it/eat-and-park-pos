@@ -7,7 +7,7 @@ import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs } fr
    ═══════════════════════════════════════════════════════════════════════════════════ */
 
 // ============================================
-// 1. CONSTANTS & CONFIGURATION (ENHANCED)
+// 1. CONSTANTS & CONFIGURATION
 // ============================================
 
 const FONTS = `
@@ -58,10 +58,9 @@ const RESTAURANT = {
   address: "Girja More, Ara – Buxar Main Road, Pakri, Ara", 
   phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "apnanumber@upi" 
 };
+
 // ============================================
-// AFTER: const COLORS = { ... }
-// AFTER: const RESTAURANT = { ... }
-// BEFORE: const CATEGORIES = [ ... ]
+// LOYALTY TIERS
 // ============================================
 
 const LOYALTY_TIERS = [
@@ -71,7 +70,6 @@ const LOYALTY_TIERS = [
   { name: 'Platinum', points: 2000, discount: 0.25, emoji: '💎' }
 ];
 
-// Add this helper function after LOYALTY_TIERS
 function getLoyaltyTier(points) {
   let tier = LOYALTY_TIERS[0];
   for (const t of LOYALTY_TIERS) {
@@ -80,31 +78,6 @@ function getLoyaltyTier(points) {
     }
   }
   return tier;
-}
-
-// Add this function after getLoyaltyTier
-function useLocalStorage(key, initialValue) {
-  const [storedValue, setStoredValue] = useState(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.error('LocalStorage error:', error);
-      return initialValue;
-    }
-  });
-
-  const setValue = (value) => {
-    try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
-    } catch (error) {
-      console.error('LocalStorage set error:', error);
-    }
-  };
-
-  return [storedValue, setValue];
 }
 
 const CATEGORIES = [
@@ -117,27 +90,7 @@ const CATEGORIES = [
 const VEG = COLORS.sage; const NONVEG = COLORS.rust;
 
 // ============================================
-// 2. ENHANCED CONSTANTS
-// ============================================
-
-const CONSTANTS = {
-  DELIVERY_FEE: 40,
-  TAX_RATE: 0.18,
-  CURRENCY: '₹',
-  MAX_CART_ITEMS: 50,
-  MIN_ORDER_AMOUNT: 100,
-  LOYALTY_TIERS: [
-    { name: 'Bronze', points: 0, discount: 0.05, color: '#CD7F32' },
-    { name: 'Silver', points: 500, discount: 0.10, color: '#C0C0C0' },
-    { name: 'Gold', points: 1000, discount: 0.15, color: '#FFD700' },
-    { name: 'Platinum', points: 2000, discount: 0.25, color: '#E5E4E2' }
-  ],
-  ORDER_STATUSES: ['Pending', 'Confirmed', 'Preparing', 'Ready', 'Out for Delivery', 'Delivered'],
-  PAYMENT_METHODS: ['Razorpay', 'PhonePe', 'Google Pay', 'Cash on Delivery']
-};
-
-// ============================================
-// 3. CUSTOM HOOKS (ENHANCED)
+// CUSTOM HOOKS
 // ============================================
 
 const useLocalStorage = (key, initialValue) => {
@@ -165,7 +118,7 @@ const useLocalStorage = (key, initialValue) => {
 };
 
 // ============================================
-// 4. ENHANCED HELPER FUNCTIONS
+// HELPER FUNCTIONS
 // ============================================
 
 function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true, customImg = "") {
@@ -189,31 +142,6 @@ function inr(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
 function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
 function timeAgo(ts) { const s = Math.floor((Date.now() - ts)/1000); if (s < 60) return s + "s ago"; const m = Math.floor(s/60); if (m < 60) return m + "m ago"; return Math.floor(m/60) + "h ago"; }
 function toLocalISODate(timestamp) { const d = new Date(timestamp); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]; }
-
-function getLoyaltyTier(points) {
-  let tier = CONSTANTS.LOYALTY_TIERS[0];
-  for (const t of CONSTANTS.LOYALTY_TIERS) {
-    if (points >= t.points) {
-      tier = t;
-    }
-  }
-  return tier;
-}
-// Inside CustomerView component, add this after your other useState hooks
-const CustomerView = () => {
-  // ... existing state
-  const [favorites, setFavorites] = useLocalStorage('favorites', []);
-  const [claimedReward, setClaimedReward] = useState(null);
-  
-  // Add this AFTER your state declarations
-  const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
-  const currentCoins = activeUser ? activeUser.coins : 0;
-  const loyaltyTier = getLoyaltyTier(currentCoins);
-  const loyaltyDiscount = loyaltyTier.discount * subtotal;
-  const finalTotal = cartTotal - loyaltyDiscount;
-  
-  // ... rest of component
-};
 
 function getEstimatedTime(items) {
   if (!items || items.length === 0) return 5;
@@ -254,7 +182,7 @@ const EMPTY_STATES = {
 };
 
 // ============================================
-// 5. REUSABLE COMPONENTS (ENHANCED)
+// REUSABLE COMPONENTS
 // ============================================
 
 class ErrorBoundary extends React.Component {
@@ -439,7 +367,7 @@ function MyOrderStats({ myOrders, loyaltyCoins }) {
 }
 
 // ============================================
-// 6. CUSTOMER VIEW (ENHANCED)
+// CUSTOMER VIEW
 // ============================================
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory }) {
@@ -1056,7 +984,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 }
 
 // ============================================
-// 7. STAFF VIEW (ENHANCED WITH KEYBOARD SHORTCUTS)
+// STAFF VIEW
 // ============================================
 
 const STAFF_SHORTCUTS = {
@@ -1234,7 +1162,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
 }
 
 // ============================================
-// 8. ADMIN VIEW (ENHANCED)
+// ADMIN VIEW
 // ============================================
 
 function KitchenMetrics({ filteredOrders }) {
@@ -1657,7 +1585,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
 }
 
 // ============================================
-// 13. DEFAULT MENU DATA
+// DEFAULT DATA
 // ============================================
 
 const DEFAULT_MENU = [
@@ -1736,60 +1664,7 @@ const DEFAULT_MENU = [
   mi("mo11", "Chicken Momo", 150, "Momo", false, "Steamed dumplings stuffed with juicy minced chicken.", "Steam"), 
   mi("mo12", "Chicken Momo", 160, "Momo", false, "Golden fried chicken dumplings.", "Fry")
 ];
-// Inside the menu items loop (where you display each item)
-{filteredItems.map((item) => {
-  const isFavorite = favorites.includes(item.id);
-  return (
-    <div key={item.id} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${COLORS.line}` }}>
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <VegDot veg={item.veg} />
-          <span style={{ fontWeight: 700 }}>{item.name}</span>
-          
-          {/* ADD THIS FAVORITE BUTTON */}
-          <button 
-            onClick={() => {
-              setFavorites(prev => {
-                if (prev.includes(item.id)) {
-                  return prev.filter(id => id !== item.id);
-                } else {
-                  return [...prev, item.id];
-                }
-              });
-            }}
-            style={{ 
-              background: 'none', 
-              border: 'none', 
-              cursor: 'pointer', 
-              fontSize: 18,
-              padding: '2px 4px'
-            }}
-            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-          >
-            {isFavorite ? '⭐' : '☆'}
-          </button>
-        </div>
-        <div style={{ color: COLORS.copper, fontWeight: 700 }}>{inr(item.price)}</div>
-      </div>
-      <button 
-        onClick={() => {
-          setCart(prev => ({ ...prev, [item.id]: (prev[item.id] || 0) + 1 }));
-        }}
-        style={{ 
-          background: COLORS.sage, 
-          color: "#fff", 
-          border: "none", 
-          borderRadius: 10, 
-          padding: "8px 16px",
-          fontWeight: 700,
-          cursor: "pointer"
-        }}
-      >
-        Add
-      </button>
-    </div>
-  );
-})}
+
 const DEFAULT_OFFERS = [
   { id: "off1", title: "Flat 20% OFF 🍜", desc: "Enjoy flat 20% off on all Chinese items today!" },
   { id: "off2", title: "Free Cold Drink 🥤", desc: "Get a free cold drink on orders above ₹499." }
@@ -1802,7 +1677,7 @@ const DEFAULT_GALLERY = [
 ];
 
 // ============================================
-// 14. MAIN APP COMPONENT (ENHANCED)
+// MAIN APP COMPONENT
 // ============================================
 
 export default function App() {
