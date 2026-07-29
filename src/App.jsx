@@ -3,7 +3,7 @@ import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V8.0 (ERROR-FREE & FULLY FIXED)
+   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V8.1 (BUG-FIXED & STABLE)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
@@ -397,8 +397,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
   async function handlePlaceOrder() {
     if (cartItems.length === 0) return;
-    if (!custName.trim() || !custPhone.trim()) { showToast("⚠️ Please enter Name & Phone", 'error'); return; }
-    if (orderType === "parcel" && !custAddress.trim()) { showToast("⚠️ Please enter Address", 'error'); return; }
+    if (!custName.trim()) { showToast("⚠️ Please enter your Name", 'error'); return; }
+    if (!custPhone.trim() || custPhone.length < 10) { showToast("⚠️ Please enter valid 10-digit Phone", 'error'); return; }
+    if (orderType === "parcel" && !custAddress.trim()) { showToast("⚠️ Please enter Delivery Address", 'error'); return; }
 
     const orderId = uid("o");
     const itemStrings = cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return `${qty}x ${m.name}` }).join(", ");
@@ -595,6 +596,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 20 }}>
                   <div style={{fontSize: 13, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', letterSpacing: 1}}>Your Details</div>
                   <input type="text" placeholder="Your Name *" value={custName} onChange={(e) => setCustName(e.target.value)} style={inputStyle} />
+                  <input type="tel" placeholder="Phone Number *" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} style={inputStyle} />
                   
                   {orderType === "parcel" && (
                     <div>
@@ -1584,8 +1586,8 @@ export default function App() {
       await setDoc(doc(db, "orders", order.id), order);
     } catch (e) { console.error(e); }
 
-    setOrdersState(prev => [...prev, order]);
-    
+    // Removed manual setOrdersState here to prevent double order rendering, as Firestore onSnapshot handles it globally.
+
     if(order.customer.phone && order.customer.phone.length >= 10) {
        const netCoins = order.earnedCoins - rewardCost;
        const existingUserIndex = loyaltyUsers.findIndex(u => u.phone === order.customer.phone);
