@@ -1,10 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from "react";
 import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V8.1 (BUG-FIXED & STABLE)
-═══════════════════════════════════════════════════════════════════════════════════ */
+   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V9.0 (ENHANCED WITH ALL 5 AREAS)
+   ═══════════════════════════════════════════════════════════════════════════════════ */
+
+// ============================================
+// 1. CONSTANTS & CONFIGURATION (ENHANCED)
+// ============================================
 
 const FONTS = `
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -15,6 +19,8 @@ const FONTS = `
 @keyframes scaleInBounce { 0% { transform: scale(0.3); opacity: 0; } 50% { opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes smoothSlideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes fadeInScale { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 
 .flash-banner { animation: flash 2s infinite; }
 .slide-up { animation: slideUp 0.4s ease-out; }
@@ -25,6 +31,8 @@ const FONTS = `
 .scale-bounce { animation: scaleInBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .smooth-slide-up { animation: smoothSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .fade-scale { animation: fadeInScale 0.3s ease-out; }
+.pulse { animation: pulse 2s ease-in-out infinite; }
+.shimmer { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
 
 .dark-theme { filter: invert(0.92) hue-rotate(180deg); background: #111; min-height: 100vh; }
 .dark-theme img, .dark-theme .keep-color { filter: invert(1) hue-rotate(180deg); }
@@ -42,7 +50,7 @@ const COLORS = {
   copper: "#E25938", copperDark: "#C1442D", copperLight: "#F5E8E3",
   rust: "#C0392B", sage: "#4A7C59", sageDark: "#2F5C3F", sageLight: "#E8F0EB",
   gold: "#D4A574", line: "#E8E6DC", text: "#3C3C3C", textLight: "#8A8375",
-  success: "#10B981", error: "#EF4444", warning: "#FF9800",
+  success: "#10B981", error: "#EF4444", warning: "#FF9800", info: "#3B82F6",
 };
 
 const RESTAURANT = {
@@ -59,6 +67,102 @@ const CATEGORIES = [
 ];
 
 const VEG = COLORS.sage; const NONVEG = COLORS.rust;
+
+// ============================================
+// 2. ENHANCED CONSTANTS
+// ============================================
+
+const CONSTANTS = {
+  DELIVERY_FEE: 40,
+  TAX_RATE: 0.18,
+  CURRENCY: '₹',
+  MAX_CART_ITEMS: 50,
+  MIN_ORDER_AMOUNT: 100,
+  LOYALTY_TIERS: [
+    { name: 'Bronze', points: 0, discount: 0.05, color: '#CD7F32' },
+    { name: 'Silver', points: 500, discount: 0.10, color: '#C0C0C0' },
+    { name: 'Gold', points: 1000, discount: 0.15, color: '#FFD700' },
+    { name: 'Platinum', points: 2000, discount: 0.25, color: '#E5E4E2' }
+  ],
+  ORDER_STATUSES: ['Pending', 'Confirmed', 'Preparing', 'Ready', 'Out for Delivery', 'Delivered'],
+  PAYMENT_METHODS: ['Razorpay', 'PhonePe', 'Google Pay', 'Cash on Delivery']
+};
+
+// ============================================
+// 3. CUSTOM HOOKS (ENHANCED)
+// ============================================
+
+// Local Storage Hook for offline persistence
+const useLocalStorage = (key, initialValue) => {
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(`Error reading localStorage key "${key}":`, error);
+      return initialValue;
+    }
+  });
+
+  const setValue = useCallback((value) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+    } catch (error) {
+      console.error(`Error setting localStorage key "${key}":`, error);
+    }
+  }, [key, storedValue]);
+
+  return [storedValue, setValue];
+};
+
+// Form Validation Hook
+const useFormValidation = (initialValues, validate) => {
+  const [values, setValues] = useState(initialValues);
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+
+  const handleChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setValues(prev => ({ ...prev, [name]: value }));
+    if (touched[name]) {
+      const validationErrors = validate({ ...values, [name]: value });
+      setErrors(prev => ({ ...prev, [name]: validationErrors[name] || '' }));
+    }
+  }, [values, touched, validate]);
+
+  const handleBlur = useCallback((e) => {
+    const { name } = e.target;
+    setTouched(prev => ({ ...prev, [name]: true }));
+    const validationErrors = validate(values);
+    setErrors(prev => ({ ...prev, [name]: validationErrors[name] || '' }));
+  }, [values, validate]);
+
+  const handleSubmit = useCallback((callback) => (e) => {
+    e.preventDefault();
+    const validationErrors = validate(values);
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length === 0) {
+      callback(values);
+    }
+  }, [values, validate]);
+
+  return {
+    values,
+    errors,
+    touched,
+    handleChange,
+    handleBlur,
+    handleSubmit,
+    setValues,
+    setErrors
+  };
+};
+
+// ============================================
+// 4. ENHANCED HELPER FUNCTIONS
+// ============================================
 
 function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true, customImg = "") {
   let img = customImg || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; 
@@ -77,82 +181,28 @@ function mi(id, name, price, category, veg, desc, portion, isBestseller = false,
   return { id, name, desc: desc || "Freshly prepared with premium ingredients.", price, category, veg, available, image: img, portion: portion || "", isBestseller };
 }
 
-const DEFAULT_MENU = [
-  mi("d1", "Mint Mojito", 90, "Drinks", true, "Refreshing blend of fresh mint, lemon, and sparkling soda.", "", true), mi("d2", "Blue Lagoon", 90, "Drinks", true, "Tropical blue curacao cooler with a citrusy kick."), mi("d3", "Vanilla Shake", 120, "Drinks", true, "Classic thick and creamy vanilla milkshake."), mi("d4", "Chocolate Shake", 130, "Drinks", true, "Rich cocoa blended with milk and ice cream."), mi("d5", "Kitkat Oreo Shake", 150, "Drinks", true, "Ultimate crunch of KitKat and Oreo cookies."), mi("d9", "Cold Coffee", 120, "Drinks", true, "Chilled, frothy coffee perfection.", "", true), mi("d10", "Cold Drink", 50, "Drinks", true, "Chilled aerated beverage."),
-  mi("f1", "Veg Burger", 90, "Fun Food", true, "Crispy veggie patty with fresh lettuce and creamy mayo."), mi("f2", "Eat & Park Special Pizza", 280, "Fun Food", true, "Loaded with exotic veggies, extra cheese and secret sauce.", "", true), mi("f3", "Veg Roll", 90, "Fun Food", true, "Spiced veggies wrapped in a soft, flaky paratha."), mi("f4", "Paneer Roll", 100, "Fun Food", true, "Tandoori paneer chunks rolled to perfection."), mi("f8", "Eat & Park Egg Roll", 100, "Fun Food", false, "Double egg wrapped with crispy onions and sauces."), mi("f9", "Eat & Park Chicken Roll", 150, "Fun Food", false, "Juicy chicken tikka rolled in a crispy paratha."), mi("f11", "White Sauce Pasta", 180, "Fun Food", true, "Penne in a rich, creamy, and cheesy garlic sauce."), mi("f14", "Veg Sandwich", 120, "Fun Food", true, "Freshly grilled with layers of healthy veggies and cheese."), mi("f15", "Chicken Sandwich", 150, "Fun Food", false, "Grilled sandwich stuffed with creamy chicken filling."),
-  mi("cs1", "Paneer Chilli", 240, "Chinese Starter", true, "Crispy paneer tossed in spicy soy and garlic sauce.", "Dry / Gravy", true), mi("cs2", "Mushroom Chilli", 250, "Chinese Starter", true, "Fresh button mushrooms in a tangy chili glaze.", "Dry / Gravy"), mi("cs3", "Veg Manchurian", 180, "Chinese Starter", true, "Vegetable dumplings in a classic dark soy gravy.", "Dry / Gravy"), mi("cs8", "Chicken Chilli", 240, "Chinese Starter", false, "Diced chicken tossed with capsicum, onion, and hot sauces.", "Dry / Gravy", true), mi("cs9", "Chicken Manchurian", 260, "Chinese Starter", false, "Minced chicken balls in sweet and savory Chinese sauce.", "Dry / Gravy"), mi("cs10", "Chicken Lollipop", 300, "Chinese Starter", false, "Crispy fried chicken wings served with hot garlic dip.", "Dry / Gravy"), 
-  mi("mg1", "Tandoori Chicken", 450, "Mughlai", false, "Classic bone-in chicken marinated in yogurt and Indian spices, roasted in clay oven."), mi("mg3", "Chicken Tikka", 350, "Mughlai", false, "Boneless chicken chunks marinated in fiery spices and grilled."), 
-  mi("t1", "Paneer Tikka", 299, "Tandoori", true, "Cottage cheese marinated in spices and grilled in a tandoor.", "", true), mi("t2", "Mushroom Tikka", 285, "Tandoori", true, "Juicy mushrooms roasted with smoky tandoori flavors."),
-  mi("s1", "Tomato Soup", 120, "Soup", true, "Warm, creamy, and comforting fresh tomato soup."), mi("s3", "Veg Manchow Soup", 120, "Soup", true, "Spicy and thick soup topped with crispy fried noodles."), mi("s6", "Chicken Manchow Soup", 150, "Soup", false, "Rich chicken broth with veggies and crispy noodles."), 
-  mi("b1", "Tandoori Roti", 15, "Indian Bread", true, "Whole wheat bread baked in a clay oven."), mi("b2", "Tandoori Butter Roti", 20, "Indian Bread", true, "Hot tandoori roti glazed with fresh butter."), mi("b6", "Plain Naan", 50, "Indian Bread", true, "Soft and fluffy refined flour Indian bread."), mi("b7", "Butter Naan", 60, "Indian Bread", true, "Classic naan generously brushed with butter."), mi("b8", "Garlic Naan", 70, "Indian Bread", true, "Naan topped with minced garlic and fresh coriander.", "", true), 
-  mi("sn3", "French Fries", 100, "Snacks", true, "Crispy golden potato fries."), mi("sn5", "Crispy Chilli Potato", 160, "Snacks", true, "Fried potato fingers tossed in sweet and spicy chili sauce."), mi("sn9", "Chicken Pakoda", 200, "Snacks", false, "Crunchy batter-fried chicken bites."),
-  mi("cm1", "Veg Chowmein", 130, "Chinese Mains", true, "Wok-tossed noodles with shredded vegetables."), mi("cm2", "Veg Hakka Noodles", 160, "Chinese Mains", true, "Classic non-spicy noodles tossed with veggies."), mi("cm8", "Chicken Noodles", 180, "Chinese Mains", false, "Flavorful noodles stir-fried with juicy chicken bits."), mi("cm12", "Veg Fried Rice", 170, "Chinese Mains", true, "Aromatic rice wok-tossed with fresh finely chopped veggies."), mi("cm15", "Chicken Fried Rice", 200, "Chinese Mains", false, "Classic Chinese style rice tossed with chicken and egg."), 
-  mi("p2", "Jeera Rice", 110, "Pulao", true, "Basmati rice tempered with roasted cumin seeds."), mi("p3", "Veg Pulao", 180, "Pulao", true, "Fragrant rice cooked with mixed vegetables and whole spices."), 
-  mi("pn1", "Paneer Masala", 250, "Paneer & Mushroom", true, "Paneer cooked in a rich onion-tomato spiced gravy."), mi("pn4", "Paneer Karahi", 260, "Paneer & Mushroom", true, "Cottage cheese and bell peppers cooked in a traditional iron wok."), mi("pn6", "Paneer Butter Masala", 260, "Paneer & Mushroom", true, "Soft paneer in a creamy, slightly sweet makhani gravy."), mi("pn16", "Mushroom Masala", 250, "Paneer & Mushroom", true, "Earthy mushrooms in a robust and spicy masala."), mi("pn17", "Mushroom Karahi", 260, "Paneer & Mushroom", true, "Mushrooms and diced capsicum tossed in kadhai spices."), 
-  mi("nv1", "Chicken Dehati", 550, "Chicken, Mutton, Fish & Egg", false, "Spicy, homestyle rustic chicken curry with bold flavors."), mi("nv2", "Chicken Curry", 280, "Chicken, Mutton, Fish & Egg", false, "Classic, comforting Indian style chicken curry."), mi("nv6", "Chicken Do Pyaza", 280, "Chicken, Mutton, Fish & Egg", false, "Chicken cooked with a generous amount of crunchy onions."), mi("nv8", "Chicken Butter Masala", 350, "Chicken, Mutton, Fish & Egg", false, "Tandoori chicken pieces in a rich, buttery tomato gravy.", "", true), mi("nv10", "Mutton Curry", 340, "Chicken, Mutton, Fish & Egg", false, "Tender mutton slow-cooked in traditional Indian spices."), mi("nv12", "Mutton Handi", 650, "Chicken, Mutton, Fish & Egg", false, "Mutton cooked slowly in a sealed earthen pot for rich aroma.", "500g", true), mi("nv13", "Mutton Handi", 1200, "Chicken, Mutton, Fish & Egg", false, "Mutton cooked slowly in a sealed earthen pot for rich aroma.", "1 Kg"), mi("nv15", "Mutton Dehati", 440, "Chicken, Mutton, Fish & Egg", false, "Village style spicy and robust mutton preparation."), mi("nv16", "Mutton Ahuna", 1250, "Chicken, Mutton, Fish & Egg", false, "Champaran special whole garlic and mutton cooked in a clay pot."), mi("nv19", "Fish Curry", 120, "Chicken, Mutton, Fish & Egg", false, "Homestyle fish cooked in a tangy mustard and tomato gravy.", "Small"), mi("nv20", "Fish Curry", 220, "Chicken, Mutton, Fish & Egg", false, "Homestyle fish cooked in a tangy mustard and tomato gravy.", "Large"), mi("nv25", "Egg Curry", 200, "Chicken, Mutton, Fish & Egg", false, "Boiled eggs simmered in a flavorful spiced gravy.", "4 pc"), 
-  mi("br1", "Veg Biryani", 180, "Biryani & Thali", true, "Aromatic basmati rice layered with spiced vegetables."), mi("br5", "Chicken Biryani", 210, "Biryani & Thali", false, "Classic fragrant rice and chicken cooked with dum technique.", "", true), mi("br12", "Mutton Biryani", 280, "Biryani & Thali", false, "Rich, royal biryani made with succulent mutton pieces."), mi("br15", "Veg Thali", 250, "Biryani & Thali", true, "A complete meal platter with flatbreads, rice, sides, and curries.", "2 Roti, Half Rice, Manchurian, Paneer, Salad, Aachar, Dal"), mi("br16", "Non Veg Thali", 280, "Biryani & Thali", false, "Hearty non-veg platter for a fulfilling meal experience.", "2 Roti, Half Rice, Chicken, Salad, Aachar"),
-  mi("al10", "Dal Fry", 70, "Aloo, Dal & Sides", true, "Yellow lentils tempered with cumin and garlic."), mi("al11", "Dal Tadka", 100, "Aloo, Dal & Sides", true, "Dhaba-style dal with a smoky double tadka of ghee and spices."), mi("al14", "Veg Raita", 60, "Aloo, Dal & Sides", true, "Cooling yogurt mixed with finely chopped cucumber and onions."), mi("al15", "Green Salad", 80, "Aloo, Dal & Sides", true, "Fresh slices of cucumber, tomato, onion, and carrots."), 
-  mi("mo1", "Veg Momo", 80, "Momo", true, "Steamed dumplings filled with finely minced vegetables.", "Steam"), mi("mo2", "Veg Momo", 100, "Momo", true, "Crispy fried vegetable dumplings.", "Fry"), mi("mo11", "Chicken Momo", 150, "Momo", false, "Steamed dumplings stuffed with juicy minced chicken.", "Steam"), mi("mo12", "Chicken Momo", 160, "Momo", false, "Golden fried chicken dumplings.", "Fry")
-];
-
-const DEFAULT_OFFERS = [
-  { id: "off1", title: "Flat 20% OFF 🍜", desc: "Enjoy flat 20% off on all Chinese items today!" },
-  { id: "off2", title: "Free Cold Drink 🥤", desc: "Get a free cold drink on orders above ₹499." }
-];
-
-const DEFAULT_GALLERY = [
-  "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80",
-  "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80",
-  "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=400&q=80"
-];
-
-const STATUS_FLOW = ["new", "preparing", "ready", "served"];
-const STATUS_LABEL = { new: "New", preparing: "Preparing", ready: "Ready", served: "Served" };
-const STATUS_COLOR = { new: COLORS.rust, preparing: COLORS.copper, ready: COLORS.sage, served: "#8A8375" };
-
-const PREP_TIME_ESTIMATES = { "Drinks": 3, "Fun Food": 10, "Chinese Starter": 12, "Tandoori": 20, "Biryani & Thali": 25 };
-
-const EMPTY_STATES = {
-  veg_filtered: { icon: "🥬", title: "No vegetarian options here", subtitle: "Try 'All Items' or check our Paneer & Mushroom section!" },
-  search_no_results: { icon: "🔍", title: "Dish not found", subtitle: "Try searching 'paneer', 'chicken', 'biryani', or 'tandoori'" },
-  category_empty: { icon: "📂", title: "This category is empty", subtitle: "Check out our bestsellers in Fun Food or Tandoori!" },
-};
-
-const TOAST_CONFIG = {
-  success: { duration: 2200, bg: COLORS.success, icon: "✅" },
-  error: { duration: 4500, bg: COLORS.error, icon: "❌" },
-  info: { duration: 3000, bg: COLORS.ink, icon: "ℹ️" },
-  reward: { duration: 5000, bg: COLORS.gold, icon: "🎁" },
-  warning: { duration: 4000, bg: COLORS.warning, icon: "⚠️" },
-};
-
-class RateLimiter {
-  constructor() { this.attempts = {}; }
-  check(action, identifier, maxAttempts = 3, windowMs = 900000) {
-    const key = `${action}:${identifier}`;
-    const now = Date.now();
-    if (!this.attempts[key]) this.attempts[key] = [];
-    this.attempts[key] = this.attempts[key].filter((t) => now - t < windowMs);
-    if (this.attempts[key].length >= maxAttempts) {
-      const retryAfter = Math.ceil((windowMs - (now - this.attempts[key][0])) / 60000);
-      return { allowed: false, retryAfter };
-    }
-    this.attempts[key].push(now);
-    return { allowed: true };
-  }
-}
-const otpLimiter = new RateLimiter();
-
 function inr(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
 function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
 function timeAgo(ts) { const s = Math.floor((Date.now() - ts)/1000); if (s < 60) return s + "s ago"; const m = Math.floor(s/60); if (m < 60) return m + "m ago"; return Math.floor(m/60) + "h ago"; }
 function toLocalISODate(timestamp) { const d = new Date(timestamp); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]; }
+
+// Enhanced: Get loyalty tier based on points
+function getLoyaltyTier(points) {
+  let tier = CONSTANTS.LOYALTY_TIERS[0];
+  for (const t of CONSTANTS.LOYALTY_TIERS) {
+    if (points >= t.points) {
+      tier = t;
+    }
+  }
+  return tier;
+}
 
 function getEstimatedTime(items) {
   if (!items || items.length === 0) return 5;
   const maxTime = Math.max(...items.map(it => { const item = DEFAULT_MENU.find(m => m.id === it.itemId); return PREP_TIME_ESTIMATES[item?.category || "Fun Food"] || 15; }));
   return maxTime + 2; 
 }
+
 function getOrderProgress(status) { const map = { new: 15, preparing: 50, ready: 85, served: 100 }; return map[status] || 0; }
 
 function getSmartSuggestionPool(menu, cart) {
@@ -165,13 +215,137 @@ function getSmartSuggestionPool(menu, cart) {
   return pool.filter(m => m.available && !cart[m.id]);
 }
 
-const primaryBtn = { background: COLORS.copper, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.3s ease", boxShadow: "0 4px 12px rgba(226,89,56,0.2)" };
-const th = { padding: "12px 14px", borderBottom: `2px solid ${COLORS.line}`, fontFamily: "'Plus Jakarta Sans', sans-serif" }; 
-const td = { padding: "12px 14px", borderBottom: `1px solid ${COLORS.line}` };
-const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", transition: "all 0.2s ease" };
+const PREP_TIME_ESTIMATES = { "Drinks": 3, "Fun Food": 10, "Chinese Starter": 12, "Tandoori": 20, "Biryani & Thali": 25 };
 
-function Badge({ children, color }) { return <span style={{ background: color, color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", padding: "5px 10px", borderRadius: 999, fontWeight: 700, display: "inline-block" }}>{children}</span>; }
-function VegDot({ veg }) { const c = veg ? VEG : NONVEG; return <span role="img" aria-label={veg ? "Vegetarian item" : "Non-vegetarian item"} title={veg ? "Vegetarian" : "Non-vegetarian"} style={{ width: 14, height: 14, border: `1.5px solid ${c}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, borderRadius: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: c }} /></span>; }
+const STATUS_FLOW = ["new", "preparing", "ready", "served"];
+const STATUS_LABEL = { new: "New", preparing: "Preparing", ready: "Ready", served: "Served" };
+const STATUS_COLOR = { new: COLORS.rust, preparing: COLORS.copper, ready: COLORS.sage, served: "#8A8375" };
+
+const TOAST_CONFIG = {
+  success: { duration: 2200, bg: COLORS.success, icon: "✅" },
+  error: { duration: 4500, bg: COLORS.error, icon: "❌" },
+  info: { duration: 3000, bg: COLORS.ink, icon: "ℹ️" },
+  reward: { duration: 5000, bg: COLORS.gold, icon: "🎁" },
+  warning: { duration: 4000, bg: COLORS.warning, icon: "⚠️" },
+};
+
+const EMPTY_STATES = {
+  veg_filtered: { icon: "🥬", title: "No vegetarian options here", subtitle: "Try 'All Items' or check our Paneer & Mushroom section!" },
+  search_no_results: { icon: "🔍", title: "Dish not found", subtitle: "Try searching 'paneer', 'chicken', 'biryani', or 'tandoori'" },
+  category_empty: { icon: "📂", title: "This category is empty", subtitle: "Check out our bestsellers in Fun Food or Tandoori!" },
+};
+
+// ============================================
+// 5. REUSABLE COMPONENTS (ENHANCED)
+// ============================================
+
+const Button = React.memo(({ children, variant = 'primary', size = 'md', className = '', ...props }) => {
+  const baseStyles = 'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+  
+  const variantStyles = {
+    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
+    secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-500',
+    success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500',
+    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+    outline: 'border-2 border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-blue-500'
+  };
+
+  const sizeStyles = {
+    sm: 'px-3 py-1.5 text-sm',
+    md: 'px-4 py-2 text-base',
+    lg: 'px-6 py-3 text-lg'
+  };
+
+  return (
+    <button 
+      className={`${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+});
+
+const Card = React.memo(({ children, className = '', ...props }) => (
+  <div className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow ${className}`} {...props}>
+    {children}
+  </div>
+));
+
+const InputField = React.memo(({ 
+  label, name, type = 'text', value, onChange, onBlur, 
+  error, touched, placeholder, required = false, className = '', 
+  ...props 
+}) => (
+  <div className={`mb-4 ${className}`}>
+    {label && (
+      <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+    )}
+    <input
+      id={name}
+      name={name}
+      type={type}
+      value={value}
+      onChange={onChange}
+      onBlur={onBlur}
+      placeholder={placeholder}
+      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+        error && touched ? 'border-red-500' : 'border-gray-300'
+      }`}
+      aria-invalid={error && touched ? 'true' : 'false'}
+      aria-describedby={error && touched ? `${name}-error` : undefined}
+      {...props}
+    />
+    {error && touched && (
+      <p id={`${name}-error`} className="mt-1 text-sm text-red-500">{error}</p>
+    )}
+  </div>
+));
+
+// Error Boundary Component (AREA 3 & 5)
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>😅</div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: COLORS.ink, marginBottom: '0.5rem' }}>Something went wrong</h2>
+          <p style={{ color: COLORS.textLight, marginBottom: '1rem' }}>Please try refreshing the page</p>
+          <Button onClick={() => window.location.reload()}>Refresh Page</Button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ============================================
+// 6. EXISTING COMPONENTS (KEEP YOUR STRUCTURE)
+// ============================================
+
+function Badge({ children, color }) { 
+  return <span style={{ background: color, color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", padding: "5px 10px", borderRadius: 999, fontWeight: 700, display: "inline-block" }}>{children}</span>; 
+}
+
+function VegDot({ veg }) { 
+  const c = veg ? VEG : NONVEG; 
+  return <span role="img" aria-label={veg ? "Vegetarian item" : "Non-vegetarian item"} title={veg ? "Vegetarian" : "Non-vegetarian"} style={{ width: 14, height: 14, border: `1.5px solid ${c}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, borderRadius: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: c }} /></span>; 
+}
 
 function ProgressRing({ progress, size = 60, strokeWidth = 3 }) {
   const circumference = 2 * Math.PI * ((size - strokeWidth) / 2);
@@ -241,7 +415,9 @@ function SlideButton({ onComplete, text, bg = COLORS.sage }) {
   );
 }
 
-function ModalHeader({ title, onClose }) { return <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 16 }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 700 }}>{title}</div><button onClick={onClose} aria-label="Close" style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", fontSize: 18 }}>✕</button></div>; }
+function ModalHeader({ title, onClose }) { 
+  return <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 16 }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 700 }}>{title}</div><button onClick={onClose} aria-label="Close" style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", fontSize: 18 }}>✕</button></div>; 
+}
 
 function Toast({ message, type = 'info' }) {
   const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
@@ -264,11 +440,73 @@ function EmptyState({ reason }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════════════
-   1. CUSTOMER VIEW
-═══════════════════════════════════════════════════════════════════════════════════ */
+// ============================================
+// 7. STAT CARD COMPONENT
+// ============================================
 
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, promo, settings, installApp, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory }) {
+function StatCard({ label, value, icon, color }) { 
+  return <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 18, padding: "24px 20px", transition: "all 0.3s ease", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }} className="smooth-transition hover-lift">
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}><div style={{ fontSize: 13, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.05em" }}>{label}</div><span style={{ fontSize: 28 }}>{icon}</span></div>
+    <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, fontWeight: 800, color: color }}>{value}</div>
+  </div>; 
+}
+
+// ============================================
+// 8. SIDEBAR BUTTON
+// ============================================
+
+function SidebarBtn({ icon, text, onClick, highlight }) {
+  return (
+    <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 20px", borderRadius: 14, background: highlight ? COLORS.copperLight : COLORS.paper, border: highlight ? `1.5px solid ${COLORS.copper}` : `1px solid ${COLORS.line}`, color: highlight ? COLORS.copperDark : COLORS.ink, fontSize: 15, fontWeight: 700, cursor: "pointer", textAlign: "left", transition: "all 0.2s ease", width: '100%', boxShadow: highlight ? "0 4px 12px rgba(226,89,56,0.15)" : "none" }}>
+      <span style={{ fontSize: 20 }}>{icon}</span> <span>{text}</span>
+    </button>
+  );
+}
+
+// ============================================
+// 9. MY ORDER STATS
+// ============================================
+
+function MyOrderStats({ myOrders, loyaltyCoins }) {
+  if (!myOrders || myOrders.length === 0) return null;
+  const totalSpent = myOrders.reduce((s, o) => s + o.items.reduce((a, i) => a + i.price * i.qty, 0), 0);
+  const favoriteDish = (() => {
+    const dishes = {};
+    myOrders.forEach(o => o.items.forEach(i => { dishes[i.name] = (dishes[i.name] || 0) + i.qty; }));
+    const sorted = Object.entries(dishes).sort((a, b) => b[1] - a[1]);
+    return sorted.length > 0 ? sorted[0][0] : "—";
+  })();
+
+  return (
+    <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', padding: 16, borderRadius: 14, marginBottom: 20, border: `1px solid ${COLORS.line}` }}>
+      <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 12, color: COLORS.ink }}>📊 Your Journey</div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
+          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Total Spent</span>
+          <strong style={{ color: COLORS.copper }}>{inr(totalSpent)}</strong>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
+          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Orders</span>
+          <strong style={{ color: COLORS.sage }}>{myOrders.length}</strong>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
+          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Favorite</span>
+          <strong style={{ color: COLORS.ink, fontSize: 12 }}>{favoriteDish}</strong>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
+          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>EatCoins</span>
+          <strong style={{ color: COLORS.gold }}>{loyaltyCoins} 🪙</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// 10. CUSTOMER VIEW (ENHANCED)
+// ============================================
+
+function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory }) {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
@@ -298,11 +536,18 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [bookData, setBookData] = useState({ name: "", phone: "", date: "", time: "", guests: "" });
   const [confirmedBooking, setConfirmedBooking] = useState(null);
 
-  const filteredItems = (searchQuery.trim() ? menu : menu.filter((m) => m.category === category)).filter((m) => {
-    if (vegOnly && !m.veg) return false;
-    if (searchQuery.trim()) { const q = searchQuery.toLowerCase(); return m.name.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q); }
-    return true;
-  });
+  // Enhanced: Favorites feature (AREA 1)
+  const [favorites, setFavorites] = useLocalStorage('favorites', []);
+
+  const filteredItems = useMemo(() => {
+    let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
+    items = items.filter((m) => {
+      if (vegOnly && !m.veg) return false;
+      if (searchQuery.trim()) { const q = searchQuery.toLowerCase(); return m.name.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q); }
+      return true;
+    });
+    return items;
+  }, [menu, category, searchQuery, vegOnly]);
 
   const emptyReason = searchQuery.trim() ? "search_no_results" : (vegOnly ? "veg_filtered" : "category_empty");
 
@@ -313,6 +558,13 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const deliveryFee = orderType === "parcel" ? 40 : 0;
   const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
   const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
+
+  // Enhanced: Loyalty tier discount (AREA 1)
+  const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
+  const currentCoins = activeUser ? activeUser.coins : 0;
+  const loyaltyTier = getLoyaltyTier(currentCoins);
+  const loyaltyDiscount = loyaltyTier.discount * subtotal;
+  const finalTotal = cartTotal - loyaltyDiscount;
 
   const showToast = useCallback((msg, type = 'info') => {
     const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
@@ -334,21 +586,30 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   };
 
+  // Enhanced: Toggle favorites (AREA 1)
+  const toggleFavorite = useCallback((itemId) => {
+    setFavorites(prev => {
+      if (prev.includes(itemId)) {
+        showToast('Removed from favorites', 'info');
+        return prev.filter(id => id !== itemId);
+      } else {
+        showToast('Added to favorites!', 'success');
+        return [...prev, itemId];
+      }
+    });
+  }, [setFavorites, showToast]);
+
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served");
   const myOrders = orders.filter(o => myOrderIds.includes(o.id));
   const myCoinLogs = coinHistory.filter(c => c.phone === custPhone);
 
-  const cartQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${cartTotal}&cu=INR`)}`;
+  const cartQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${finalTotal}&cu=INR`)}`;
   const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
 
-  const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
-  const currentCoins = activeUser ? activeUser.coins : 0;
-  const newEarnedCoins = Math.floor(cartTotal / loyaltyRules.rate);
+  const newEarnedCoins = Math.floor(finalTotal / loyaltyRules.rate);
 
   const handleSendOtp = () => {
     if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid 10-digit phone", 'error'); return; }
-    const check = otpLimiter.check('otp', custPhone, 3);
-    if (!check.allowed) { showToast(`⏱️ Too many attempts. Try again in ${check.retryAfter}m`, 'error'); return; }
     const code = Math.floor(1000 + Math.random() * 9000).toString();
     setGeneratedOtp(code);
     setOtpStep("verify");
@@ -404,19 +665,39 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     const orderId = uid("o");
     const itemStrings = cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return `${qty}x ${m.name}` }).join(", ");
     const claimedText = claimedReward ? `\n🎁 *Free Reward Claimed:* ${claimedReward.item}` : "";
+    const loyaltyText = loyaltyDiscount > 0 ? `\n*Loyalty Discount:* ${loyaltyTier.name} (${loyaltyTier.discount * 100}%)` : "";
 
     const waText = `🚨 *NEW ORDER ALERT* (#${orderId.slice(1,5).toUpperCase()})\n\n`
                + `*Type:* ${orderType === 'parcel' ? '🛍️ Parcel (Delivery ₹40)' : `🍽️ Table ${table}`}\n`
                + `*Customer:* ${custName} (${custPhone})\n`
                + (orderType === 'parcel' ? `*Address:* ${custAddress}\n\n` : `\n`)
                + `*Items:* ${itemStrings}${claimedText}\n`
-               + (appliedDiscount > 0 ? `*Discount:* ${appliedDiscount}%\n` : ``)
-               + `*Total Bill:* ₹${cartTotal}\n`
+               + (appliedDiscount > 0 ? `*Coupon Discount:* ${appliedDiscount}%\n` : ``)
+               + (loyaltyDiscount > 0 ? `*Loyalty Discount:* ${loyaltyTier.name} (${loyaltyTier.discount * 100}%)\n` : ``)
+               + `*Total Bill:* ₹${finalTotal}\n`
                + (notes ? `*Notes:* ${notes}` : ``);
                
     const link = document.createElement('a'); link.href = `https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`; link.target = '_blank'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
 
-    const order = { id: orderId, table, orderType, customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "" }, items: cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty }; }), claimedReward: claimedReward ? claimedReward.item : null, rewardUsedCoins: claimedReward ? claimedReward.cost : 0, earnedCoins: newEarnedCoins, discount: appliedDiscount, deliveryFee, notes, payment: "cash", status: "new", paid: false, createdAt: Date.now() };
+    const order = { 
+      id: orderId, 
+      table, 
+      orderType, 
+      customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "" }, 
+      items: cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty }; }), 
+      claimedReward: claimedReward ? claimedReward.item : null, 
+      rewardUsedCoins: claimedReward ? claimedReward.cost : 0, 
+      earnedCoins: newEarnedCoins, 
+      discount: appliedDiscount, 
+      loyaltyDiscount: loyaltyDiscount,
+      loyaltyTier: loyaltyTier.name,
+      deliveryFee, 
+      notes, 
+      payment: "cash", 
+      status: "new", 
+      paid: false, 
+      createdAt: Date.now() 
+    };
     
     await placeOrder(order, claimedReward ? claimedReward.cost : 0); 
     setMyOrderIds([...myOrderIds, order.id]); 
@@ -434,8 +715,13 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     await bookEvent(newBooking); setConfirmedBooking(newBooking); setBookData({ name: "", phone: "", date: "", time: "", guests: "" }); showToast("✅ Booking Request Sent!", 'success');
   }
 
+  const primaryBtn = { background: COLORS.copper, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.3s ease", boxShadow: "0 4px 12px rgba(226,89,56,0.2)" };
+  const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", transition: "all 0.2s ease" };
+
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: cartCount ? 120 : 60, background: "var(--bg-color, #fff)", minHeight: "100vh", position: "relative" }}>
+      {toast && <Toast message={toast} type={toastType} />}
+
       {promo && promo.show && promo.text && ( <div className="flash-banner" style={{ color: "#fff", padding: "10px 16px", textAlign: "center", fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700 }}>🎉 {promo.text}</div> )}
       
       <button onClick={() => {requestWaiter(table); showToast("🔔 Waiter has been notified!", 'success');}} aria-label="Call waiter to your table" style={{ position: "fixed", top: 80, right: 16, background: COLORS.rust, color: "#fff", border: "none", borderRadius: 20, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 8px 24px rgba(192,57,43,0.4)", cursor: "pointer", zIndex: 60, fontSize: 13, fontWeight: 800 }} className="smooth-transition hover-lift scale-bounce" title="Call Waiter">🔔 Waiter Call</button>
@@ -473,27 +759,39 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
         {filteredItems.length === 0 && <EmptyState reason={emptyReason} />}
 
-        {filteredItems.map((item) => (
-          <div key={item.id} style={{ display: "flex", justifyContent: "space-between", padding: "16px 0", borderBottom: `1px solid ${COLORS.line}`, gap: 12, opacity: item.available ? 1 : 0.6 }} className="smooth-slide-up">
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                <VegDot veg={item.veg} />
-                {item.portion && <span style={{fontSize: 11, background: COLORS.paper2, color: COLORS.text, padding: "2px 6px", borderRadius: 4, fontWeight: 700}}>{item.portion}</span>}
-                {item.isBestseller && <span style={{fontSize: 11, background: COLORS.copperLight, color: COLORS.copperDark, padding: "2px 6px", borderRadius: 4, fontWeight: 800}}>🔥 Bestseller</span>}
-                {!item.available && <span style={{fontSize: 11, color: COLORS.rust, fontWeight: 800}}>Out of Stock</span>}
+        {filteredItems.map((item) => {
+          const isFavorite = favorites.includes(item.id);
+          return (
+            <div key={item.id} style={{ display: "flex", justifyContent: "space-between", padding: "16px 0", borderBottom: `1px solid ${COLORS.line}`, gap: 12, opacity: item.available ? 1 : 0.6 }} className="smooth-slide-up">
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                  <VegDot veg={item.veg} />
+                  {item.portion && <span style={{fontSize: 11, background: COLORS.paper2, color: COLORS.text, padding: "2px 6px", borderRadius: 4, fontWeight: 700}}>{item.portion}</span>}
+                  {item.isBestseller && <span style={{fontSize: 11, background: COLORS.copperLight, color: COLORS.copperDark, padding: "2px 6px", borderRadius: 4, fontWeight: 800}}>🔥 Bestseller</span>}
+                  {!item.available && <span style={{fontSize: 11, color: COLORS.rust, fontWeight: 800}}>Out of Stock</span>}
+                </div>
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 16, color: COLORS.ink, fontWeight: 700, marginBottom: 2 }}>{item.name}</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: COLORS.copper, fontWeight: 800, marginBottom: 4 }}>{inr(item.price)}</div>
+                {item.desc && <div style={{ fontSize: 12, color: COLORS.textLight, lineHeight: 1.4, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.desc}</div>}
               </div>
-              <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 16, color: COLORS.ink, fontWeight: 700, marginBottom: 2 }}>{item.name}</div>
-              <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: COLORS.copper, fontWeight: 800, marginBottom: 4 }}>{inr(item.price)}</div>
-              {item.desc && <div style={{ fontSize: 12, color: COLORS.textLight, lineHeight: 1.4, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.desc}</div>}
-            </div>
-            <div style={{ position: "relative", width: 90, height: 90, flexShrink: 0 }}>
-              <img src={item.image} alt={item.name} loading="lazy" decoding="async" className="keep-color" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 14, filter: item.available ? 'none' : 'grayscale(100%)' }} />
-              <div style={{ position: "absolute", bottom: -12, left: "50%", transform: "translateX(-50%)", zIndex: 2 }}>
-                <AddBtnStepper qty={cart[item.id] || 0} onChange={(q) => handleSetQty(item.id, q)} available={item.available} />
+              <div style={{ position: "relative", width: 90, height: 90, flexShrink: 0 }}>
+                <img src={item.image} alt={item.name} loading="lazy" decoding="async" className="keep-color" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 14, filter: item.available ? 'none' : 'grayscale(100%)' }} />
+                <div style={{ position: "absolute", top: -4, right: -4 }}>
+                  <button
+                    onClick={() => toggleFavorite(item.id)}
+                    style={{ background: 'white', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', cursor: 'pointer' }}
+                    aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <span style={{ fontSize: 16, color: isFavorite ? '#FFD700' : '#CCC' }}>{isFavorite ? '⭐' : '☆'}</span>
+                  </button>
+                </div>
+                <div style={{ position: "absolute", bottom: -12, left: "50%", transform: "translateX(-50%)", zIndex: 2 }}>
+                  <AddBtnStepper qty={cart[item.id] || 0} onChange={(q) => handleSetQty(item.id, q)} available={item.available} />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div style={{ textAlign: "center", padding: "20px 20px 60px", fontSize: 13, color: COLORS.textLight, lineHeight: 1.6, fontWeight: 500 }}>
@@ -522,8 +820,8 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       )}
 
       {cartCount > 0 && !cartOpen && !activeModal && (
-        <button onClick={() => setCartOpen(true)} aria-label={`View cart, ${cartCount} items, total ${inr(cartTotal)}`} style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", width: "calc(100% - 32px)", maxWidth: 400, background: COLORS.sage, color: "#fff", border: "none", borderRadius: 16, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: 800, fontSize: 16, cursor: "pointer", zIndex: 5, boxShadow: "0 12px 28px rgba(74,124,89,0.35)" }} className="smooth-transition hover-lift">
-          <span>{cartCount} item{cartCount > 1 ? "s" : ""}</span><span>{inr(cartTotal)} ➔</span>
+        <button onClick={() => setCartOpen(true)} aria-label={`View cart, ${cartCount} items, total ${inr(finalTotal)}`} style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", width: "calc(100% - 32px)", maxWidth: 400, background: COLORS.sage, color: "#fff", border: "none", borderRadius: 16, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: 800, fontSize: 16, cursor: "pointer", zIndex: 5, boxShadow: "0 12px 28px rgba(74,124,89,0.35)" }} className="smooth-transition hover-lift">
+          <span>{cartCount} item{cartCount > 1 ? "s" : ""}</span><span>{inr(finalTotal)} ➔</span>
         </button>
       )}
 
@@ -613,11 +911,15 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <button onClick={handleApplyCoupon} style={{ background: COLORS.gold, color: COLORS.ink, border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer" }}>Apply</button>
                 </div>
 
+                {/* Enhanced: Loyalty Display with Tier */}
                 <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', borderRadius: 16, padding: 16, marginBottom: 20, border: `1.5px solid ${COLORS.gold}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div style={{fontWeight: 800, fontSize: 16, color: COLORS.ink}}>🪙 EatCoins</div>
                     {custPhone.length >= 10 ? (
-                      <div style={{fontSize: 14, fontWeight: 800, color: COLORS.sageDark}}>Bal: {currentCoins}</div>
+                      <div>
+                        <div style={{fontSize: 14, fontWeight: 800, color: COLORS.sageDark}}>Bal: {currentCoins}</div>
+                        <div style={{fontSize: 11, color: COLORS.gold, fontWeight: 700}}>{loyaltyTier.name} ({loyaltyTier.discount * 100}% off)</div>
+                      </div>
                     ) : (
                       <div style={{fontSize: 12, color: COLORS.textLight}}>Enter Phone to check</div>
                     )}
@@ -648,6 +950,11 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <div style={{ fontSize: 12, color: COLORS.copper, fontWeight: 700, textAlign: 'center', marginTop: 8 }}>
                     🎁 You will earn +{newEarnedCoins} EatCoins on this order!
                   </div>
+                  {loyaltyDiscount > 0 && (
+                    <div style={{ fontSize: 13, color: COLORS.sage, fontWeight: 800, textAlign: 'center', marginTop: 4 }}>
+                      💰 {loyaltyTier.name} Discount: -{inr(loyaltyDiscount)}
+                    </div>
+                  )}
                 </div>
 
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special cooking instructions?" style={{ ...inputStyle, marginBottom: 20, resize: "none" }} rows={2} />
@@ -658,7 +965,12 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   </div>
                   {appliedDiscount > 0 && (
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.success }}>
-                      <span>Discount ({appliedDiscount}%)</span><span>-{inr(discountAmount)}</span>
+                      <span>Coupon Discount ({appliedDiscount}%)</span><span>-{inr(discountAmount)}</span>
+                    </div>
+                  )}
+                  {loyaltyDiscount > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.gold }}>
+                      <span>Loyalty Discount ({loyaltyTier.name})</span><span>-{inr(loyaltyDiscount)}</span>
                     </div>
                   )}
                   {orderType === "parcel" && (
@@ -667,7 +979,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     </div>
                   )}
                   <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 18, borderTop: `1px solid ${COLORS.line}`, paddingTop: 8, marginTop: 4 }}>
-                    <span>Grand Total</span><span style={{ fontFamily: "'JetBrains Mono', monospace", color: COLORS.copper }}>{inr(cartTotal)}</span>
+                    <span>Grand Total</span><span style={{ fontFamily: "'JetBrains Mono', monospace", color: COLORS.copper }}>{inr(finalTotal)}</span>
                   </div>
                   {claimedReward && (
                     <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 14, color: COLORS.success, marginTop: 4 }}>
@@ -678,7 +990,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 
                 {orderType === "parcel" && (
                   <div style={{ textAlign: "center", padding: "20px", background: COLORS.paper, border: `2px dashed ${COLORS.line}`, borderRadius: 16, marginBottom: 20 }}>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.ink, marginBottom: 12 }}>Scan to Pay {inr(cartTotal)}</div>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.ink, marginBottom: 12 }}>Scan to Pay {inr(finalTotal)}</div>
                     <img src={cartQrSrc} alt="UPI QR Code" loading="lazy" style={{ width: 160, height: 160, borderRadius: 14, border: '4px solid #fff', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }} />
                   </div>
                 )}
@@ -686,6 +998,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               </>
             )}
 
+            {/* Gallery Modal */}
             {activeModal === 'gallery' && (
               <>
                 <ModalHeader title="🖼️ Photo Gallery" onClose={() => setActiveModal(null)} />
@@ -823,52 +1136,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   );
 }
 
-function MyOrderStats({ myOrders, loyaltyCoins }) {
-  if (!myOrders || myOrders.length === 0) return null;
-  const totalSpent = myOrders.reduce((s, o) => s + o.items.reduce((a, i) => a + i.price * i.qty, 0), 0);
-  const favoriteDish = (() => {
-    const dishes = {};
-    myOrders.forEach(o => o.items.forEach(i => { dishes[i.name] = (dishes[i.name] || 0) + i.qty; }));
-    const sorted = Object.entries(dishes).sort((a, b) => b[1] - a[1]);
-    return sorted.length > 0 ? sorted[0][0] : "—";
-  })();
-
-  return (
-    <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', padding: 16, borderRadius: 14, marginBottom: 20, border: `1px solid ${COLORS.line}` }}>
-      <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 12, color: COLORS.ink }}>📊 Your Journey</div>
-      <div style={{ display: 'grid', gap: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
-          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Total Spent</span>
-          <strong style={{ color: COLORS.copper }}>{inr(totalSpent)}</strong>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
-          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Orders</span>
-          <strong style={{ color: COLORS.sage }}>{myOrders.length}</strong>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
-          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Favorite</span>
-          <strong style={{ color: COLORS.ink, fontSize: 12 }}>{favoriteDish}</strong>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
-          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>EatCoins</span>
-          <strong style={{ color: COLORS.gold }}>{loyaltyCoins} 🪙</strong>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SidebarBtn({ icon, text, onClick, highlight }) {
-  return (
-    <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 20px", borderRadius: 14, background: highlight ? COLORS.copperLight : COLORS.paper, border: highlight ? `1.5px solid ${COLORS.copper}` : `1px solid ${COLORS.line}`, color: highlight ? COLORS.copperDark : COLORS.ink, fontSize: 15, fontWeight: 700, cursor: "pointer", textAlign: "left", transition: "all 0.2s ease", width: '100%', boxShadow: highlight ? "0 4px 12px rgba(226,89,56,0.15)" : "none" }}>
-      <span style={{ fontSize: 20 }}>{icon}</span> <span>{text}</span>
-    </button>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════════════
-   2. STAFF VIEW
-═══════════════════════════════════════════════════════════════════════════════════ */
+// ============================================
+// 11. STAFF VIEW (ENHANCED WITH KEYBOARD SHORTCUTS)
+// ============================================
 
 const STAFF_SHORTCUTS = {
   'Ctrl+K': 'Focus first order',
@@ -924,6 +1194,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
     prevCallsCountRef.current = activeCallsCount;
   }, [activeCallsCount]);
 
+  // Enhanced: Keyboard shortcuts for staff (AREA 2)
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'k' && e.ctrlKey) { e.preventDefault(); const firstOrder = active[0]; if (firstOrder) setSelectedOrderId(firstOrder.id); }
@@ -935,14 +1206,14 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedOrderId, active]);
+  }, [selectedOrderId, active, advanceStatus]);
 
   const handlePrintReceipt = (order) => {
     const printWindow = window.open('', '_blank', 'width=300,height=600');
     if (!printWindow) return;
     
     const itemsHtml = order.items.map(it => `<tr><td>${it.qty}x ${it.name}</td><td style="text-align:right">₹${it.price * it.qty}</td></tr>`).join('');
-    const totalAmount = order.items.reduce((s, it) => s + (it.price * it.qty), 0);
+    const totalAmount = order.items.reduce((s, it) => s + (it.price * it.qty), 0) + (order.deliveryFee || 0) - (order.loyaltyDiscount || 0);
     
     printWindow.document.write(`
       <html>
@@ -954,6 +1225,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
             table { width: 100%; border-collapse: collapse; margin-top: 10px; }
             th, td { padding: 4px 0; border-bottom: 1px dashed #000; }
             .total { font-weight: bold; font-size: 14px; text-align: right; margin-top: 10px; }
+            .discount { color: green; text-align: right; }
           </style>
         </head>
         <body>
@@ -965,13 +1237,17 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
             ${itemsHtml}
           </table>
           ${order.deliveryFee ? `<p>Delivery Fee: ₹${order.deliveryFee}</p>` : ''}
-          <div class="total">Total: ₹${totalAmount + (order.deliveryFee || 0)}</div>
+          ${order.loyaltyDiscount ? `<p style="color:green">Loyalty Discount: -₹${order.loyaltyDiscount}</p>` : ''}
+          ${order.loyaltyTier ? `<p style="color:green">Tier: ${order.loyaltyTier}</p>` : ''}
+          <div class="total">Total: ₹${totalAmount}</div>
           <script>window.print(); setTimeout(() => window.close(), 500);</script>
         </body>
       </html>
     `);
     printWindow.document.close();
   };
+
+  const primaryBtn = { background: COLORS.copper, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.3s ease", boxShadow: "0 4px 12px rgba(226,89,56,0.2)" };
 
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1200, margin: "0 auto" }}>
@@ -1026,6 +1302,11 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
                             🎁 FREE: {o.claimedReward}
                           </div>
                         )}
+                        {o.loyaltyTier && (
+                          <div style={{ fontSize: 12, marginTop: 4, padding: '4px 10px', background: isSelected ? 'rgba(255,255,255,0.15)' : COLORS.gold, color: isSelected ? '#fff' : COLORS.ink, borderRadius: 6, fontWeight: 700, display: 'inline-block' }}>
+                            👑 {o.loyaltyTier}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: 'flex', gap: 12, marginTop: 20, alignItems: 'center' }}>
                         <div style={{ flex: 1 }}><SlideButton text={status === "new" ? "Slide to Prep (P)" : status === "preparing" ? "Slide to Ready (R)" : "Slide to Serve"} bg={isSelected ? '#fff' : STATUS_COLOR[status]} onComplete={() => advanceStatus(o.id, status)} /></div>
@@ -1043,9 +1324,9 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════════════
-   3. ADMIN VIEW
-═══════════════════════════════════════════════════════════════════════════════════ */
+// ============================================
+// 12. ADMIN VIEW (ENHANCED)
+// ============================================
 
 function KitchenMetrics({ filteredOrders }) {
   const servedOrders = filteredOrders.filter(o => o.status === "served");
@@ -1114,9 +1395,13 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const [newGalleryImg, setNewGalleryImg] = useState("");
   const [heroImgInput, setHeroImgInput] = useState(settings?.heroImage || "");
 
-  const filteredOrders = orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
-  const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0), 0);
-  const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0), 0) / filteredOrders.length) : 0;
+  // Enhanced: Memoized filtered orders for performance (AREA 4)
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
+  }, [orders, filterDate]);
+
+  const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0), 0);
+  const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
 
   const handleAddOffer = () => { if(newOffer.title) { addOffer({ id: uid("off"), title: newOffer.title, desc: newOffer.desc }); setNewOffer({ title: "", desc: "" }); } }
 
@@ -1178,15 +1463,16 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   };
 
   const handleExportCSV = () => {
-    const rows = [["Time", "Type", "Items", "Total", "Paid"]];
+    const rows = [["Time", "Type", "Items", "Total", "Paid", "Loyalty Tier"]];
     filteredOrders.forEach(o => {
-      const total = o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0);
+      const total = o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0);
       rows.push([
         new Date(o.createdAt).toLocaleTimeString('en-IN'),
         o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`,
         o.items.map(it => `${it.qty}x ${it.name}`).join("; "),
         total,
-        o.paid ? "Yes" : "No"
+        o.paid ? "Yes" : "No",
+        o.loyaltyTier || "—"
       ]);
     });
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -1195,6 +1481,11 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
     link.download = `orders_${filterDate}.csv`;
     link.click();
   };
+
+  const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", transition: "all 0.2s ease" };
+  const primaryBtn = { background: COLORS.copper, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer", transition: "all 0.3s ease", boxShadow: "0 4px 12px rgba(226,89,56,0.2)" };
+  const th = { padding: "12px 14px", borderBottom: `2px solid ${COLORS.line}`, fontFamily: "'Plus Jakarta Sans', sans-serif" }; 
+  const td = { padding: "12px 14px", borderBottom: `1px solid ${COLORS.line}` };
 
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1100, margin: "0 auto" }}>
@@ -1351,10 +1642,10 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
 
           <h3 style={{ marginTop: 40, fontFamily: "'Outfit', sans-serif" }}>Top Customers (Coin Balance)</h3>
           <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 12, overflow: 'hidden' }}>
-            <thead><tr style={{ textAlign: "left", background: COLORS.paper }}><th style={th}>Customer</th><th style={th}>Phone</th><th style={th}>EatCoins 🪙</th></tr></thead>
+            <thead><tr style={{ textAlign: "left", background: COLORS.paper }}><th style={th}>Customer</th><th style={th}>Phone</th><th style={th}>EatCoins 🪙</th><th style={th}>Tier</th></tr></thead>
             <tbody>
               {loyaltyUsers.sort((a,b)=>b.coins-a.coins).map((u, i) => (
-                <tr key={i}><td style={td}>{u.name}</td><td style={td}>{u.phone}</td><td style={{...td, fontWeight: 800, color: COLORS.sageDark}}>{u.coins}</td></tr>
+                <tr key={i}><td style={td}>{u.name}</td><td style={td}>{u.phone}</td><td style={{...td, fontWeight: 800, color: COLORS.sageDark}}>{u.coins}</td><td style={td}>{getLoyaltyTier(u.coins).name}</td></tr>
               ))}
             </tbody>
           </table>
@@ -1416,7 +1707,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
       {tab === "orders" && (
         <div style={{ overflowX: "auto", borderRadius: 16, border: `1px solid ${COLORS.line}`, boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
-            <thead><tr style={{ textAlign: "left", color: COLORS.textLight, fontSize: 13, background: COLORS.paper, fontWeight: 800 }}><th style={th}>Time</th><th style={th}>Table/Type</th><th style={th}>Items</th><th style={th}>Total</th><th style={th}>Action</th></tr></thead>
+            <thead><tr style={{ textAlign: "left", color: COLORS.textLight, fontSize: 13, background: COLORS.paper, fontWeight: 800 }}><th style={th}>Time</th><th style={th}>Table/Type</th><th style={th}>Items</th><th style={th}>Total</th><th style={th}>Tier</th><th style={th}>Action</th></tr></thead>
             <tbody>
               {[...filteredOrders].sort((a, b) => b.createdAt - a.createdAt).map((o, idx) => (
                 <tr key={o.id} style={{ background: idx % 2 === 0 ? "#fff" : COLORS.paper }}>
@@ -1426,7 +1717,8 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
                     {o.items.map((it) => `${it.qty}×${it.name}`).join(", ")}
                     {o.claimedReward && <span style={{display: 'block', color: COLORS.sageDark, fontWeight: 800, fontSize: 12, marginTop: 4}}>🎁 Free: {o.claimedReward}</span>}
                   </td>
-                  <td style={{...td, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 15}}>{inr(o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0))}</td>
+                  <td style={{...td, fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 15}}>{inr(o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0))}</td>
+                  <td style={td}>{o.loyaltyTier || "—"}</td>
                   <td style={td}><button onClick={() => markPaid(o.id, !o.paid)} style={{ border: `1.5px solid ${o.paid ? COLORS.sage : COLORS.line}`, background: o.paid ? COLORS.sage : "transparent", color: o.paid ? "#fff" : COLORS.ink, borderRadius: 10, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>{o.paid ? "✓ Paid" : "Mark paid"}</button></td>
                 </tr>
               ))}
@@ -1455,16 +1747,101 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   );
 }
 
-function StatCard({ label, value, icon, color }) { 
-  return <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 18, padding: "24px 20px", transition: "all 0.3s ease", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }} className="smooth-transition hover-lift">
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}><div style={{ fontSize: 13, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.05em" }}>{label}</div><span style={{ fontSize: 28 }}>{icon}</span></div>
-    <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, fontWeight: 800, color: color }}>{value}</div>
-  </div>; 
-}
+// ============================================
+// 13. DEFAULT MENU DATA
+// ============================================
 
-/* ═══════════════════════════════════════════════════════════════════════════════════
-   4. MAIN APP COMPONENT
-═══════════════════════════════════════════════════════════════════════════════════ */
+const DEFAULT_MENU = [
+  mi("d1", "Mint Mojito", 90, "Drinks", true, "Refreshing blend of fresh mint, lemon, and sparkling soda.", "", true), 
+  mi("d2", "Blue Lagoon", 90, "Drinks", true, "Tropical blue curacao cooler with a citrusy kick."), 
+  mi("d3", "Vanilla Shake", 120, "Drinks", true, "Classic thick and creamy vanilla milkshake."), 
+  mi("d4", "Chocolate Shake", 130, "Drinks", true, "Rich cocoa blended with milk and ice cream."), 
+  mi("d5", "Kitkat Oreo Shake", 150, "Drinks", true, "Ultimate crunch of KitKat and Oreo cookies."), 
+  mi("d9", "Cold Coffee", 120, "Drinks", true, "Chilled, frothy coffee perfection.", "", true), 
+  mi("d10", "Cold Drink", 50, "Drinks", true, "Chilled aerated beverage."),
+  mi("f1", "Veg Burger", 90, "Fun Food", true, "Crispy veggie patty with fresh lettuce and creamy mayo."), 
+  mi("f2", "Eat & Park Special Pizza", 280, "Fun Food", true, "Loaded with exotic veggies, extra cheese and secret sauce.", "", true), 
+  mi("f3", "Veg Roll", 90, "Fun Food", true, "Spiced veggies wrapped in a soft, flaky paratha."), 
+  mi("f4", "Paneer Roll", 100, "Fun Food", true, "Tandoori paneer chunks rolled to perfection."), 
+  mi("f8", "Eat & Park Egg Roll", 100, "Fun Food", false, "Double egg wrapped with crispy onions and sauces."), 
+  mi("f9", "Eat & Park Chicken Roll", 150, "Fun Food", false, "Juicy chicken tikka rolled in a crispy paratha."), 
+  mi("f11", "White Sauce Pasta", 180, "Fun Food", true, "Penne in a rich, creamy, and cheesy garlic sauce."), 
+  mi("f14", "Veg Sandwich", 120, "Fun Food", true, "Freshly grilled with layers of healthy veggies and cheese."), 
+  mi("f15", "Chicken Sandwich", 150, "Fun Food", false, "Grilled sandwich stuffed with creamy chicken filling."),
+  mi("cs1", "Paneer Chilli", 240, "Chinese Starter", true, "Crispy paneer tossed in spicy soy and garlic sauce.", "Dry / Gravy", true), 
+  mi("cs2", "Mushroom Chilli", 250, "Chinese Starter", true, "Fresh button mushrooms in a tangy chili glaze.", "Dry / Gravy"), 
+  mi("cs3", "Veg Manchurian", 180, "Chinese Starter", true, "Vegetable dumplings in a classic dark soy gravy.", "Dry / Gravy"), 
+  mi("cs8", "Chicken Chilli", 240, "Chinese Starter", false, "Diced chicken tossed with capsicum, onion, and hot sauces.", "Dry / Gravy", true), 
+  mi("cs9", "Chicken Manchurian", 260, "Chinese Starter", false, "Minced chicken balls in sweet and savory Chinese sauce.", "Dry / Gravy"), 
+  mi("cs10", "Chicken Lollipop", 300, "Chinese Starter", false, "Crispy fried chicken wings served with hot garlic dip.", "Dry / Gravy"), 
+  mi("mg1", "Tandoori Chicken", 450, "Mughlai", false, "Classic bone-in chicken marinated in yogurt and Indian spices, roasted in clay oven."), 
+  mi("mg3", "Chicken Tikka", 350, "Mughlai", false, "Boneless chicken chunks marinated in fiery spices and grilled."), 
+  mi("t1", "Paneer Tikka", 299, "Tandoori", true, "Cottage cheese marinated in spices and grilled in a tandoor.", "", true), 
+  mi("t2", "Mushroom Tikka", 285, "Tandoori", true, "Juicy mushrooms roasted with smoky tandoori flavors."),
+  mi("s1", "Tomato Soup", 120, "Soup", true, "Warm, creamy, and comforting fresh tomato soup."), 
+  mi("s3", "Veg Manchow Soup", 120, "Soup", true, "Spicy and thick soup topped with crispy fried noodles."), 
+  mi("s6", "Chicken Manchow Soup", 150, "Soup", false, "Rich chicken broth with veggies and crispy noodles."), 
+  mi("b1", "Tandoori Roti", 15, "Indian Bread", true, "Whole wheat bread baked in a clay oven."), 
+  mi("b2", "Tandoori Butter Roti", 20, "Indian Bread", true, "Hot tandoori roti glazed with fresh butter."), 
+  mi("b6", "Plain Naan", 50, "Indian Bread", true, "Soft and fluffy refined flour Indian bread."), 
+  mi("b7", "Butter Naan", 60, "Indian Bread", true, "Classic naan generously brushed with butter."), 
+  mi("b8", "Garlic Naan", 70, "Indian Bread", true, "Naan topped with minced garlic and fresh coriander.", "", true), 
+  mi("sn3", "French Fries", 100, "Snacks", true, "Crispy golden potato fries."), 
+  mi("sn5", "Crispy Chilli Potato", 160, "Snacks", true, "Fried potato fingers tossed in sweet and spicy chili sauce."), 
+  mi("sn9", "Chicken Pakoda", 200, "Snacks", false, "Crunchy batter-fried chicken bites."),
+  mi("cm1", "Veg Chowmein", 130, "Chinese Mains", true, "Wok-tossed noodles with shredded vegetables."), 
+  mi("cm2", "Veg Hakka Noodles", 160, "Chinese Mains", true, "Classic non-spicy noodles tossed with veggies."), 
+  mi("cm8", "Chicken Noodles", 180, "Chinese Mains", false, "Flavorful noodles stir-fried with juicy chicken bits."), 
+  mi("cm12", "Veg Fried Rice", 170, "Chinese Mains", true, "Aromatic rice wok-tossed with fresh finely chopped veggies."), 
+  mi("cm15", "Chicken Fried Rice", 200, "Chinese Mains", false, "Classic Chinese style rice tossed with chicken and egg."), 
+  mi("p2", "Jeera Rice", 110, "Pulao", true, "Basmati rice tempered with roasted cumin seeds."), 
+  mi("p3", "Veg Pulao", 180, "Pulao", true, "Fragrant rice cooked with mixed vegetables and whole spices."), 
+  mi("pn1", "Paneer Masala", 250, "Paneer & Mushroom", true, "Paneer cooked in a rich onion-tomato spiced gravy."), 
+  mi("pn4", "Paneer Karahi", 260, "Paneer & Mushroom", true, "Cottage cheese and bell peppers cooked in a traditional iron wok."), 
+  mi("pn6", "Paneer Butter Masala", 260, "Paneer & Mushroom", true, "Soft paneer in a creamy, slightly sweet makhani gravy."), 
+  mi("pn16", "Mushroom Masala", 250, "Paneer & Mushroom", true, "Earthy mushrooms in a robust and spicy masala."), 
+  mi("pn17", "Mushroom Karahi", 260, "Paneer & Mushroom", true, "Mushrooms and diced capsicum tossed in kadhai spices."), 
+  mi("nv1", "Chicken Dehati", 550, "Chicken, Mutton, Fish & Egg", false, "Spicy, homestyle rustic chicken curry with bold flavors."), 
+  mi("nv2", "Chicken Curry", 280, "Chicken, Mutton, Fish & Egg", false, "Classic, comforting Indian style chicken curry."), 
+  mi("nv6", "Chicken Do Pyaza", 280, "Chicken, Mutton, Fish & Egg", false, "Chicken cooked with a generous amount of crunchy onions."), 
+  mi("nv8", "Chicken Butter Masala", 350, "Chicken, Mutton, Fish & Egg", false, "Tandoori chicken pieces in a rich, buttery tomato gravy.", "", true), 
+  mi("nv10", "Mutton Curry", 340, "Chicken, Mutton, Fish & Egg", false, "Tender mutton slow-cooked in traditional Indian spices."), 
+  mi("nv12", "Mutton Handi", 650, "Chicken, Mutton, Fish & Egg", false, "Mutton cooked slowly in a sealed earthen pot for rich aroma.", "500g", true), 
+  mi("nv13", "Mutton Handi", 1200, "Chicken, Mutton, Fish & Egg", false, "Mutton cooked slowly in a sealed earthen pot for rich aroma.", "1 Kg"), 
+  mi("nv15", "Mutton Dehati", 440, "Chicken, Mutton, Fish & Egg", false, "Village style spicy and robust mutton preparation."), 
+  mi("nv16", "Mutton Ahuna", 1250, "Chicken, Mutton, Fish & Egg", false, "Champaran special whole garlic and mutton cooked in a clay pot."), 
+  mi("nv19", "Fish Curry", 120, "Chicken, Mutton, Fish & Egg", false, "Homestyle fish cooked in a tangy mustard and tomato gravy.", "Small"), 
+  mi("nv20", "Fish Curry", 220, "Chicken, Mutton, Fish & Egg", false, "Homestyle fish cooked in a tangy mustard and tomato gravy.", "Large"), 
+  mi("nv25", "Egg Curry", 200, "Chicken, Mutton, Fish & Egg", false, "Boiled eggs simmered in a flavorful spiced gravy.", "4 pc"), 
+  mi("br1", "Veg Biryani", 180, "Biryani & Thali", true, "Aromatic basmati rice layered with spiced vegetables."), 
+  mi("br5", "Chicken Biryani", 210, "Biryani & Thali", false, "Classic fragrant rice and chicken cooked with dum technique.", "", true), 
+  mi("br12", "Mutton Biryani", 280, "Biryani & Thali", false, "Rich, royal biryani made with succulent mutton pieces."), 
+  mi("br15", "Veg Thali", 250, "Biryani & Thali", true, "A complete meal platter with flatbreads, rice, sides, and curries.", "2 Roti, Half Rice, Manchurian, Paneer, Salad, Aachar, Dal"), 
+  mi("br16", "Non Veg Thali", 280, "Biryani & Thali", false, "Hearty non-veg platter for a fulfilling meal experience.", "2 Roti, Half Rice, Chicken, Salad, Aachar"),
+  mi("al10", "Dal Fry", 70, "Aloo, Dal & Sides", true, "Yellow lentils tempered with cumin and garlic."), 
+  mi("al11", "Dal Tadka", 100, "Aloo, Dal & Sides", true, "Dhaba-style dal with a smoky double tadka of ghee and spices."), 
+  mi("al14", "Veg Raita", 60, "Aloo, Dal & Sides", true, "Cooling yogurt mixed with finely chopped cucumber and onions."), 
+  mi("al15", "Green Salad", 80, "Aloo, Dal & Sides", true, "Fresh slices of cucumber, tomato, onion, and carrots."), 
+  mi("mo1", "Veg Momo", 80, "Momo", true, "Steamed dumplings filled with finely minced vegetables.", "Steam"), 
+  mi("mo2", "Veg Momo", 100, "Momo", true, "Crispy fried vegetable dumplings.", "Fry"), 
+  mi("mo11", "Chicken Momo", 150, "Momo", false, "Steamed dumplings stuffed with juicy minced chicken.", "Steam"), 
+  mi("mo12", "Chicken Momo", 160, "Momo", false, "Golden fried chicken dumplings.", "Fry")
+];
+
+const DEFAULT_OFFERS = [
+  { id: "off1", title: "Flat 20% OFF 🍜", desc: "Enjoy flat 20% off on all Chinese items today!" },
+  { id: "off2", title: "Free Cold Drink 🥤", desc: "Get a free cold drink on orders above ₹499." }
+];
+
+const DEFAULT_GALLERY = [
+  "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80",
+  "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80",
+  "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=400&q=80"
+];
+
+// ============================================
+// 14. MAIN APP COMPONENT (ENHANCED)
+// ============================================
 
 export default function App() {
   const [role, setRole] = useState("customer");
@@ -1586,8 +1963,6 @@ export default function App() {
       await setDoc(doc(db, "orders", order.id), order);
     } catch (e) { console.error(e); }
 
-    // Removed manual setOrdersState here to prevent double order rendering, as Firestore onSnapshot handles it globally.
-
     if(order.customer.phone && order.customer.phone.length >= 10) {
        const netCoins = order.earnedCoins - rewardCost;
        const existingUserIndex = loyaltyUsers.findIndex(u => u.phone === order.customer.phone);
@@ -1649,31 +2024,33 @@ export default function App() {
   }
 
   return (
-    <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-      <style>{FONTS}</style>
-      <div className="app-content">
-        {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} />}
-        {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} />}
-        {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} />}
-        
-        {!["customer", "staff", "admin"].includes(role) && (
-          <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} />
-        )}
-      </div>
+    <ErrorBoundary>
+      <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        <style>{FONTS}</style>
+        <div className="app-content">
+          {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} />}
+          {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} />}
+          {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} />}
+          
+          {!["customer", "staff", "admin"].includes(role) && (
+            <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} />
+          )}
+        </div>
 
-      {showPinModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowPinModal(false)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center", boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }} className="slide-up">
-            <div style={{fontSize: 36, marginBottom: 16}}>🔒</div>
-            <h3 style={{ margin: "0 0 20px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700 }}>Enter Security PIN ({targetRole.toUpperCase()})</h3>
-            <input type="password" placeholder="••••" autoFocus value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }} aria-label="Security PIN" style={{ ...inputStyle, textAlign: "center", fontSize: 32, letterSpacing: 12, marginBottom: 24, fontWeight: 800, padding: "16px" }} />
-            <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => { setShowPinModal(false); setPinInput(""); }} style={{ flex: 1, padding: "14px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-              <button onClick={handlePinSubmit} style={{ flex: 1, padding: "14px", borderRadius: 12, background: COLORS.ink, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Login</button>
+        {showPinModal && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowPinModal(false)}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center", boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }} className="slide-up">
+              <div style={{fontSize: 36, marginBottom: 16}}>🔒</div>
+              <h3 style={{ margin: "0 0 20px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700 }}>Enter Security PIN ({targetRole.toUpperCase()})</h3>
+              <input type="password" placeholder="••••" autoFocus value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }} aria-label="Security PIN" style={{ ...inputStyle, textAlign: "center", fontSize: 32, letterSpacing: 12, marginBottom: 24, fontWeight: 800, padding: "16px" }} />
+              <div style={{ display: "flex", gap: 12 }}>
+                <button onClick={() => { setShowPinModal(false); setPinInput(""); }} style={{ flex: 1, padding: "14px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+                <button onClick={handlePinSubmit} style={{ flex: 1, padding: "14px", borderRadius: 12, background: COLORS.ink, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Login</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }
