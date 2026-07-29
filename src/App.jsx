@@ -3,7 +3,7 @@ import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.7 (FIXED PIN & VIEW ROUTING)
+   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.9 (FULL COMPLETE & STABLE)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
@@ -242,6 +242,16 @@ function SlideButton({ onComplete, text, bg = COLORS.sage }) {
 }
 
 function ModalHeader({ title, onClose }) { return <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 16 }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 700 }}>{title}</div><button onClick={onClose} aria-label="Close" style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", fontSize: 18 }}>✕</button></div>; }
+
+function Toast({ message, type = 'info' }) {
+  const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
+  return (
+    <div className="toast-anim" role="status" aria-live="polite" style={{ position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)', background: config.bg, color: '#fff', padding: '16px 28px', borderRadius: 30, boxShadow: `0 12px 28px ${config.bg}66`, zIndex: 100, fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)' }}>
+      <span style={{ fontSize: 18 }}>{config.icon}</span>
+      <span>{message}</span>
+    </div>
+  );
+}
 
 function EmptyState({ reason }) {
   const state = EMPTY_STATES[reason] || EMPTY_STATES.category_empty;
@@ -812,7 +822,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowPinModal(false)}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center", boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }} className="slide-up">
             <div style={{fontSize: 36, marginBottom: 16}}>🔒</div>
-            <h3 style={{ margin: "0 0 20px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700 }}>Enter Security PIN</h3>
+            <h3 style={{ margin: "0 0 20px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700 }}>Enter Security PIN ({targetRole.toUpperCase()})</h3>
             <input type="password" placeholder="••••" autoFocus value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }} aria-label="Security PIN" style={{ ...inputStyle, textAlign: "center", fontSize: 32, letterSpacing: 12, marginBottom: 24, fontWeight: 800, padding: "16px" }} />
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={() => { setShowPinModal(false); setPinInput(""); }} style={{ flex: 1, padding: "14px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
