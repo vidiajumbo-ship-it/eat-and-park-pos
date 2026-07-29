@@ -3,7 +3,7 @@ import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.6 (PERMANENT DB SYNC & SECURE PIN)
+   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.7 (FIXED PIN & VIEW ROUTING)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
@@ -487,7 +487,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
       <div style={{ textAlign: "center", padding: "20px 20px 60px", fontSize: 13, color: COLORS.textLight, lineHeight: 1.6, fontWeight: 500 }}>
         {RESTAURANT.address}<br />{RESTAURANT.phones.join(" · ")}<br /><br />
-        <button onClick={() => requestPinPrompt((enteredRole) => {})} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", fontWeight: 600 }} className="smooth-transition hover-lift">🔒 Staff / Admin Login</button>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
+          <button onClick={() => requestPinPrompt("staff")} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", fontWeight: 600 }} className="smooth-transition hover-lift">🔒 Staff Login</button>
+          <button onClick={() => requestPinPrompt("admin")} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", fontWeight: 600 }} className="smooth-transition hover-lift">⚙️ Admin Login</button>
+        </div>
       </div>
 
       {aiSuggestion && !cartOpen && !activeModal && (
@@ -801,6 +804,20 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               </>
             )}
 
+          </div>
+        </div>
+      )}
+
+      {showPinModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowPinModal(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center", boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }} className="slide-up">
+            <div style={{fontSize: 36, marginBottom: 16}}>🔒</div>
+            <h3 style={{ margin: "0 0 20px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700 }}>Enter Security PIN</h3>
+            <input type="password" placeholder="••••" autoFocus value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }} aria-label="Security PIN" style={{ ...inputStyle, textAlign: "center", fontSize: 32, letterSpacing: 12, marginBottom: 24, fontWeight: 800, padding: "16px" }} />
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => { setShowPinModal(false); setPinInput(""); }} style={{ flex: 1, padding: "14px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+              <button onClick={handlePinSubmit} style={{ flex: 1, padding: "14px", borderRadius: 12, background: COLORS.ink, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Login</button>
+            </div>
           </div>
         </div>
       )}
@@ -1475,7 +1492,7 @@ export default function App() {
 
   // Security PIN Modal State
   const [showPinModal, setShowPinModal] = useState(false);
-  const [targetRole, setTargetRole] = useState("");
+  const [targetRole, setTargetRole] = useState("staff");
   const [pinInput, setPinInput] = useState("");
 
   const requestPinPrompt = (target) => {
@@ -1487,8 +1504,17 @@ export default function App() {
   const handlePinSubmit = () => {
     const aPin = settings?.adminPin || "9876";
     const sPin = settings?.staffPin || "5432";
-    if (pinInput === aPin || pinInput === sPin || targetRole === "customer") {
-      setRole(targetRole);
+    
+    if (targetRole === "admin" && pinInput === aPin) {
+      setRole("admin");
+      setShowPinModal(false);
+      setPinInput("");
+    } else if (targetRole === "staff" && (pinInput === sPin || pinInput === aPin)) {
+      setRole("staff");
+      setShowPinModal(false);
+      setPinInput("");
+    } else if (targetRole === "customer") {
+      setRole("customer");
       setShowPinModal(false);
       setPinInput("");
     } else {
@@ -1641,7 +1667,7 @@ export default function App() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowPinModal(false)}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center", boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }} className="slide-up">
             <div style={{fontSize: 36, marginBottom: 16}}>🔒</div>
-            <h3 style={{ margin: "0 0 20px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700 }}>Enter Security PIN</h3>
+            <h3 style={{ margin: "0 0 20px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700 }}>Enter Security PIN ({targetRole.toUpperCase()})</h3>
             <input type="password" placeholder="••••" autoFocus value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }} aria-label="Security PIN" style={{ ...inputStyle, textAlign: "center", fontSize: 32, letterSpacing: 12, marginBottom: 24, fontWeight: 800, padding: "16px" }} />
             <div style={{ display: "flex", gap: 12 }}>
               <button onClick={() => { setShowPinModal(false); setPinInput(""); }} style={{ flex: 1, padding: "14px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
