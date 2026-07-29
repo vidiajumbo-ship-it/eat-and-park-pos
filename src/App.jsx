@@ -60,19 +60,11 @@ const RESTAURANT = {
   phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "apnanumber@upi" 
 };
 
-// ============================================
-// GOOGLE REVIEW CONFIGURATION
-// ============================================
-
 const GOOGLE_PLACE_ID = "ChIJc8jv-j9fjTkRYFQLM7KK1aA";
 const GOOGLE_REVIEW_URL = `https://search.google.com/local/writereview?placeid=${GOOGLE_PLACE_ID}`;
 
-// ============================================
-// RAZORPAY CONFIGURATION (Add your keys)
-// ============================================
-
-const RAZORPAY_KEY = "YOUR_RAZORPAY_KEY_ID"; // Replace with your actual key
-const PHONEPE_MERCHANT_ID = "YOUR_MERCHANT_ID"; // Replace with your PhonePe merchant ID
+const RAZORPAY_KEY = "YOUR_RAZORPAY_KEY_ID";
+const PHONEPE_MERCHANT_ID = "YOUR_MERCHANT_ID";
 
 const CATEGORIES = [
   "Drinks", "Fun Food", "Chinese Starter", "Mughlai", "Tandoori", 
@@ -103,10 +95,6 @@ function getLoyaltyTier(points) {
   }
   return tier;
 }
-
-// ============================================
-// 3. LOYALTY PROGRESS COMPONENT
-// ============================================
 
 function LoyaltyProgress({ currentPoints, nextTier, loyaltyRules }) {
   if (!nextTier) return null;
@@ -144,10 +132,6 @@ function LoyaltyProgress({ currentPoints, nextTier, loyaltyRules }) {
   );
 }
 
-// ============================================
-// 4. CUSTOM HOOKS
-// ============================================
-
 const useLocalStorage = (key, initialValue) => {
   const [storedValue, setStoredValue] = useState(() => {
     try {
@@ -173,7 +157,7 @@ const useLocalStorage = (key, initialValue) => {
 };
 
 // ============================================
-// 5. NOTIFICATION SOUND
+// NOTIFICATION SOUND
 // ============================================
 
 const playNotificationSound = () => {
@@ -185,10 +169,6 @@ const playNotificationSound = () => {
     console.log("Sound error:", e);
   }
 };
-
-// ============================================
-// 6. HELPER FUNCTIONS
-// ============================================
 
 function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true, customImg = "") {
   let img = customImg || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; 
@@ -252,7 +232,7 @@ const EMPTY_STATES = {
 };
 
 // ============================================
-// 7. REUSABLE COMPONENTS
+// REUSABLE COMPONENTS
 // ============================================
 
 class ErrorBoundary extends React.Component {
@@ -436,10 +416,6 @@ function MyOrderStats({ myOrders, loyaltyCoins }) {
   );
 }
 
-// ============================================
-// 8. GOOGLE REVIEW BUTTON
-// ============================================
-
 function GoogleReviewButton({ variant = 'primary', size = 'md', showText = true }) {
   const buttonStyles = {
     primary: {
@@ -494,10 +470,6 @@ function GoogleReviewButton({ variant = 'primary', size = 'md', showText = true 
   );
 }
 
-// ============================================
-// 9. RAZORPAY PAYMENT COMPONENT
-// ============================================
-
 const loadRazorpayScript = () => {
   return new Promise((resolve) => {
     const script = document.createElement('script');
@@ -546,7 +518,7 @@ async function processRazorpayPayment(amount, orderId, customerName, customerPho
 }
 
 // ============================================
-// 10. CUSTOMER VIEW (WITH ALL FEATURES)
+// CUSTOMER VIEW (WITH ALL FEATURES)
 // ============================================
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState }) {
@@ -581,23 +553,17 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
   const [favorites, setFavorites] = useLocalStorage('favorites', []);
 
-  // ============================================
-  // SCHEDULED ORDER (NEW)
-  // ============================================
-  
+  // === SCHEDULED ORDER ===
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [isScheduled, setIsScheduled] = useState(false);
 
-  // ============================================
-  // PAYMENT METHOD (NEW)
-  // ============================================
-  
+  // === PAYMENT METHOD ===
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // ============================================
-  // PERSISTENCE: Load saved data on mount
+  // PERSISTENCE
   // ============================================
   
   useEffect(() => {
@@ -629,15 +595,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       } catch(e) {}
     }
 
-    // Request notification permission
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
   }, []);
-
-  // ============================================
-  // PERSISTENCE: Save data on change
-  // ============================================
 
   useEffect(() => {
     if (custName || custPhone) {
@@ -655,10 +616,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       localStorage.setItem('eatpark_cart', JSON.stringify(cart));
     }
   }, [cart]);
-
-  // ============================================
-  // FILTERED ITEMS
-  // ============================================
 
   const filteredItems = useMemo(() => {
     let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
@@ -728,10 +685,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
   const newEarnedCoins = Math.floor(finalTotal / loyaltyRules.rate);
 
-  // ============================================
-  // PUSH NOTIFICATION (NEW)
-  // ============================================
-
+  // === PUSH NOTIFICATION ===
   const sendPushNotification = useCallback((title, message) => {
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(title, {
@@ -743,21 +697,16 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   }, []);
 
-  // ============================================
-  // ORDER CANCELLATION (NEW)
-  // ============================================
-
+  // === ORDER CANCELLATION ===
   const cancelOrder = useCallback(async (orderId) => {
     if (!window.confirm("Are you sure you want to cancel this order?")) return;
     
     try {
-      // Update in Firebase
       await updateDoc(doc(db, "orders", orderId), { 
         status: "cancelled",
         cancelledAt: Date.now()
       });
       
-      // Update local state
       setOrdersState(prev => prev.map(o => 
         o.id === orderId ? { ...o, status: "cancelled", cancelledAt: Date.now() } : o
       ));
@@ -770,10 +719,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   }, [setOrdersState, showToast, sendPushNotification]);
 
-  // ============================================
-  // ORDER REORDER (NEW)
-  // ============================================
-
+  // === ORDER REORDER ===
   const reorderOrder = useCallback((order) => {
     const newCart = {};
     order.items.forEach(item => {
@@ -784,10 +730,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     showToast("🔄 Order items added to cart!", 'success');
   }, [setCart, showToast]);
 
-  // ============================================
-  // ADD TO EXISTING ORDER (NEW)
-  // ============================================
-
+  // === ADD TO EXISTING ORDER ===
   const addToExistingOrder = useCallback(async (orderId, items) => {
     try {
       const orderRef = doc(db, "orders", orderId);
@@ -832,10 +775,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     setOtpStep("verify");
     showToast(`🔐 Demo OTP sent: ${code}`, 'success');
   };
-
-  // ============================================
-  // HANDLE VERIFY OTP
-  // ============================================
 
   const handleVerifyOtp = () => {
     if (otpCode === generatedOtp || otpCode === "1234") {
@@ -884,10 +823,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       showToast("❌ Incorrect OTP", 'error');
     }
   };
-
-  // ============================================
-  // CHECK EXISTING CUSTOMER
-  // ============================================
 
   const checkExistingCustomer = async (phone) => {
     if (phone.length === 10) {
@@ -938,7 +873,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   };
 
   // ============================================
-  // HANDLE PLACE ORDER (WITH ALL NEW FEATURES)
+  // HANDLE PLACE ORDER (WITH ALL FEATURES)
   // ============================================
 
   async function handlePlaceOrder() {
@@ -950,7 +885,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     setIsProcessingPayment(true);
 
     try {
-      // Process payment based on selected method
       if (paymentMethod === "razorpay") {
         const success = await processRazorpayPayment(finalTotal, uid("o"), custName, custPhone);
         if (!success) {
@@ -958,10 +892,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
           return;
         }
       } else if (paymentMethod === "phonepe") {
-        // PhonePe integration - redirect to PhonePe page
         showToast("📱 Redirecting to PhonePe...", 'info');
-        // window.location.href = `https://phone.pe/pay?merchant=${PHONEPE_MERCHANT_ID}&amount=${finalTotal}`;
-        // For demo, we'll simulate
         await new Promise(resolve => setTimeout(resolve, 1500));
       }
 
@@ -1008,23 +939,19 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         isScheduled: isScheduled
       };
       
-      // SAVE TO LOCAL STORAGE
       const orderHistory = JSON.parse(localStorage.getItem('eatpark_orders') || '[]');
       orderHistory.push(order);
       localStorage.setItem('eatpark_orders', JSON.stringify(orderHistory));
       localStorage.setItem('eatpark_last_order', JSON.stringify(order));
       
-      // Update customer stats
       const customerData = JSON.parse(localStorage.getItem('eatpark_customer') || '{}');
       customerData.totalOrders = (customerData.totalOrders || 0) + 1;
       customerData.totalSpent = (customerData.totalSpent || 0) + finalTotal;
       customerData.lastOrderDate = Date.now();
       localStorage.setItem('eatpark_customer', JSON.stringify(customerData));
       
-      // Save to Firebase
       await placeOrder(order, claimedReward ? claimedReward.cost : 0); 
       
-      // Update Firebase customer record
       try {
         const userRef = doc(db, "customers", custPhone);
         await updateDoc(userRef, {
@@ -1036,10 +963,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         console.log("Customer update error:", e);
       }
       
-      // Play notification sound
       playNotificationSound();
-      
-      // Send push notification
       sendPushNotification(
         "🛎️ New Order Received!",
         `Order #${orderId.slice(1,5)} from ${custName} - ₹${finalTotal}`
@@ -1057,7 +981,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       setScheduleTime("");
       showToast("🎉 Order Placed Successfully!", 'success');
       
-      // GOOGLE REVIEW REMINDER
       setTimeout(() => {
         showToast("⭐ Love our food? Rate us on Google!", 'info');
       }, 4000);
@@ -1078,15 +1001,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
   const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", transition: "all 0.2s ease" };
 
-  // ============================================
-  // RENDER
-  // ============================================
-
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: cartCount ? 120 : 60, background: "var(--bg-color, #fff)", minHeight: "100vh", position: "relative" }}>
       {toast && <Toast message={toast} type={toastType} />}
 
-      {/* New Order Notification Badge */}
       {orders.filter(o => o.status === "new" && !myOrderIds.includes(o.id)).length > 0 && (
         <div style={{ 
           position: "fixed", 
@@ -1121,7 +1039,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         </div>
       </div>
 
-      {/* Daily Specials Banner (NEW) */}
+      {/* Daily Specials Banner */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
         <div style={{ 
           background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
@@ -1294,7 +1212,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <button onClick={() => setOrderType("parcel")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "parcel" ? COLORS.copper : COLORS.line}`, background: orderType === "parcel" ? COLORS.copper : "#fff", color: orderType === "parcel" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer", transition: "all 0.2s ease" }}>🛍️ Parcel (+₹40)</button>
                 </div>
 
-                {/* SCHEDULED ORDER TOGGLE (NEW) */}
+                {/* === SCHEDULED ORDER === */}
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                     <input 
@@ -1374,7 +1292,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <button onClick={handleApplyCoupon} style={{ background: COLORS.gold, color: COLORS.ink, border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer" }}>Apply</button>
                 </div>
 
-                {/* EatCoins Section */}
                 <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', borderRadius: 16, padding: 16, marginBottom: 20, border: `1.5px solid ${COLORS.gold}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <div style={{fontWeight: 800, fontSize: 16, color: COLORS.ink}}>🪙 EatCoins</div>
@@ -1478,7 +1395,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special cooking instructions?" style={{ ...inputStyle, marginBottom: 20, resize: "none" }} rows={2} />
                 
-                {/* PAYMENT METHOD SELECTION (NEW) */}
+                {/* === PAYMENT METHOD SELECTION === */}
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Payment Method</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
@@ -1719,7 +1636,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                             </div>
                             
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                              {/* REORDER BUTTON (NEW) */}
+                              {/* === REORDER BUTTON === */}
                               {!isCancelled && (
                                 <button 
                                   onClick={() => reorderOrder(o)}
@@ -1739,12 +1656,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                                 </button>
                               )}
                               
-                              {/* GOOGLE REVIEW BUTTON */}
-                              {isCompleted && (
-                                <GoogleReviewButton variant="primary" size="sm" />
-                              )}
+                              <GoogleReviewButton variant="primary" size="sm" />
                               
-                              {/* CANCEL BUTTON (NEW) - Only show if order is new/preparing */}
+                              {/* === CANCEL BUTTON === */}
                               {!isCompleted && !isCancelled && (o.status === "new" || o.status === "preparing") && (
                                 <button 
                                   onClick={() => cancelOrder(o.id)}
@@ -1909,7 +1823,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                           Back to Menu
                         </button>
                         
-                        {/* ADD TO ORDER BUTTON (NEW) */}
+                        {/* === ADD TO EXISTING ORDER === */}
                         <button 
                           onClick={() => {
                             setActiveModal(null);
@@ -1928,7 +1842,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                           ➕ Add Items
                         </button>
                         
-                        {/* CANCEL ORDER BUTTON (NEW) */}
+                        {/* === CANCEL ORDER === */}
                         {isCancellable && (
                           <button 
                             onClick={() => cancelOrder(o.id)}
@@ -1960,7 +1874,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 }
 
 // ============================================
-// 11. STAFF VIEW (WITH SOUND NOTIFICATIONS)
+// STAFF VIEW (WITH SOUND NOTIFICATIONS)
 // ============================================
 
 const STAFF_SHORTCUTS = {
@@ -2001,11 +1915,9 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
 
-  // PLAY SOUND ON NEW ORDER
   useEffect(() => {
     if (newOrderCount > prevCountRef.current) {
       playNotificationSound();
-      // Also show browser notification
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('🛎️ New Order Received!', {
           body: `${newOrderCount} new order${newOrderCount > 1 ? 's' : ''} waiting`,
@@ -2025,7 +1937,6 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
     prevCallsCountRef.current = activeCallsCount;
   }, [activeCallsCount]);
 
-  // KEYBOARD SHORTCUTS
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'k' && e.ctrlKey) { e.preventDefault(); const firstOrder = active[0]; if (firstOrder) setSelectedOrderId(firstOrder.id); }
@@ -2088,7 +1999,6 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
       </div>
       <div style={{ fontSize: 15, color: COLORS.textLight, marginBottom: 24, fontWeight: 600 }}>Use ↑↓ to navigate, P/R to advance, Shift+? for help</div>
 
-      {/* New Order Alert Banner */}
       {newOrderCount > 0 && (
         <div style={{ 
           background: 'rgba(226,89,56,0.1)', 
@@ -2189,7 +2099,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
 }
 
 // ============================================
-// 12. ADMIN VIEW (WITH PDF REPORT)
+// ADMIN VIEW (WITH PDF REPORT)
 // ============================================
 
 function KitchenMetrics({ filteredOrders }) {
@@ -2259,7 +2169,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const [newGalleryImg, setNewGalleryImg] = useState("");
   const [heroImgInput, setHeroImgInput] = useState(settings?.heroImage || "");
 
-  // PDF Report Generation (NEW)
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const filteredOrders = useMemo(() => {
@@ -2269,11 +2178,10 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0), 0);
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
 
-  // PDF Export Function
+  // === PDF REPORT GENERATION ===
   const generatePDFReport = async () => {
     setIsGeneratingPDF(true);
     try {
-      // Dynamic import for html2canvas and jsPDF
       const html2canvas = (await import('html2canvas')).default;
       const jsPDF = (await import('jspdf')).default;
       
@@ -2402,7 +2310,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
             
             <button onClick={handleExportCSV} style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontWeight: 700 }}>📊 Export CSV</button>
             
-            {/* PDF Report Button (NEW) */}
+            {/* === PDF REPORT BUTTON === */}
             <button 
               onClick={generatePDFReport} 
               disabled={isGeneratingPDF}
@@ -2429,7 +2337,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           
           <KitchenMetrics filteredOrders={filteredOrders} />
 
-          {/* Hidden Report Content for PDF */}
           <div id="report-content" style={{ display: 'none' }}>
             <div style={{ padding: 20 }}>
               <h2>{RESTAURANT.name} - Sales Report</h2>
@@ -2692,7 +2599,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
 }
 
 // ============================================
-// 13. DEFAULT MENU DATA
+// DEFAULT DATA
 // ============================================
 
 const DEFAULT_MENU = [
@@ -2784,7 +2691,7 @@ const DEFAULT_GALLERY = [
 ];
 
 // ============================================
-// 14. MAIN APP COMPONENT
+// MAIN APP COMPONENT
 // ============================================
 
 export default function App() {
