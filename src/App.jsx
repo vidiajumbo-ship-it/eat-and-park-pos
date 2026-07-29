@@ -199,6 +199,21 @@ function getLoyaltyTier(points) {
   }
   return tier;
 }
+// Inside CustomerView component, add this after your other useState hooks
+const CustomerView = () => {
+  // ... existing state
+  const [favorites, setFavorites] = useLocalStorage('favorites', []);
+  const [claimedReward, setClaimedReward] = useState(null);
+  
+  // Add this AFTER your state declarations
+  const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
+  const currentCoins = activeUser ? activeUser.coins : 0;
+  const loyaltyTier = getLoyaltyTier(currentCoins);
+  const loyaltyDiscount = loyaltyTier.discount * subtotal;
+  const finalTotal = cartTotal - loyaltyDiscount;
+  
+  // ... rest of component
+};
 
 function getEstimatedTime(items) {
   if (!items || items.length === 0) return 5;
@@ -1721,7 +1736,60 @@ const DEFAULT_MENU = [
   mi("mo11", "Chicken Momo", 150, "Momo", false, "Steamed dumplings stuffed with juicy minced chicken.", "Steam"), 
   mi("mo12", "Chicken Momo", 160, "Momo", false, "Golden fried chicken dumplings.", "Fry")
 ];
-
+// Inside the menu items loop (where you display each item)
+{filteredItems.map((item) => {
+  const isFavorite = favorites.includes(item.id);
+  return (
+    <div key={item.id} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${COLORS.line}` }}>
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <VegDot veg={item.veg} />
+          <span style={{ fontWeight: 700 }}>{item.name}</span>
+          
+          {/* ADD THIS FAVORITE BUTTON */}
+          <button 
+            onClick={() => {
+              setFavorites(prev => {
+                if (prev.includes(item.id)) {
+                  return prev.filter(id => id !== item.id);
+                } else {
+                  return [...prev, item.id];
+                }
+              });
+            }}
+            style={{ 
+              background: 'none', 
+              border: 'none', 
+              cursor: 'pointer', 
+              fontSize: 18,
+              padding: '2px 4px'
+            }}
+            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            {isFavorite ? '⭐' : '☆'}
+          </button>
+        </div>
+        <div style={{ color: COLORS.copper, fontWeight: 700 }}>{inr(item.price)}</div>
+      </div>
+      <button 
+        onClick={() => {
+          setCart(prev => ({ ...prev, [item.id]: (prev[item.id] || 0) + 1 }));
+        }}
+        style={{ 
+          background: COLORS.sage, 
+          color: "#fff", 
+          border: "none", 
+          borderRadius: 10, 
+          padding: "8px 16px",
+          fontWeight: 700,
+          cursor: "pointer"
+        }}
+      >
+        Add
+      </button>
+    </div>
+  );
+})}
 const DEFAULT_OFFERS = [
   { id: "off1", title: "Flat 20% OFF 🍜", desc: "Enjoy flat 20% off on all Chinese items today!" },
   { id: "off2", title: "Free Cold Drink 🥤", desc: "Get a free cold drink on orders above ₹499." }
