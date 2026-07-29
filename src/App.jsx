@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { db } from "./firebase";
-import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, writeBatch } from "firebase/firestore";
+import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.4 (FULL RESTORED ADMIN FEATURES)
+   🍽️ EAT & PARK RESTAURANT — PROFESSIONAL POS V7.5 (PERMANENT DB SYNC & SECURITY)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 const FONTS = `
@@ -16,8 +16,6 @@ const FONTS = `
 @keyframes scaleInBounce { 0% { transform: scale(0.3); opacity: 0; } 50% { opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes smoothSlideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes fadeInScale { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-@keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
-@keyframes successPulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
 
 .flash-banner { animation: flash 2s infinite; }
 .slide-up { animation: slideUp 0.4s ease-out; }
@@ -25,12 +23,9 @@ const FONTS = `
 .toast-anim { animation: toastSlide 3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .smooth-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 .hover-lift:hover { transform: translateY(-3px); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12) !important; }
-.pulse-anim { animation: pulse 2s infinite; }
 .scale-bounce { animation: scaleInBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .smooth-slide-up { animation: smoothSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .fade-scale { animation: fadeInScale 0.3s ease-out; }
-.skeleton-loading { background: linear-gradient(90deg, #f0efeb 25%, #e8e6dc 50%, #f0efeb 75%); background-size: 1000px 100%; animation: shimmer 2s infinite; }
-.success-pulse { animation: successPulse 0.8s infinite; }
 
 .dark-theme { filter: invert(0.92) hue-rotate(180deg); background: #111; min-height: 100vh; }
 .dark-theme img, .dark-theme .keep-color { filter: invert(1) hue-rotate(180deg); }
@@ -274,7 +269,7 @@ function EmptyState({ reason }) {
    1. CUSTOMER VIEW (WITH GALLERY MODAL)
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, setRole, promo, settings, installApp, handlePrint, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory }) {
+function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, promo, settings, installApp, handlePrint, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory }) {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
@@ -303,8 +298,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [bookType, setBookType] = useState("table");
   const [bookData, setBookData] = useState({ name: "", phone: "", date: "", time: "", guests: "" });
   const [confirmedBooking, setConfirmedBooking] = useState(null);
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [pinInput, setPinInput] = useState("");
 
   const filteredItems = (searchQuery.trim() ? menu : menu.filter((m) => m.category === category)).filter((m) => {
     if (vegOnly && !m.veg) return false;
@@ -425,7 +418,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
     const order = { id: orderId, table, orderType, customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "" }, items: cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty }; }), claimedReward: claimedReward ? claimedReward.item : null, rewardUsedCoins: claimedReward ? claimedReward.cost : 0, earnedCoins: newEarnedCoins, discount: appliedDiscount, deliveryFee, notes, payment: "cash", status: "new", paid: false, createdAt: Date.now() };
     
-    await placeOrder(order); 
+    await placeOrder(order, claimedReward ? claimedReward.cost : 0); 
     setMyOrderIds([...myOrderIds, order.id]); 
     setCart({}); 
     setNotes(""); 
@@ -439,13 +432,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     if(!bookData.name || !bookData.phone || !bookData.date || !bookData.time || !bookData.guests) { showToast("⚠️ Please fill all fields", 'error'); return; }
     const newBooking = { ...bookData, type: bookType, id: uid("b"), status: "pending", createdAt: Date.now() };
     await bookEvent(newBooking); setConfirmedBooking(newBooking); setBookData({ name: "", phone: "", date: "", time: "", guests: "" }); showToast("✅ Booking Request Sent!", 'success');
-  }
-
-  function handleLoginSubmit() {
-    const aPin = settings?.adminPin || "9876"; const sPin = settings?.staffPin || "5432";
-    if (pinInput === aPin) { setRole("admin"); setShowLoginModal(false); setPinInput(""); showToast("🔓 Admin access", 'success'); } 
-    else if (pinInput === sPin) { setRole("staff"); setShowLoginModal(false); setPinInput(""); showToast("🔓 Staff access", 'success'); } 
-    else { showToast("❌ Incorrect PIN", 'error'); setPinInput(""); }
   }
 
   return (
@@ -512,7 +498,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
       <div style={{ textAlign: "center", padding: "20px 20px 60px", fontSize: 13, color: COLORS.textLight, lineHeight: 1.6, fontWeight: 500 }}>
         {RESTAURANT.address}<br />{RESTAURANT.phones.join(" · ")}<br /><br />
-        <button onClick={() => setShowLoginModal(true)} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", fontWeight: 600 }} className="smooth-transition hover-lift">🔒 Staff Login</button>
+        <button onClick={() => requestPinPrompt((enteredRole) => {})} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", fontWeight: 600 }} className="smooth-transition hover-lift">🔒 Staff / Admin Login</button>
       </div>
 
       {aiSuggestion && !cartOpen && !activeModal && (
@@ -829,21 +815,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
           </div>
         </div>
       )}
-      
-      {showLoginModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowLoginModal(false)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center", boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }} className="slide-up">
-            <div style={{fontSize: 36, marginBottom: 16}}>🔒</div>
-            <h3 style={{ margin: "0 0 20px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700 }}>Enter Security PIN</h3>
-            <input type="password" placeholder="••••" autoFocus value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleLoginSubmit(); }} aria-label="Security PIN" style={{ ...inputStyle, textAlign: "center", fontSize: 32, letterSpacing: 12, marginBottom: 24, fontWeight: 800, padding: "16px" }} />
-            <div style={{ display: "flex", gap: 12 }}>
-              <button onClick={() => { setShowLoginModal(false); setPinInput(""); }} style={{ flex: 1, padding: "14px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-              <button onClick={handleLoginSubmit} style={{ flex: 1, padding: "14px", borderRadius: 12, background: COLORS.ink, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Login</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {toast && <Toast message={toast} type={toastType} />}
     </div>
   );
 }
@@ -922,7 +893,7 @@ function KeyboardHelpModal({ onClose }) {
   );
 }
 
-function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
+function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall }) {
   const active = orders.filter((o) => o.status !== "served").sort((a, b) => a.createdAt - b.createdAt);
   const activeCalls = calls.filter(c => c.status === 'active');
   const columns = ["new", "preparing", "ready"];
@@ -1004,7 +975,7 @@ function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
         <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>🍳 Kitchen Board</div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={() => setShowHelpModal(true)} aria-label="Show keyboard shortcuts" title="Keyboard Shortcuts (Shift + ?)" style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 12, padding: "10px 16px", cursor: "pointer", fontWeight: 700 }}>⌨️ Shortcuts</button>
-          <button onClick={() => setRole("admin")} style={{ ...primaryBtn, background: COLORS.ink }}>⚙️ Admin</button>
+          <button onClick={() => requestPinPrompt("admin")} style={{ ...primaryBtn, background: COLORS.ink }}>⚙️ Admin</button>
         </div>
       </div>
       <div style={{ fontSize: 15, color: COLORS.textLight, marginBottom: 24, fontWeight: 600 }}>Use ↑↓ to navigate, P/R to advance, Shift+? for help</div>
@@ -1069,7 +1040,7 @@ function StaffView({ orders, advanceStatus, setRole, calls, resolveCall }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   3. ADMIN VIEW (WITH HERO IMAGE, MENU ITEM IMAGE, AND GALLERY PHOTO MANAGEMENT)
+   3. ADMIN VIEW
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 function KitchenMetrics({ filteredOrders }) {
@@ -1116,7 +1087,7 @@ function InventoryAlertBanner({ inventory }) {
   );
 }
 
-function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder, setRole, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery }) {
+function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery }) {
   const [tab, setTab] = useState("overview");
   const [filterDate, setFilterDate] = useState(toLocalISODate(Date.now()));
   const [newInv, setNewInv] = useState({ name: "", stock: "", unit: "kg" });
@@ -1152,20 +1123,28 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
     }
   }
 
-  const handleSaveMenuItem = () => {
+  const handleSaveMenuItem = async () => {
     if (!editingItem) return;
-    setMenuState(menu.map(m => m.id === editingItem.id ? { ...m, name: newItemName, price: Number(newItemPrice), category: newItemCat, ...(newItemImage ? { image: newItemImage } : {}) } : m));
+    const updatedMenu = menu.map(m => m.id === editingItem.id ? { ...m, name: newItemName, price: Number(newItemPrice), category: newItemCat, ...(newItemImage ? { image: newItemImage } : {}) } : m);
+    setMenuState(updatedMenu);
+    try {
+      await setDoc(doc(db, "settings", "menu"), { items: updatedMenu });
+    } catch(e) { console.error(e); }
     setEditingItem(null);
     setNewItemImage("");
   };
 
-  const handleDeleteMenuItem = (id) => {
+  const handleDeleteMenuItem = async (id) => {
     if (window.confirm("Are you sure you want to delete this menu item?")) {
-      setMenuState(menu.filter(m => m.id !== id));
+      const updatedMenu = menu.filter(m => m.id !== id);
+      setMenuState(updatedMenu);
+      try {
+        await setDoc(doc(db, "settings", "menu"), { items: updatedMenu });
+      } catch(e) { console.error(e); }
     }
   };
 
-  const handleAddNewDish = () => {
+  const handleAddNewDish = async () => {
     if (!addMenuName.trim() || !addMenuPrice) {
       alert("Please enter dish name and price.");
       return;
@@ -1182,7 +1161,11 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
       true,
       addMenuImage.trim()
     );
-    setMenuState([newDish, ...menu]);
+    const updatedMenu = [newDish, ...menu];
+    setMenuState(updatedMenu);
+    try {
+      await setDoc(doc(db, "settings", "menu"), { items: updatedMenu });
+    } catch(e) { console.error(e); }
     setAddMenuName("");
     setAddMenuPrice("");
     setAddMenuDesc("");
@@ -1190,27 +1173,39 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
     alert("✅ New dish added successfully!");
   };
 
-  const handleAddGalleryPhoto = () => {
+  const handleAddGalleryPhoto = async () => {
     if (!newGalleryImg.trim()) return;
-    setGallery([...gallery, newGalleryImg.trim()]);
+    const updatedGallery = [...gallery, newGalleryImg.trim()];
+    setGallery(updatedGallery);
+    try {
+      await setDoc(doc(db, "settings", "gallery"), { images: updatedGallery });
+    } catch(e) { console.error(e); }
     setNewGalleryImg("");
     alert("✅ Photo added to gallery!");
   };
 
-  const handleDeleteGalleryPhoto = (index) => {
-    setGallery(gallery.filter((_, i) => i !== index));
+  const handleDeleteGalleryPhoto = async (index) => {
+    const updatedGallery = gallery.filter((_, i) => i !== index);
+    setGallery(updatedGallery);
+    try {
+      await setDoc(doc(db, "settings", "gallery"), { images: updatedGallery });
+    } catch(e) { console.error(e); }
   };
 
-  const handleSaveHeroImage = () => {
+  const handleSaveHeroImage = async () => {
     if (!heroImgInput.trim()) return;
-    setSettings({ ...settings, heroImage: heroImgInput.trim() });
+    const newSettings = { ...settings, heroImage: heroImgInput.trim() };
+    setSettings(newSettings);
+    try {
+      await setDoc(doc(db, "settings", "appSettings"), newSettings);
+    } catch(e) { console.error(e); }
     alert("✅ Hero front image updated successfully!");
   };
 
   const handleExportCSV = () => {
     const rows = [["Time", "Type", "Items", "Total", "Paid"]];
     filteredOrders.forEach(o => {
-      const total = o.items.reduce((s, it) => s + (it.price * it.qty), 0) + (o.deliveryFee || 0);
+      const total = o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0);
       rows.push([
         new Date(o.createdAt).toLocaleTimeString('en-IN'),
         o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`,
@@ -1228,7 +1223,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder
 
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1100, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, alignItems: 'center' }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>📊 Admin Dashboard</div><button onClick={() => setRole("customer")} style={{ background: COLORS.paper2, border: "none", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontWeight: 700 }}>← Exit</button></div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, alignItems: 'center' }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>📊 Admin Dashboard</div><button onClick={() => requestPinPrompt("customer")} style={{ background: COLORS.paper2, border: "none", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontWeight: 700 }}>← Exit</button></div>
       
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto", scrollbarWidth: "none" }}>
         {["overview", "menu", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings"].map((t) => ( <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", marginRight: 10, fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button> ))}
@@ -1493,7 +1488,7 @@ function StatCard({ label, value, icon, color }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   4. MAIN APP COMPONENT (WITH FIREBASE FIRESTORE SYNC)
+   4. MAIN APP COMPONENT
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
 export default function App() {
@@ -1508,157 +1503,190 @@ export default function App() {
     rate: 10, 
     rewards: [{ id: "r1", cost: 300, item: "Free French Fry" }]
   });
-  const [loyaltyUsers, setLoyaltyUsers] = useState([
-    { phone: "9876543210", name: "Demo User", coins: 350 }
-  ]);
-  const [coinHistory, setCoinHistory] = useState([
-    { phone: "9876543210", coins: 350, reason: "Initial Bonus", timestamp: Date.now() - 86400000 }
-  ]);
+  const [loyaltyUsers, setLoyaltyUsers] = useState([]);
+  const [coinHistory, setCoinHistory] = useState([]);
 
   const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); return params.has("table") ? Number(params.get("table")) : 1; });
   const [menu, setMenuState] = useState(DEFAULT_MENU);
   const [orders, setOrdersState] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80", adminPin: "9876", staffPin: "5432" });
-  const [ready, setReady] = useState(true);
+  
+  // Security PIN Modal State
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [targetRole, setTargetRole] = useState("");
+  const [pinInput, setPinInput] = useState("");
 
-  // 🔄 Firebase Real-time Sync (Orders)
+  const requestPinPrompt = (target) => {
+    setTargetRole(target);
+    setShowPinModal(true);
+    setPinInput("");
+  };
+
+  const handlePinSubmit = () => {
+    const aPin = settings?.adminPin || "9876";
+    const sPin = settings?.staffPin || "5432";
+    if (pinInput === aPin || pinInput === sPin) {
+      setRole(targetRole);
+      setShowPinModal(false);
+      setPinInput("");
+    } else {
+      alert("❌ Incorrect PIN!");
+      setPinInput("");
+    }
+  };
+
+  // 🔄 Firebase Permanent Data Sync on Load
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "orders"), (snapshot) => {
-      const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      if (ordersData.length > 0) setOrdersState(ordersData);
-    }, (error) => {
-      console.error("Firestore sync error:", error);
-    });
-    return () => unsubscribe();
+    // 1. Fetch Loyalty Users
+    const fetchLoyaltyUsers = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "loyaltyUsers"));
+        const users = querySnapshot.docs.map(doc => doc.data());
+        if (users.length > 0) setLoyaltyUsers(users);
+      } catch (e) { console.error(e); }
+    };
+    fetchLoyaltyUsers();
+
+    // 2. Fetch Coin History
+    const fetchCoinHistory = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "coinHistory"));
+        const history = querySnapshot.docs.map(doc => doc.data());
+        if (history.length > 0) setCoinHistory(history);
+      } catch (e) { console.error(e); }
+    };
+    fetchCoinHistory();
+
+    // 3. Fetch Persistent Gallery & Menu & Settings
+    const fetchSettingsAndMenu = async () => {
+      try {
+        const unsubscribeOrders = onSnapshot(collection(db, "orders"), (snap) => {
+          const ords = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          if (ords.length > 0) setOrdersState(ords);
+        });
+
+        const menuSnap = await getDocs(collection(db, "settings"));
+        menuSnap.forEach(docSnap => {
+          if (docSnap.id === "menu" && docSnap.data().items) setMenuState(docSnap.data().items);
+          if (docSnap.id === "gallery" && docSnap.data().images) setGallery(docSnap.data().images);
+          if (docSnap.id === "appSettings" && docSnap.data().heroImage) setSettings(docSnap.data().appSettings);
+        });
+        return () => unsubscribeOrders();
+      } catch (e) { console.error(e); }
+    };
+    fetchSettingsAndMenu();
   }, []);
 
   const deleteBooking = async (id) => { 
     if(window.confirm("Delete this booking?")) {
-      try {
-        await deleteDoc(doc(db, "bookings", id));
-        setBookings(bookings.filter(b => b.id !== id));
-      } catch (e) {
-        setBookings(bookings.filter(b => b.id !== id));
-      }
+      try { await deleteDoc(doc(db, "bookings", id)); } catch(e){}
+      setBookings(bookings.filter(b=>b.id!==id)); 
     } 
   };
 
   const addInventory = async (item) => { 
-    try {
-      await setDoc(doc(db, "inventory", item.id), item);
-      setInventory([...inventory, item]);
-    } catch(e) {
-      setInventory([...inventory, item]);
-    }
+    try { await setDoc(doc(db, "inventory", item.id), item); } catch(e){}
+    setInventory([...inventory, item]); 
   };
 
   const updateStock = async (id, newStock) => { 
-    try {
-      await updateDoc(doc(db, "inventory", id), { stock: newStock });
-      setInventory(inventory.map(i => i.id === id ? { ...i, stock: newStock } : i));
-    } catch(e) {
-      setInventory(inventory.map(i => i.id === id ? { ...i, stock: newStock } : i));
-    }
+    try { await updateDoc(doc(db, "inventory", id), { stock: newStock }); } catch(e){}
+    setInventory(inventory.map(i=>i.id===id?{...i,stock:newStock}:i)); 
   };
 
-  const requestWaiter = async (tbl) => { 
-    const newCall = { id: uid("call"), table: tbl, time: Date.now(), status: "active" };
-    setCalls([...calls, newCall]); 
-  };
-
-  const resolveCall = async (id) => { 
-    setCalls(calls.filter(c => c.id !== id)); 
-  };
+  const requestWaiter = async (tbl) => { setCalls([...calls, { id: uid("call"), table: tbl, time: Date.now(), status: "active" }]); };
+  const resolveCall = async (id) => { setCalls(calls.filter(c=>c.id!==id)); };
   
   const addOffer = async (off) => { setOffersList([...offersList, off]); };
-  const removeOffer = async (id) => { setOffersList(offersList.filter(o => o.id !== id)); };
+  const removeOffer = async (id) => { setOffersList(offersList.filter(o=>o.id!==id)); };
 
-  const placeOrder = async (order) => {  
+  const placeOrder = async (order, rewardCost = 0) => {  
     try {
       await setDoc(doc(db, "orders", order.id), order);
-    } catch (e) {
-      console.error("Error saving order to Firestore:", e);
-    }
+    } catch (e) { console.error(e); }
 
     setOrdersState(prev => [...prev, order]);
     
     if(order.customer.phone && order.customer.phone.length >= 10) {
-       const netCoins = order.earnedCoins - (order.rewardUsedCoins || 0);
+       const netCoins = order.earnedCoins - rewardCost;
        const existingUserIndex = loyaltyUsers.findIndex(u => u.phone === order.customer.phone);
+       let updatedUsers = [...loyaltyUsers];
+       
        if(existingUserIndex >= 0) {
-          const newArr = [...loyaltyUsers];
-          newArr[existingUserIndex].coins = Math.max(0, newArr[existingUserIndex].coins + netCoins);
-          newArr[existingUserIndex].name = order.customer.name || newArr[existingUserIndex].name;
-          setLoyaltyUsers(newArr);
+          updatedUsers[existingUserIndex].coins = Math.max(0, updatedUsers[existingUserIndex].coins + netCoins);
+          updatedUsers[existingUserIndex].name = order.customer.name || updatedUsers[existingUserIndex].name;
        } else if (netCoins > 0) {
-          setLoyaltyUsers([...loyaltyUsers, { phone: order.customer.phone, name: order.customer.name, coins: netCoins }]);
+          updatedUsers.push({ phone: order.customer.phone, name: order.customer.name, coins: netCoins });
+       }
+       setLoyaltyUsers(updatedUsers);
+
+       // Permanent save to Firebase
+       if(existingUserIndex >= 0) {
+         try {
+           await setDoc(doc(db, "loyaltyUsers", order.customer.phone), updatedUsers[existingUserIndex]);
+         } catch(e){ console.error(e); }
+       } else {
+         try {
+           await setDoc(doc(db, "loyaltyUsers", order.customer.phone), { phone: order.customer.phone, name: order.customer.name, coins: netCoins });
+         } catch(e){ console.error(e); }
        }
 
+       let newLogs = [...coinHistory];
        if (order.earnedCoins > 0) {
-         setCoinHistory(prev => [...prev, { phone: order.customer.phone, coins: order.earnedCoins, reason: `Earned from Order #${order.id.slice(1,5).toUpperCase()}`, timestamp: Date.now() }]);
+         const logEarn = { phone: order.customer.phone, coins: order.earnedCoins, reason: `Earned from Order #${order.id.slice(1,5).toUpperCase()}`, timestamp: Date.now() };
+         newLogs.push(logEarn);
+         try { await setDoc(doc(db, "coinHistory", uid("ch")), logEarn); } catch(e){}
        }
-       if (order.rewardUsedCoins > 0) {
-         setCoinHistory(prev => [...prev, { phone: order.customer.phone, coins: -order.rewardUsedCoins, reason: `Redeemed for ${order.claimedReward}`, timestamp: Date.now() }]);
+       if (rewardCost > 0) {
+         const logRedeem = { phone: order.customer.phone, coins: -rewardCost, reason: `Redeemed for reward`, timestamp: Date.now() };
+         newLogs.push(logRedeem);
+         try { await setDoc(doc(db, "coinHistory", uid("ch")), logRedeem); } catch(e){}
        }
+       setCoinHistory(newLogs);
     }
-
-    order.items.forEach(cartItem => {
-      const itemName = cartItem.name.toLowerCase();
-      let newInv = [...inventory];
-      newInv = newInv.map(inv => {
-        if (itemName.includes(inv.name.toLowerCase())) {
-          const deductAmt = inv.unit === 'pcs' ? 1 : 0.2;
-          return {...inv, stock: Math.max(0, inv.stock - (deductAmt * cartItem.qty))};
-        }
-        return inv;
-      });
-      setInventory(newInv);
-    });
   };
 
   const advanceStatus = async (orderId, currentStatus) => { 
     const idx = STATUS_FLOW.indexOf(currentStatus); 
     const nextStatus = STATUS_FLOW[Math.min(idx + 1, STATUS_FLOW.length - 1)]; 
     const updateData = { status: nextStatus, ...(nextStatus === "served" ? { servedAt: Date.now() } : {}) };
-    
-    try {
-      await updateDoc(doc(db, "orders", orderId), updateData);
-    } catch(e) {
-      console.error(e);
-    }
-
-    setOrdersState(orders.map(o => o.id === orderId ? { ...o, ...updateData } : o)); 
+    try { await updateDoc(doc(db, "orders", orderId), updateData); } catch(e){}
+    setOrdersState(orders.map(o=>o.id===orderId?{...o, ...updateData}:o)); 
   };
 
   const markPaid = async (orderId, paid) => { 
-    try {
-      await updateDoc(doc(db, "orders", orderId), { paid });
-    } catch(e) {
-      console.error(e);
-    }
-    setOrdersState(orders.map(o => o.id === orderId ? { ...o, paid } : o)); 
+    try { await updateDoc(doc(db, "orders", orderId), { paid }); } catch(e){}
+    setOrdersState(orders.map(o=>o.id===orderId?{...o,paid}:o)); 
   };
 
   const bookEvent = async (booking) => { 
-    try {
-      await setDoc(doc(db, "bookings", booking.id), booking);
-    } catch(e) {
-      console.error(e);
-    }
+    try { await setDoc(doc(db, "bookings", booking.id), booking); } catch(e){}
     setBookings([...bookings, booking]); 
   };
-
-  if (!ready) return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: COLORS.paper, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700 }}>Loading menu...</div>;
 
   return (
     <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <style>{FONTS}</style>
       <div className="app-content">
-        {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} setRole={setRole} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} />}
-        {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} setRole={setRole} calls={calls} resolveCall={resolveCall} />}
-        {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} setRole={setRole} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} />}
+        {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} />}
+        {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} />}
+        {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} />}
       </div>
+
+      {showPinModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowPinModal(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center", boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }} className="slide-up">
+            <div style={{fontSize: 36, marginBottom: 16}}>🔒</div>
+            <h3 style={{ margin: "0 0 20px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700 }}>Enter Security PIN</h3>
+            <input type="password" placeholder="••••" autoFocus value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }} aria-label="Security PIN" style={{ ...inputStyle, textAlign: "center", fontSize: 32, letterSpacing: 12, marginBottom: 24, fontWeight: 800, padding: "16px" }} />
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => { setShowPinModal(false); setPinInput(""); }} style={{ flex: 1, padding: "14px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+              <button onClick={handlePinSubmit} style={{ flex: 1, padding: "14px", borderRadius: 12, background: COLORS.ink, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Login</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
