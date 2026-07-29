@@ -12,7 +12,6 @@ const FONTS = `
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes slideRight { from { transform: translateX(-100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 @keyframes toastSlide { 0% { transform: translate(-50%, 100px); opacity: 0; } 10% { transform: translate(-50%, 0); opacity: 1; } 90% { transform: translate(-50%, 0); opacity: 1; } 100% { transform: translate(-50%, 100px); opacity: 0; } }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 @keyframes scaleInBounce { 0% { transform: scale(0.3); opacity: 0; } 50% { opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes smoothSlideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes fadeInScale { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -244,16 +243,6 @@ function SlideButton({ onComplete, text, bg = COLORS.sage }) {
 
 function ModalHeader({ title, onClose }) { return <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 16 }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 700 }}>{title}</div><button onClick={onClose} aria-label="Close" style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", fontSize: 18 }}>✕</button></div>; }
 
-function Toast({ message, type = 'info' }) {
-  const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
-  return (
-    <div className="toast-anim" role="status" aria-live="polite" style={{ position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)', background: config.bg, color: '#fff', padding: '16px 28px', borderRadius: 30, boxShadow: `0 12px 28px ${config.bg}66`, zIndex: 100, fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)' }}>
-      <span style={{ fontSize: 18 }}>{config.icon}</span>
-      <span>{message}</span>
-    </div>
-  );
-}
-
 function EmptyState({ reason }) {
   const state = EMPTY_STATES[reason] || EMPTY_STATES.category_empty;
   return (
@@ -266,10 +255,10 @@ function EmptyState({ reason }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   1. CUSTOMER VIEW (WITH GALLERY MODAL)
+   1. CUSTOMER VIEW
 ═══════════════════════════════════════════════════════════════════════════════════ */
 
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, promo, settings, installApp, handlePrint, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory }) {
+function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, promo, settings, installApp, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory }) {
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
@@ -1087,7 +1076,7 @@ function InventoryAlertBanner({ inventory }) {
   );
 }
 
-function AdminView({ menu, setMenuState, bookings, orders, markPaid, deleteOrder, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery }) {
+function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery }) {
   const [tab, setTab] = useState("overview");
   const [filterDate, setFilterDate] = useState(toLocalISODate(Date.now()));
   const [newInv, setNewInv] = useState({ name: "", stock: "", unit: "kg" });
@@ -1498,6 +1487,7 @@ export default function App() {
   const [inventory, setInventory] = useState([]);
   const [offersList, setOffersList] = useState(DEFAULT_OFFERS);
   const [gallery, setGallery] = useState(DEFAULT_GALLERY);
+  const [loading, setLoading] = useState(true); // 👈 Added loading state to prevent blank screen
 
   const [loyaltyRules, setLoyaltyRules] = useState({
     rate: 10, 
@@ -1538,44 +1528,36 @@ export default function App() {
 
   // 🔄 Firebase Permanent Data Sync on Load
   useEffect(() => {
-    // 1. Fetch Loyalty Users
-    const fetchLoyaltyUsers = async () => {
+    const fetchAllData = async () => {
       try {
         const querySnapshot = await getDocs(collection(db, "loyaltyUsers"));
         const users = querySnapshot.docs.map(doc => doc.data());
         if (users.length > 0) setLoyaltyUsers(users);
-      } catch (e) { console.error(e); }
-    };
-    fetchLoyaltyUsers();
 
-    // 2. Fetch Coin History
-    const fetchCoinHistory = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "coinHistory"));
-        const history = querySnapshot.docs.map(doc => doc.data());
+        const historySnapshot = await getDocs(collection(db, "coinHistory"));
+        const history = historySnapshot.docs.map(doc => doc.data());
         if (history.length > 0) setCoinHistory(history);
-      } catch (e) { console.error(e); }
-    };
-    fetchCoinHistory();
-
-    // 3. Fetch Persistent Gallery & Menu & Settings
-    const fetchSettingsAndMenu = async () => {
-      try {
-        const unsubscribeOrders = onSnapshot(collection(db, "orders"), (snap) => {
-          const ords = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          if (ords.length > 0) setOrdersState(ords);
-        });
 
         const menuSnap = await getDocs(collection(db, "settings"));
         menuSnap.forEach(docSnap => {
           if (docSnap.id === "menu" && docSnap.data().items) setMenuState(docSnap.data().items);
           if (docSnap.id === "gallery" && docSnap.data().images) setGallery(docSnap.data().images);
-          if (docSnap.id === "appSettings" && docSnap.data().heroImage) setSettings(docSnap.data().appSettings);
+          if (docSnap.id === "appSettings" && docSnap.data().appSettings) setSettings(docSnap.data().appSettings);
         });
-        return () => unsubscribeOrders();
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+        console.error("Firebase fetch error:", e); 
+      } finally {
+        setLoading(false); // 👈 Stop loading once data is fetched
+      }
     };
-    fetchSettingsAndMenu();
+    fetchAllData();
+
+    const unsubscribeOrders = onSnapshot(collection(db, "orders"), (snap) => {
+      const ords = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setOrdersState(ords);
+    });
+
+    return () => unsubscribeOrders();
   }, []);
 
   const deleteBooking = async (id) => { 
@@ -1621,7 +1603,6 @@ export default function App() {
        }
        setLoyaltyUsers(updatedUsers);
 
-       // Permanent save to Firebase
        if(existingUserIndex >= 0) {
          try {
            await setDoc(doc(db, "loyaltyUsers", order.customer.phone), updatedUsers[existingUserIndex]);
@@ -1664,6 +1645,15 @@ export default function App() {
     try { await setDoc(doc(db, "bookings", booking.id), booking); } catch(e){}
     setBookings([...bookings, booking]); 
   };
+
+  // 🛡️ Safe Loading Check to prevent Vercel blank screen
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: COLORS.paper, fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 700, fontSize: 18, color: COLORS.copper }}>
+        🍽️ Loading Eat & Park POS...
+      </div>
+    );
+  }
 
   return (
     <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
