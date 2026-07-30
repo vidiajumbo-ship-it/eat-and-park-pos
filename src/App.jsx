@@ -2009,7 +2009,8 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
 
   // ---------- PDF Report ----------
-const generatePDFReport = async () => {
+const generatePDFReport = async () 
+=> {
   setIsGeneratingPDF(true);
   try {
     const loadScript = (src) => {
