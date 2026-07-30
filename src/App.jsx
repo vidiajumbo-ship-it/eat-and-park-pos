@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs, getDoc } from "firebase/firestore";
+import QRCode from 'qrcode.react';
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
    🍽️ EAT & PARK RESTAURANT — FINAL V13.0 (CDN PDF FIX)
