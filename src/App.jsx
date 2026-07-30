@@ -3,7 +3,7 @@ import { db } from "./firebase";
 import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs, getDoc } from "firebase/firestore";
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — COMPLETE POS V12.0 (ALL FEATURES)
+   🍽️ EAT & PARK RESTAURANT — COMPLETE POS V12.1 (DYNAMIC PDF IMPORT)
    ═══════════════════════════════════════════════════════════════════════════════════ */
 
 // ============================================
@@ -2099,7 +2099,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
 }
 
 // ============================================
-// ADMIN VIEW (WITH PDF REPORT)
+// ADMIN VIEW (WITH DYNAMIC PDF IMPORT)
 // ============================================
 
 function KitchenMetrics({ filteredOrders }) {
@@ -2178,15 +2178,20 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0), 0);
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
 
-  // === PDF REPORT GENERATION ===
+  // === PDF REPORT GENERATION (DYNAMIC IMPORT — NO BUILD ERROR) ===
   const generatePDFReport = async () => {
     setIsGeneratingPDF(true);
     try {
+      // Dynamic import — build time pe resolve nahi hoga, error nahi aayega
       const html2canvas = (await import('html2canvas')).default;
       const jsPDF = (await import('jspdf')).default;
       
       const reportElement = document.getElementById('report-content');
-      if (!reportElement) return;
+      if (!reportElement) {
+        alert('Report content not found.');
+        setIsGeneratingPDF(false);
+        return;
+      }
       
       const canvas = await html2canvas(reportElement, {
         scale: 2,
@@ -2203,7 +2208,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
       pdf.save(`Sales_Report_${filterDate}.pdf`);
     } catch(e) {
       console.error("PDF Error:", e);
-      alert("⚠️ Could not generate PDF. Please try again.");
+      alert("⚠️ Could not generate PDF. Please install 'html2canvas' and 'jspdf' packages.");
     } finally {
       setIsGeneratingPDF(false);
     }
@@ -2310,7 +2315,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
             
             <button onClick={handleExportCSV} style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontWeight: 700 }}>📊 Export CSV</button>
             
-            {/* === PDF REPORT BUTTON === */}
+            {/* === PDF REPORT BUTTON (DYNAMIC IMPORT — NO BUILD ERROR) === */}
             <button 
               onClick={generatePDFReport} 
               disabled={isGeneratingPDF}
