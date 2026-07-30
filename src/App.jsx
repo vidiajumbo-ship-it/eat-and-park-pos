@@ -622,7 +622,13 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     return items;
   }, [menu, category, searchQuery, vegOnly]);
 
-  const emptyReason = searchQuery.trim() ? "search_no_results" : (vegOnly ? "veg_filtered" : "category_empty");
+  // ---- FIX: Compute emptyReason ----
+  let emptyReason = 'category_empty';
+  if (vegOnly) {
+    emptyReason = 'veg_filtered';
+  } else if (searchQuery && searchQuery.trim() !== '') {
+    emptyReason = 'search_no_results';
+  }
 
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
   const cartCount = cartItems.reduce((s, [, q]) => s + q, 0);
@@ -1145,7 +1151,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
             </div>
 
             {myOrders.length > 0 && <MyOrderStats myOrders={myOrders} loyaltyCoins={currentCoins} />}
-            
+             
             <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
               <SidebarBtn icon={isDark ? "☀️" : "🌙"} text={isDark ? "Switch to Light Mode" : "VIP Dark Mode"} onClick={() => { setIsDark(!isDark); setShowSidebar(false); showToast(isDark ? "☀️ Light Mode Active" : "🌙 VIP Dark Mode Active", "success"); }} highlight />
               <SidebarBtn icon="🖼️" text="Photo Gallery" onClick={() => { setShowSidebar(false); setActiveModal('gallery'); }} />
@@ -1228,7 +1234,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <div style={{fontSize: 13, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', letterSpacing: 1}}>Your Details</div>
                   <input type="text" placeholder="Your Name *" value={custName} onChange={(e) => setCustName(e.target.value)} style={inputStyle} />
                   <input type="tel" placeholder="Phone Number *" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} style={inputStyle} />
-                  
+                   
                   {orderType === "parcel" && (
                     <div>
                       <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -1256,7 +1262,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                       <div style={{fontSize: 12, color: COLORS.textLight}}>Enter Phone to check</div>
                     )}
                   </div>
-                  
+                   
                   {custPhone.length >= 10 && (
                     <LoyaltyProgress 
                       currentPoints={currentCoins} 
@@ -1264,7 +1270,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                       loyaltyRules={loyaltyRules}
                     />
                   )}
-                  
+                   
                   {custPhone.length >= 10 && (
                     <div style={{ marginTop: 12 }}>
                       {loyaltyRules.rewards.map(r => {
@@ -1272,7 +1278,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                         const isClaimed = claimedReward?.id === r.id;
                         const pointsNeeded = Math.max(0, r.cost - currentCoins);
                         const progress = Math.min((currentCoins / r.cost) * 100, 100);
-                        
+                         
                         return (
                           <div key={r.id} style={{ 
                             display: 'flex', 
@@ -1308,7 +1314,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                                 {isClaimed ? "✓ Claimed" : (canAfford ? "Claim 🎁" : `${pointsNeeded} more`)}
                               </button>
                             </div>
-                            
+                             
                             {!isClaimed && !canAfford && (
                               <div style={{ marginTop: 8 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 2 }}>
@@ -1328,7 +1334,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                       })}
                     </div>
                   )}
-                  
+                   
                   <div style={{ fontSize: 12, color: COLORS.copper, fontWeight: 700, textAlign: 'center', marginTop: 8 }}>
                     🎁 You will earn +{newEarnedCoins} EatCoins on this order!
                   </div>
@@ -1340,7 +1346,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 </div>
 
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special cooking instructions?" style={{ ...inputStyle, marginBottom: 20, resize: "none" }} rows={2} />
-                
+                 
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Payment Method</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
@@ -1350,7 +1356,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     <button onClick={() => setPaymentMethod('gpay')} style={{ padding: '10px', borderRadius: 10, border: `2px solid ${paymentMethod === 'gpay' ? COLORS.copper : COLORS.line}`, background: paymentMethod === 'gpay' ? COLORS.copperLight : 'transparent', fontWeight: 700, cursor: 'pointer' }}>🟢 Google Pay</button>
                   </div>
                 </div>
-                
+                 
                 <div style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.textLight }}>
                     <span>Subtotal</span><span>{inr(subtotal)}</span>
@@ -1385,7 +1391,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     </div>
                   )}
                 </div>
-                
+                 
                 {orderType === "parcel" && paymentMethod === "cash" && (
                   <div style={{ textAlign: "center", padding: "20px", background: COLORS.paper, border: `2px dashed ${COLORS.line}`, borderRadius: 16, marginBottom: 20 }}>
                     <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.ink, marginBottom: 12 }}>Scan to Pay {inr(finalTotal)}</div>
@@ -1426,7 +1432,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
             {activeModal === 'orderHistory' && (
               <>
                 <ModalHeader title="📜 My Order History" onClose={() => setActiveModal(null)} />
-                
+                 
                 {myOrders.length > 0 && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
                     <div style={{ background: COLORS.paper, padding: 12, borderRadius: 10, textAlign: 'center' }}>
@@ -1443,7 +1449,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     </div>
                   </div>
                 )}
-                
+                 
                 {myOrders.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: "40px 0", color: COLORS.textLight, fontWeight: 600 }}>
                     <div style={{ fontSize: 48, marginBottom: 12 }}>🛒</div>
@@ -1456,7 +1462,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                       const orderTotal = o.items.reduce((s,i)=>s+(i.price*i.qty),0) + (o.deliveryFee||0) - (o.loyaltyDiscount||0);
                       const isCompleted = o.status === "served";
                       const isCancelled = o.status === "cancelled";
-                      
+                       
                       return (
                         <div key={o.id} style={{ 
                           background: COLORS.paper, 
@@ -1483,7 +1489,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                                o.status === "ready" ? "✅ Ready" : o.status}
                             </span>
                           </div>
-                          
+                           
                           <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 8 }}>
                             📅 {new Date(o.createdAt).toLocaleString('en-IN', {
                               day: '2-digit',
@@ -1498,11 +1504,11 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                               </span>
                             )}
                           </div>
-                          
+                           
                           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: COLORS.ink }}>
                             {o.items.map(i => `${i.qty}× ${i.name}`).join(", ")}
                           </div>
-                          
+                           
                           <div style={{ 
                             display: 'flex', 
                             justifyContent: 'space-between', 
@@ -1528,7 +1534,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                                 </div>
                               )}
                             </div>
-                            
+                             
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                               {!isCancelled && (
                                 <button onClick={() => reorderOrder(o)} style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${COLORS.sage}`, background: 'transparent', color: COLORS.sage, fontWeight: 700, fontSize: 11, cursor: 'pointer' }} className="smooth-transition hover-lift">🔄 Reorder</button>
@@ -1656,11 +1662,11 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                       <div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}>
                         <ProgressRing progress={getOrderProgress(o.status)} size={80} />
                       </div>
-                      
+                       
                       <div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 12 }}>
                         {o.items.map(i => `${i.qty}x ${i.name}`).join(", ")}
                       </div>
-                      
+                       
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                         <button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back to Menu</button>
                         <button onClick={() => { setActiveModal(null); setCartOpen(true); }} style={{ padding: "13px 20px", background: COLORS.sage, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>➕ Add Items</button>
@@ -1964,7 +1970,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const [newGalleryImg, setNewGalleryImg] = useState("");
   const [heroImgInput, setHeroImgInput] = useState(settings?.heroImage || "");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  
+   
   // New state for categories management
   const [newCategoryInput, setNewCategoryInput] = useState('');
 
@@ -2120,7 +2126,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, alignItems: 'center' }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>📊 Admin Dashboard</div><button onClick={() => requestPinPrompt("customer")} style={{ background: COLORS.paper2, border: "none", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontWeight: 700 }}>← Exit</button></div>
-      
+       
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto", scrollbarWidth: "none" }}>
         {["overview", "menu", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings"].map((t) => ( <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", marginRight: 10, fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button> ))}
       </div>
@@ -2133,13 +2139,13 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
             <button onClick={handleExportCSV} style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontWeight: 700 }}>📊 Export CSV</button>
             <button onClick={generatePDFReport} disabled={isGeneratingPDF} style={{ background: COLORS.copper, color: "#fff", border: "none", borderRadius: 10, padding: "10px 16px", cursor: isGeneratingPDF ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: isGeneratingPDF ? 0.6 : 1 }}>{isGeneratingPDF ? '⏳ Generating...' : '📄 PDF Report'}</button>
           </div>
-          
+           
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, marginBottom: 28 }}>
             <StatCard label={`Orders (${filterDate})`} value={filteredOrders.length} icon="📋" color={COLORS.copper} />
             <StatCard label="Revenue (paid)" value={inr(revenue)} icon="💰" color={COLORS.sage} />
             <StatCard label="Avg Order Value" value={inr(avgOrderValue)} icon="📈" color={COLORS.gold} />
           </div>
-          
+           
           <KitchenMetrics filteredOrders={filteredOrders} />
 
           <div id="report-content" style={{ display: 'none' }}>
@@ -2211,7 +2217,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
               />
               <button onClick={handleAddCategory} style={{ ...primaryBtn, whiteSpace: 'nowrap' }}>+ Add</button>
             </div>
-            
+             
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {categories.map((cat, index) => (
                 <div key={cat} style={{ 
@@ -2275,7 +2281,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
               <input type="text" placeholder="Dish Name *" value={addMenuName} onChange={e => setAddMenuName(e.target.value)} style={inputStyle} />
               <input type="number" placeholder="Price (₹) *" value={addMenuPrice} onChange={e => setAddMenuPrice(e.target.value)} style={inputStyle} />
               <select value={addMenuCat} onChange={e => setAddMenuCat(e.target.value)} style={inputStyle}>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                {categories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <select value={addMenuVeg} onChange={e => setAddMenuVeg(e.target.value === 'true')} style={inputStyle}>
                 <option value="true">🟢 Vegetarian</option>
@@ -2315,7 +2321,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
                 <input type="text" value={newItemName} onChange={e=>setNewItemName(e.target.value)} style={{...inputStyle, marginBottom: 12}} />
                 <input type="number" value={newItemPrice} onChange={e=>setNewItemPrice(e.target.value)} style={{...inputStyle, marginBottom: 12}} />
                 <select value={newItemCat} onChange={e=>setNewItemCat(e.target.value)} style={{...inputStyle, marginBottom: 12}}>
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <input type="url" placeholder="Image URL" value={newItemImage} onChange={e=>setNewItemImage(e.target.value)} style={{...inputStyle, marginBottom: 20}} />
                 <div style={{ display: 'flex', gap: 12 }}>
@@ -2337,9 +2343,9 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
               <input type="number" value={loyaltyRules.rate} onChange={(e) => setLoyaltyRules({...loyaltyRules, rate: Number(e.target.value)})} style={{...inputStyle, width: 120}} />
               <span style={{ fontSize: 14, color: COLORS.textLight }}>*(Currently: ₹{loyaltyRules.rate} = 1 EatCoin)*</span>
             </div>
-            
+             
             <div style={{ borderTop: `1px solid ${COLORS.line}`, margin: '20px 0' }} />
-            
+             
             <div style={{ fontWeight: 700, marginBottom: 12 }}>Add New Reward Tier</div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <input type="number" placeholder="Cost (e.g. 300)" value={newReward.cost} onChange={e=>setNewReward({...newReward, cost: e.target.value})} style={{...inputStyle, flex: 1, minWidth: 120}} />
@@ -2665,7 +2671,7 @@ export default function App() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [targetRole, setTargetRole] = useState("staff");
   const [pinInput, setPinInput] = useState("");
-  
+   
   // New: categories state
   const [categories, setCategories] = useState(CATEGORIES);
 
@@ -2678,7 +2684,7 @@ export default function App() {
   const handlePinSubmit = () => {
     const aPin = settings?.adminPin || "9876";
     const sPin = settings?.staffPin || "5432";
-    
+     
     if (targetRole === "admin" && pinInput === aPin) {
       setRole("admin");
       setShowPinModal(false);
@@ -2842,7 +2848,7 @@ export default function App() {
           {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} />}
           {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} />}
           {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} />}
-          
+           
           {!["customer", "staff", "admin"].includes(role) && (
             <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} />
           )}
