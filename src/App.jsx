@@ -545,8 +545,8 @@ const processRazorpayPayment = async (amount, orderId, customerName, customerPho
 // 12. CUSTOMER VIEW
 // ============================================
 
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState }) {
-  const [category, setCategory] = useState(CATEGORIES[0]);
+function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories }) {
+  const [category, setCategory] = useState(categories[0] || "Drinks");
   const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -1054,7 +1054,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
       {!searchQuery.trim() && (
         <div style={{ display: "flex", gap: 10, overflowX: "auto", padding: "8px 16px", scrollbarWidth: "none", borderBottom: `1px solid ${COLORS.line}` }}>
-          {CATEGORIES.map((c) => ( <button key={c} onClick={() => setCategory(c)} style={{ whiteSpace: "nowrap", padding: "8px 16px", borderRadius: 12, border: `1.5px solid ${category === c ? COLORS.copper : COLORS.line}`, background: category === c ? COLORS.copper : "transparent", color: category === c ? "#fff" : COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }} className="smooth-transition">{c}</button> ))}
+          {categories.map((c) => ( <button key={c} onClick={() => setCategory(c)} style={{ whiteSpace: "nowrap", padding: "8px 16px", borderRadius: 12, border: `1.5px solid ${category === c ? COLORS.copper : COLORS.line}`, background: category === c ? COLORS.copper : "transparent", color: category === c ? "#fff" : COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }} className="smooth-transition">{c}</button> ))}
         </div>
       )}
 
@@ -1944,7 +1944,7 @@ function InventoryAlertBanner({ inventory }) {
   );
 }
 
-function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery }) {
+function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery, categories, updateCategories }) {
   const [tab, setTab] = useState("overview");
   const [filterDate, setFilterDate] = useState(toLocalISODate(Date.now()));
   const [newInv, setNewInv] = useState({ name: "", stock: "", unit: "kg" });
@@ -1964,6 +1964,9 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const [newGalleryImg, setNewGalleryImg] = useState("");
   const [heroImgInput, setHeroImgInput] = useState(settings?.heroImage || "");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  
+  // New state for categories management
+  const [newCategoryInput, setNewCategoryInput] = useState('');
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => toLocalISODate(o.createdAt) === filterDate);
@@ -1971,6 +1974,29 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
 
   const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0), 0);
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
+
+  // Category management functions
+  const handleAddCategory = () => {
+    if (!newCategoryInput.trim()) return;
+    updateCategories([...categories, newCategoryInput.trim()]);
+    setNewCategoryInput('');
+  };
+
+  const handleMoveCategory = (index, direction) => {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= categories.length) return;
+    const updated = [...categories];
+    const [removed] = updated.splice(index, 1);
+    updated.splice(newIndex, 0, removed);
+    updateCategories(updated);
+  };
+
+  const handleDeleteCategory = (index) => {
+    if (window.confirm(`"${categories[index]}" को डिलीट करें?`)) {
+      const updated = categories.filter((_, i) => i !== index);
+      updateCategories(updated);
+    }
+  };
 
   const generatePDFReport = async () => {
     setIsGeneratingPDF(true);
@@ -2172,6 +2198,77 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
 
       {tab === "menu" && (
         <div className="slide-up">
+          {/* ⭐ NEW: Category Management Block */}
+          <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30, border: `1px solid ${COLORS.line}` }}>
+            <h3 style={{ fontFamily: "'Outfit', sans-serif", marginTop: 0, marginBottom: 16 }}>📂 Manage Categories</h3>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+              <input 
+                type="text" 
+                placeholder="New Category Name (e.g. 'Beverages')" 
+                value={newCategoryInput} 
+                onChange={(e) => setNewCategoryInput(e.target.value)} 
+                style={inputStyle} 
+              />
+              <button onClick={handleAddCategory} style={{ ...primaryBtn, whiteSpace: 'nowrap' }}>+ Add</button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {categories.map((cat, index) => (
+                <div key={cat} style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  background: '#fff',
+                  padding: '10px 16px',
+                  borderRadius: 10,
+                  border: `1px solid ${COLORS.line}`
+                }}>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{index + 1}. {cat}</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button 
+                      onClick={() => handleMoveCategory(index, -1)} 
+                      disabled={index === 0}
+                      style={{ 
+                        background: COLORS.paper2, 
+                        border: 'none', 
+                        borderRadius: 6, 
+                        padding: '4px 10px', 
+                        cursor: index === 0 ? 'not-allowed' : 'pointer',
+                        opacity: index === 0 ? 0.4 : 1
+                      }}
+                    >⬆️</button>
+                    <button 
+                      onClick={() => handleMoveCategory(index, 1)} 
+                      disabled={index === categories.length - 1}
+                      style={{ 
+                        background: COLORS.paper2, 
+                        border: 'none', 
+                        borderRadius: 6, 
+                        padding: '4px 10px', 
+                        cursor: index === categories.length - 1 ? 'not-allowed' : 'pointer',
+                        opacity: index === categories.length - 1 ? 0.4 : 1
+                      }}
+                    >⬇️</button>
+                    <button 
+                      onClick={() => handleDeleteCategory(index)}
+                      style={{ 
+                        background: 'transparent', 
+                        border: `1.5px solid ${COLORS.error}`, 
+                        color: COLORS.error,
+                        borderRadius: 6, 
+                        padding: '4px 10px', 
+                        cursor: 'pointer',
+                        fontWeight: 700,
+                        fontSize: 12
+                      }}
+                    >✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* END Category Management Block */}
+
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30, border: `1px solid ${COLORS.line}` }}>
             <h3 style={{ fontFamily: "'Outfit', sans-serif", marginTop: 0, marginBottom: 16 }}>➕ Add New Menu Item (with Image)</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
@@ -2568,6 +2665,9 @@ export default function App() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [targetRole, setTargetRole] = useState("staff");
   const [pinInput, setPinInput] = useState("");
+  
+  // New: categories state
+  const [categories, setCategories] = useState(CATEGORIES);
 
   const requestPinPrompt = (target) => {
     setTargetRole(target);
@@ -2597,6 +2697,16 @@ export default function App() {
     }
   };
 
+  // Function to update categories (saves to Firebase)
+  const updateCategories = async (newCategories) => {
+    setCategories(newCategories);
+    try {
+      await setDoc(doc(db, "settings", "categories"), { categories: newCategories });
+    } catch (e) {
+      console.error("Failed to save categories:", e);
+    }
+  };
+
   useEffect(() => {
     const fetchAllData = async () => {
       try {
@@ -2615,6 +2725,10 @@ export default function App() {
           if (docSnap.id === "gallery" && data.images) setGallery(data.images);
           if (docSnap.id === "appSettings") {
             setSettings(prev => ({ ...prev, ...data }));
+          }
+          // Load categories from Firebase
+          if (docSnap.id === "categories" && data.categories) {
+            setCategories(data.categories);
           }
         });
       } catch (e) { 
@@ -2725,12 +2839,12 @@ export default function App() {
       <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <style>{FONTS}</style>
         <div className="app-content">
-          {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} />}
+          {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} />}
           {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} />}
-          {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} />}
+          {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} />}
           
           {!["customer", "staff", "admin"].includes(role) && (
-            <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} />
+            <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} />
           )}
         </div>
 
