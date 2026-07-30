@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db } from "./firebase";
 import { 
   collection, 
@@ -17,7 +17,7 @@ import {
 import QRCode from 'qrcode.react';
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — FINAL V14.0 (FIXED & ENHANCED)
+   🍽️ EAT & PARK RESTAURANT — FINAL V14.1 (FIXED & ENHANCED)
    ═══════════════════════════════════════════════════════════════════════════════════ */
 
 // ============================================
@@ -77,8 +77,9 @@ const RESTAURANT = {
 const GOOGLE_PLACE_ID = "ChIJc8jv-j9fjTkRYFQLM7KK1aA";
 const GOOGLE_REVIEW_URL = `https://search.google.com/local/writereview?placeid=${GOOGLE_PLACE_ID}`;
 
-const RAZORPAY_KEY = "YOUR_RAZORPAY_KEY_ID";
-const PHONEPE_MERCHANT_ID = "YOUR_MERCHANT_ID";
+// Use environment variables for sensitive keys (fallback to placeholders)
+const RAZORPAY_KEY = process.env.REACT_APP_RAZORPAY_KEY || "YOUR_RAZORPAY_KEY_ID";
+const PHONEPE_MERCHANT_ID = process.env.REACT_APP_PHONEPE_MERCHANT_ID || "YOUR_MERCHANT_ID";
 
 const CATEGORIES = [
   "Drinks", "Fun Food", "Chinese Starter", "Mughlai", "Tandoori", 
@@ -103,103 +104,14 @@ const LOYALTY_TIERS = [
 function getLoyaltyTier(points) {
   let tier = LOYALTY_TIERS[0];
   for (const t of LOYALTY_TIERS) {
-    if (points >= t.points) {
-      tier = t;
-    }
+    if (points >= t.points) tier = t;
   }
   return tier;
 }
 
-function LoyaltyProgress({ currentPoints, nextTier, loyaltyRules }) {
-  if (!nextTier) return null;
-  
-  const currentTierIndex = LOYALTY_TIERS.indexOf(nextTier) - 1;
-  const previousTierPoints = currentTierIndex >= 0 ? LOYALTY_TIERS[currentTierIndex].points : 0;
-  const pointsNeeded = nextTier.points - currentPoints;
-  const progress = Math.min(((currentPoints - previousTierPoints) / (nextTier.points - previousTierPoints)) * 100, 100);
-  
-  return (
-    <div style={{ marginTop: 8, padding: '10px 12px', background: '#fff', borderRadius: 10, border: `1px solid ${COLORS.line}` }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-        <span style={{ fontWeight: 600, color: COLORS.textLight }}>
-          {nextTier.emoji} Next: {nextTier.name}
-        </span>
-        <span style={{ fontWeight: 700, color: pointsNeeded > 0 ? COLORS.copper : COLORS.success }}>
-          {pointsNeeded > 0 ? `${pointsNeeded} points away` : '🎉 Unlocked!'}
-        </span>
-      </div>
-      <div style={{ width: '100%', height: 6, background: COLORS.paper2, borderRadius: 999, overflow: 'hidden' }}>
-        <div style={{ 
-          width: `${Math.min(progress, 100)}%`, 
-          height: '100%', 
-          background: `linear-gradient(90deg, ${COLORS.gold}, ${nextTier.color || COLORS.sage})`,
-          borderRadius: 999,
-          transition: 'width 0.8s ease'
-        }} />
-      </div>
-      {pointsNeeded > 0 && (
-        <div style={{ fontSize: 11, color: COLORS.textLight, marginTop: 4, fontWeight: 500 }}>
-          💰 Spend ₹{Math.ceil(pointsNeeded * loyaltyRules.rate)} more to reach {nextTier.name}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const useLocalStorage = (key, initialValue) => {
-  const [storedValue, setStoredValue] = useState(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : initialValue;
-    } catch (error) {
-      console.error(`Error reading localStorage key "${key}":`, error);
-      return initialValue;
-    }
-  });
-
-  const setValue = useCallback((value) => {
-    try {
-      const valueToStore = value instanceof Function ? value(storedValue) : value;
-      setStoredValue(valueToStore);
-      window.localStorage.setItem(key, JSON.stringify(valueToStore));
-    } catch (error) {
-      console.error(`Error setting localStorage key "${key}":`, error);
-    }
-  }, [key, storedValue]);
-
-  return [storedValue, setValue];
-};
-
 // ============================================
-// NOTIFICATION SOUND
+// 3. UTILITY FUNCTIONS
 // ============================================
-
-const playNotificationSound = () => {
-  try {
-    const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
-    audio.volume = 0.5;
-    audio.play().catch(e => console.log("Sound play error:", e));
-  } catch(e) {
-    console.log("Sound error:", e);
-  }
-};
-
-function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true, customImg = "") {
-  let img = customImg || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; 
-  if (!customImg) {
-    if (category.includes("Drinks") || category.includes("Tea")) img = "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Fun Food") || category.includes("Snacks")) img = "https://images.unsplash.com/photo-1626082895617-2c6ad36f568a?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Indian Bread")) img = "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Paneer")) img = "https://images.unsplash.com/photo-1631452180519-c014fe946bc0?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Mushroom") || category.includes("Soup") || category.includes("Dal") || category.includes("Aloo")) img = "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Biryani") || category.includes("Pulao")) img = "https://images.unsplash.com/photo-1589302168068-964664d93cb0?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Chinese") || category.includes("Momo")) img = "https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Tandoori") || category.includes("Mughlai")) img = "https://images.unsplash.com/photo-1599487405702-3e28c42b9370?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Chicken") || category.includes("Mutton") || category.includes("Egg") || category.includes("Fish")) img = "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Thali")) img = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=400&q=80";
-  }
-  return { id, name, desc: desc || "Freshly prepared with premium ingredients.", price, category, veg, available, image: img, portion: portion || "", isBestseller };
-}
 
 function inr(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
 function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
@@ -246,84 +158,57 @@ const EMPTY_STATES = {
 };
 
 // ============================================
-// REUSABLE COMPONENTS
+// 4. REUSABLE COMPONENTS (memoized for performance)
 // ============================================
 
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
+const ErrorBoundary = React.memo(({ children }) => {
+  const [hasError, setHasError] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const handleError = (event) => {
+      console.error('Uncaught error:', event.error);
+      setHasError(true);
+      setError(event.error);
+    };
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+
+  if (hasError) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+        <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>😅</div>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: COLORS.ink, marginBottom: '0.5rem' }}>Something went wrong</h2>
+        <p style={{ color: COLORS.textLight, marginBottom: '1rem' }}>Please try refreshing the page</p>
+        <button onClick={() => window.location.reload()} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>Refresh Page</button>
+      </div>
+    );
   }
+  return children;
+});
 
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
+const VegDot = memo(({ veg }) => {
+  const c = veg ? VEG : NONVEG;
+  return <span role="img" aria-label={veg ? "Vegetarian item" : "Non-vegetarian item"} title={veg ? "Vegetarian" : "Non-vegetarian"} style={{ width: 14, height: 14, border: `1.5px solid ${c}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, borderRadius: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: c }} /></span>;
+});
 
-  componentDidCatch(error, errorInfo) {
-    console.error('Error caught by boundary:', error, errorInfo);
-  }
+const Badge = memo(({ children, color }) => {
+  return <span style={{ background: color, color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", padding: "5px 10px", borderRadius: 999, fontWeight: 700, display: "inline-block" }}>{children}</span>;
+});
 
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
-          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>😅</div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: COLORS.ink, marginBottom: '0.5rem' }}>Something went wrong</h2>
-          <p style={{ color: COLORS.textLight, marginBottom: '1rem' }}>Please try refreshing the page</p>
-          <button onClick={() => window.location.reload()} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>Refresh Page</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+const Stepper = memo(({ qty, onChange }) => {
+  const btnStyle = { width: 28, height: 28, borderRadius: "50%", border: `1.5px solid ${COLORS.copper}`, background: "transparent", color: COLORS.copper, fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s ease" };
+  return <div style={{ display: "flex", alignItems: "center", gap: 10 }}><button onClick={() => onChange(Math.max(0, qty - 1))} style={btnStyle} className="smooth-transition" aria-label="Decrease quantity">−</button><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, minWidth: 16, textAlign: "center", fontSize: 15 }}>{qty}</span><button onClick={() => onChange(qty + 1)} style={btnStyle} className="smooth-transition" aria-label="Increase quantity">+</button></div>;
+});
 
-function Badge({ children, color }) { 
-  return <span style={{ background: color, color: "#fff", fontFamily: "'JetBrains Mono', monospace", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", padding: "5px 10px", borderRadius: 999, fontWeight: 700, display: "inline-block" }}>{children}</span>; 
-}
-
-function VegDot({ veg }) { 
-  const c = veg ? VEG : NONVEG; 
-  return <span role="img" aria-label={veg ? "Vegetarian item" : "Non-vegetarian item"} title={veg ? "Vegetarian" : "Non-vegetarian"} style={{ width: 14, height: 14, border: `1.5px solid ${c}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, borderRadius: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: c }} /></span>; 
-}
-
-function ProgressRing({ progress, size = 60, strokeWidth = 3 }) {
-  const circumference = 2 * Math.PI * ((size - strokeWidth) / 2);
-  const offset = circumference - (progress / 100) * circumference;
-  return (
-    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx={size/2} cy={size/2} r={(size-strokeWidth)/2} fill="none" stroke={COLORS.line} strokeWidth={strokeWidth} />
-      <circle cx={size/2} cy={size/2} r={(size-strokeWidth)/2} fill="none" stroke={COLORS.sage} strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset} style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
-      <text x="50%" y="50%" textAnchor="middle" dy="0.3em" fontSize="16" fontWeight="700" fill={COLORS.sage}>{progress}%</text>
-    </svg>
-  );
-}
-
-function OrderTimer({ createdAt, estimatedTime }) {
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => { const timer = setInterval(() => setElapsed(Math.floor((Date.now() - createdAt) / 1000)), 1000); return () => clearInterval(timer); }, [createdAt]);
-  const minutes = Math.floor(elapsed / 60); const seconds = elapsed % 60; const isOvertime = elapsed > (estimatedTime * 60);
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: isOvertime ? 'rgba(239, 68, 68, 0.1)' : COLORS.sageLight, borderRadius: 10, borderLeft: `3px solid ${isOvertime ? COLORS.error : COLORS.sage}` }}>
-      <span style={{ fontSize: 11, fontWeight: 800, color: isOvertime ? COLORS.error : COLORS.sageDark }}>⏱️ {minutes}:{seconds.toString().padStart(2, '0')}</span>
-      <span style={{ fontSize: 11, color: COLORS.textLight, fontWeight: 600 }}>/ {estimatedTime}m</span>
-    </div>
-  );
-}
-
-const stepBtnStyle = { width: 28, height: 28, borderRadius: "50%", border: `1.5px solid ${COLORS.copper}`, background: "transparent", color: COLORS.copper, fontSize: 18, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s ease" };
-
-function Stepper({ qty, onChange }) { 
-  return <div style={{ display: "flex", alignItems: "center", gap: 10 }}><button onClick={() => onChange(Math.max(0, qty - 1))} style={stepBtnStyle} className="smooth-transition" aria-label="Decrease quantity">−</button><span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, minWidth: 16, textAlign: "center", fontSize: 15 }}>{qty}</span><button onClick={() => onChange(qty + 1)} style={stepBtnStyle} className="smooth-transition" aria-label="Increase quantity">+</button></div>; 
-}
-
-function AddBtnStepper({ qty, onChange, available }) {
+const AddBtnStepper = memo(({ qty, onChange, available }) => {
   if (!available) return <div style={{ color: COLORS.rust, background: COLORS.paper2, borderRadius: 8, fontWeight: 700, fontSize: 11, padding: "6px 10px", textAlign: "center", width: 80, boxSizing: "border-box" }}>Out of stock</div>;
   if (!qty) return <button onClick={() => onChange(1)} aria-label="Add item to cart" style={{ color: COLORS.sage, background: "#fff", border: `2px solid ${COLORS.sage}`, borderRadius: 8, fontWeight: 800, fontSize: 12, padding: "6px 16px", cursor: "pointer", width: 80, boxShadow: "0 4px 12px rgba(74,124,89,0.15)" }} className="smooth-transition hover-lift scale-bounce">ADD</button>;
-  return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: 80, padding: "4px", background: "#fff", border: `2px solid ${COLORS.sage}`, borderRadius: 8, boxShadow: "0 4px 12px rgba(74,124,89,0.15)" }}><button onClick={() => onChange(Math.max(0, qty - 1))} aria-label="Decrease quantity" style={{...stepBtnStyle, width: 22, height: 22, border: "none", color: COLORS.sage}} className="smooth-transition">−</button><span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 14, color: COLORS.sage }}>{qty}</span><button onClick={() => onChange(qty + 1)} aria-label="Increase quantity" style={{...stepBtnStyle, width: 22, height: 22, border: "none", color: COLORS.sage}} className="smooth-transition">+</button></div>;
-}
+  return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: 80, padding: "4px", background: "#fff", border: `2px solid ${COLORS.sage}`, borderRadius: 8, boxShadow: "0 4px 12px rgba(74,124,89,0.15)" }}><button onClick={() => onChange(Math.max(0, qty - 1))} aria-label="Decrease quantity" style={{ width: 22, height: 22, border: "none", color: COLORS.sage, background: "transparent", fontSize: 18, cursor: "pointer" }} className="smooth-transition">−</button><span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 800, fontSize: 14, color: COLORS.sage }}>{qty}</span><button onClick={() => onChange(qty + 1)} aria-label="Increase quantity" style={{ width: 22, height: 22, border: "none", color: COLORS.sage, background: "transparent", fontSize: 18, cursor: "pointer" }} className="smooth-transition">+</button></div>;
+});
 
-function SearchBar({ value, onChange, placeholder = "Search menu..." }) {
+const SearchBar = memo(({ value, onChange, placeholder = "Search menu..." }) => {
   const timeoutRef = useRef(null);
   const [localValue, setLocalValue] = useState(value);
   useEffect(() => { setLocalValue(value); }, [value]);
@@ -340,9 +225,9 @@ function SearchBar({ value, onChange, placeholder = "Search menu..." }) {
       {localValue && ( <button onClick={() => { setLocalValue(""); onChange(""); }} aria-label="Clear search" style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: COLORS.textLight, padding: "4px 8px" }}>✕</button> )}
     </div>
   );
-}
+});
 
-function SlideButton({ onComplete, text, bg = COLORS.sage }) {
+const SlideButton = memo(({ onComplete, text, bg = COLORS.sage }) => {
   const [val, setVal] = useState(0);
   return (
     <div style={{position: 'relative', width: '100%', height: 48, background: COLORS.paper2, borderRadius: 14, overflow: 'hidden', border: `1px solid ${COLORS.line}`}}>
@@ -353,13 +238,9 @@ function SlideButton({ onComplete, text, bg = COLORS.sage }) {
       <input type="range" min="0" max="100" value={val} onChange={(e) => setVal(Number(e.target.value))} onMouseUp={() => { if(val > 85) onComplete(); setVal(0); }} onTouchEnd={() => { if(val > 85) onComplete(); setVal(0); }} aria-label={text} style={{opacity: 0, width: '100%', height: '100%', cursor: 'pointer', position: 'absolute', top: 0, left: 0, zIndex: 3}} />
     </div>
   );
-}
+});
 
-function ModalHeader({ title, onClose }) { 
-  return <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 16 }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 700 }}>{title}</div><button onClick={onClose} aria-label="Close" style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", fontSize: 18 }}>✕</button></div>; 
-}
-
-function Toast({ message, type = 'info' }) {
+const Toast = memo(({ message, type = 'info' }) => {
   const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
   return (
     <div className="toast-anim" role="status" aria-live="polite" style={{ position: 'fixed', bottom: 40, left: '50%', transform: 'translateX(-50%)', background: config.bg, color: '#fff', padding: '16px 28px', borderRadius: 30, boxShadow: `0 12px 28px ${config.bg}66`, zIndex: 100, fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 12, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.2)' }}>
@@ -367,175 +248,162 @@ function Toast({ message, type = 'info' }) {
       <span>{message}</span>
     </div>
   );
-}
+});
 
-function EmptyState({ reason }) {
-  const state = EMPTY_STATES[reason] || EMPTY_STATES.category_empty;
-  return (
-    <div className="fade-scale" style={{ textAlign: 'center', padding: '60px 20px', color: COLORS.textLight }}>
-      <div style={{ fontSize: 56, marginBottom: 16 }}>{state.icon}</div>
-      <div style={{ fontWeight: 800, fontSize: 18, color: COLORS.ink, marginBottom: 8 }}>{state.title}</div>
-      <div style={{ fontWeight: 500, fontSize: 14, lineHeight: 1.6, maxWidth: 280, margin: "0 auto" }}>{state.subtitle}</div>
-    </div>
-  );
-}
+const ModalHeader = memo(({ title, onClose }) => {
+  return <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 16 }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 700 }}>{title}</div><button onClick={onClose} aria-label="Close" style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, cursor: "pointer", fontSize: 18 }}>✕</button></div>;
+});
 
-function StatCard({ label, value, icon, color }) { 
+const StatCard = memo(({ label, value, icon, color }) => {
   return <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 18, padding: "24px 20px", transition: "all 0.3s ease", boxShadow: "0 8px 24px rgba(0,0,0,0.04)" }} className="smooth-transition hover-lift">
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}><div style={{ fontSize: 13, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.05em" }}>{label}</div><span style={{ fontSize: 28 }}>{icon}</span></div>
     <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, fontWeight: 800, color: color }}>{value}</div>
-  </div>; 
-}
+  </div>;
+});
 
-function SidebarBtn({ icon, text, onClick, highlight }) {
+const SidebarBtn = memo(({ icon, text, onClick, highlight }) => {
   return (
     <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 20px", borderRadius: 14, background: highlight ? COLORS.copperLight : COLORS.paper, border: highlight ? `1.5px solid ${COLORS.copper}` : `1px solid ${COLORS.line}`, color: highlight ? COLORS.copperDark : COLORS.ink, fontSize: 15, fontWeight: 700, cursor: "pointer", textAlign: "left", transition: "all 0.2s ease", width: '100%', boxShadow: highlight ? "0 4px 12px rgba(226,89,56,0.15)" : "none" }}>
       <span style={{ fontSize: 20 }}>{icon}</span> <span>{text}</span>
     </button>
   );
-}
+});
 
-function MyOrderStats({ myOrders, loyaltyCoins }) {
-  if (!myOrders || myOrders.length === 0) return null;
-  const totalSpent = myOrders.reduce((s, o) => s + o.items.reduce((a, i) => a + i.price * i.qty, 0), 0);
-  const favoriteDish = (() => {
-    const dishes = {};
-    myOrders.forEach(o => o.items.forEach(i => { dishes[i.name] = (dishes[i.name] || 0) + i.qty; }));
-    const sorted = Object.entries(dishes).sort((a, b) => b[1] - a[1]);
-    return sorted.length > 0 ? sorted[0][0] : "—";
-  })();
-
+// ---------- new helper components ----------
+const ComboCard = memo(({ combo, onAdd }) => {
   return (
-    <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', padding: 16, borderRadius: 14, marginBottom: 20, border: `1px solid ${COLORS.line}` }}>
-      <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 12, color: COLORS.ink }}>📊 Your Journey</div>
-      <div style={{ display: 'grid', gap: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
-          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Total Spent</span>
-          <strong style={{ color: COLORS.copper }}>{inr(totalSpent)}</strong>
+    <div style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.gold}`, padding: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 32 }}>{combo.image}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.ink }}>{combo.name}</div>
+          <ul style={{ fontSize: 12, color: COLORS.textLight, margin: '4px 0', paddingLeft: 16 }}>
+            {combo.items.map(item => <li key={item.id}>{item.name} × {item.quantity}</li>)}
+          </ul>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4 }}>
+            <span style={{ fontWeight: 700, color: COLORS.copper }}>₹{combo.finalPrice}</span>
+            <span style={{ textDecoration: 'line-through', fontSize: 12, color: COLORS.textLight }}>₹{combo.totalPrice}</span>
+            <span style={{ background: COLORS.copper, color: '#fff', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{combo.discount}% OFF</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
-          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Orders</span>
-          <strong style={{ color: COLORS.sage }}>{myOrders.length}</strong>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
-          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Favorite</span>
-          <strong style={{ color: COLORS.ink, fontSize: 12 }}>{favoriteDish}</strong>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
-          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>EatCoins</span>
-          <strong style={{ color: COLORS.gold }}>{loyaltyCoins} 🪙</strong>
-        </div>
+        <button onClick={onAdd} style={{ background: COLORS.sage, color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }} className="smooth-transition hover-lift">Add Combo</button>
       </div>
     </div>
   );
-}
+});
 
-function GoogleReviewButton({ variant = 'primary', size = 'md', showText = true }) {
-  const buttonStyles = {
-    primary: {
-      background: '#4285F4',
-      color: '#fff',
-      border: 'none',
-      boxShadow: '0 4px 12px rgba(66, 133, 244, 0.3)'
-    },
-    secondary: {
-      background: 'transparent',
-      color: '#4285F4',
-      border: `2px solid #4285F4`,
-      boxShadow: 'none'
-    },
-    gold: {
-      background: 'linear-gradient(135deg, #FFD700, #FFA500)',
-      color: '#1A1A1A',
-      border: 'none',
-      boxShadow: '0 4px 12px rgba(255, 215, 0, 0.3)'
-    }
-  };
-
-  const sizeStyles = {
-    sm: { padding: '4px 12px', fontSize: 11, borderRadius: 16 },
-    md: { padding: '8px 18px', fontSize: 13, borderRadius: 20 },
-    lg: { padding: '12px 24px', fontSize: 16, borderRadius: 24 }
-  };
-
-  const styles = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    textDecoration: 'none',
-    fontWeight: 700,
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    ...buttonStyles[variant],
-    ...sizeStyles[size]
-  };
-
+const FlashSaleItem = memo(({ item, onAdd }) => {
   return (
-    <a 
-      href={GOOGLE_REVIEW_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={styles}
-      className="smooth-transition hover-lift"
-    >
-      <span style={{ fontSize: size === 'lg' ? 24 : size === 'sm' ? 14 : 18 }}>⭐</span>
-      {showText && <span>Rate on Google</span>}
-    </a>
+    <div style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.error}`, padding: 12, minWidth: 150, flexShrink: 0 }}>
+      <div style={{ fontSize: 20 }}>🔥</div>
+      <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.ink }}>{item.name}</div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '4px 0' }}>
+        <span style={{ fontWeight: 800, color: COLORS.error }}>₹{item.discountPrice}</span>
+        <span style={{ textDecoration: 'line-through', fontSize: 12, color: COLORS.textLight }}>₹{item.price}</span>
+      </div>
+      <button onClick={onAdd} style={{ background: COLORS.error, color: '#fff', border: 'none', padding: '4px 12px', borderRadius: 6, fontWeight: 700, width: '100%', cursor: 'pointer' }} className="smooth-transition hover-lift">Add</button>
+    </div>
   );
-}
+});
 
-const loadRazorpayScript = () => {
-  return new Promise((resolve) => {
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
+// ============================================
+// 5. CUSTOM HOOKS
+// ============================================
+
+const useLocalStorage = (key, initialValue) => {
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.error(`Error reading localStorage key "${key}":`, error);
+      return initialValue;
+    }
   });
+
+  const setValue = useCallback((value) => {
+    try {
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
+      setStoredValue(valueToStore);
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+    } catch (error) {
+      console.error(`Error setting localStorage key "${key}":`, error);
+    }
+  }, [key, storedValue]);
+
+  return [storedValue, setValue];
 };
 
-async function processRazorpayPayment(amount, orderId, customerName, customerPhone) {
-  const isScriptLoaded = await loadRazorpayScript();
-  if (!isScriptLoaded) {
-    alert("⚠️ Payment gateway could not load. Please try again.");
-    return false;
+// ============================================
+// 6. NOTIFICATION SOUND (single instance)
+// ============================================
+
+const notificationAudio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+notificationAudio.volume = 0.5;
+
+const playNotificationSound = () => {
+  try {
+    notificationAudio.currentTime = 0;
+    notificationAudio.play().catch(e => console.log("Sound play error:", e));
+  } catch(e) {
+    console.log("Sound error:", e);
   }
+};
 
-  const options = {
-    key: RAZORPAY_KEY,
-    amount: Math.round(amount * 100),
-    currency: "INR",
-    name: RESTAURANT.name,
-    description: `Order #${orderId}`,
-    prefill: {
-      name: customerName,
-      contact: customerPhone,
-    },
-    theme: {
-      color: COLORS.copper,
-    },
-    handler: function(response) {
-      console.log("Payment successful:", response);
-      return true;
-    },
-    modal: {
-      ondismiss: function() {
-        console.log("Payment cancelled");
-        return false;
-      }
-    }
-  };
+// ============================================
+// 7. MENU ITEM HELPER
+// ============================================
 
-  const razorpay = new window.Razorpay(options);
-  razorpay.open();
-  return true;
+function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true, customImg = "") {
+  let img = customImg || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; 
+  if (!customImg) {
+    if (category.includes("Drinks") || category.includes("Tea")) img = "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Fun Food") || category.includes("Snacks")) img = "https://images.unsplash.com/photo-1626082895617-2c6ad36f568a?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Indian Bread")) img = "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Paneer")) img = "https://images.unsplash.com/photo-1631452180519-c014fe946bc0?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Mushroom") || category.includes("Soup") || category.includes("Dal") || category.includes("Aloo")) img = "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Biryani") || category.includes("Pulao")) img = "https://images.unsplash.com/photo-1589302168068-964664d93cb0?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Chinese") || category.includes("Momo")) img = "https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Tandoori") || category.includes("Mughlai")) img = "https://images.unsplash.com/photo-1599487405702-3e28c42b9370?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Chicken") || category.includes("Mutton") || category.includes("Egg") || category.includes("Fish")) img = "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Thali")) img = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=400&q=80";
+  }
+  return { id, name, desc: desc || "Freshly prepared with premium ingredients.", price, category, veg, available, image: img, portion: portion || "", isBestseller };
 }
 
 // ============================================
-// CHAT BOX COMPONENT
+// 8. LOYALTY PROGRESS COMPONENT
 // ============================================
 
-const ChatBox = ({ orderId, customerId }) => {
+const LoyaltyProgress = memo(({ currentPoints, nextTier, loyaltyRules }) => {
+  if (!nextTier) return null;
+  const currentTierIndex = LOYALTY_TIERS.indexOf(nextTier) - 1;
+  const previousTierPoints = currentTierIndex >= 0 ? LOYALTY_TIERS[currentTierIndex].points : 0;
+  const pointsNeeded = nextTier.points - currentPoints;
+  const progress = Math.min(((currentPoints - previousTierPoints) / (nextTier.points - previousTierPoints)) * 100, 100);
+  return (
+    <div style={{ marginTop: 8, padding: '10px 12px', background: '#fff', borderRadius: 10, border: `1px solid ${COLORS.line}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+        <span style={{ fontWeight: 600, color: COLORS.textLight }}>{nextTier.emoji} Next: {nextTier.name}</span>
+        <span style={{ fontWeight: 700, color: pointsNeeded > 0 ? COLORS.copper : COLORS.success }}>{pointsNeeded > 0 ? `${pointsNeeded} points away` : '🎉 Unlocked!'}</span>
+      </div>
+      <div style={{ width: '100%', height: 6, background: COLORS.paper2, borderRadius: 999, overflow: 'hidden' }}>
+        <div style={{ width: `${Math.min(progress, 100)}%`, height: '100%', background: `linear-gradient(90deg, ${COLORS.gold}, ${nextTier.color || COLORS.sage})`, borderRadius: 999, transition: 'width 0.8s ease' }} />
+      </div>
+      {pointsNeeded > 0 && (
+        <div style={{ fontSize: 11, color: COLORS.textLight, marginTop: 4, fontWeight: 500 }}>
+          💰 Spend ₹{Math.ceil(pointsNeeded * loyaltyRules.rate)} more to reach {nextTier.name}
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ============================================
+// 9. CHAT BOX COMPONENT (with local timestamp fallback)
+// ============================================
+
+const ChatBox = memo(({ orderId, customerId }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesRef = collection(db, 'chats', orderId, 'messages');
@@ -544,13 +412,19 @@ const ChatBox = ({ orderId, customerId }) => {
     try {
       const q = query(messagesRef, orderBy('timestamp', 'asc'));
       const unsubscribe = onSnapshot(q, (snap) => {
-        setMessages(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const msgs = snap.docs.map(doc => {
+          const data = doc.data();
+          // Fallback to local time if serverTimestamp not yet set
+          if (!data.timestamp) data.timestamp = Date.now();
+          return { id: doc.id, ...data };
+        });
+        setMessages(msgs);
       });
       return unsubscribe;
     } catch (e) {
       console.error('Chat error:', e);
     }
-  }, [orderId]);
+  }, [orderId, messagesRef]);
 
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
@@ -594,16 +468,84 @@ const ChatBox = ({ orderId, customerId }) => {
           style={{ flex: 1, padding: 8, border: '1px solid #ccc', borderRadius: 4 }}
           onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
         />
-        <button onClick={sendMessage} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 4, cursor: 'pointer' }}>
-          Send
-        </button>
+        <button onClick={sendMessage} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 4, cursor: 'pointer' }}>Send</button>
       </div>
     </div>
   );
+});
+
+// ============================================
+// 10. GOOGLE REVIEW BUTTON
+// ============================================
+
+const GoogleReviewButton = memo(({ variant = 'primary', size = 'md', showText = true }) => {
+  const buttonStyles = {
+    primary: { background: '#4285F4', color: '#fff', border: 'none', boxShadow: '0 4px 12px rgba(66, 133, 244, 0.3)' },
+    secondary: { background: 'transparent', color: '#4285F4', border: `2px solid #4285F4`, boxShadow: 'none' },
+    gold: { background: 'linear-gradient(135deg, #FFD700, #FFA500)', color: '#1A1A1A', border: 'none', boxShadow: '0 4px 12px rgba(255, 215, 0, 0.3)' }
+  };
+  const sizeStyles = {
+    sm: { padding: '4px 12px', fontSize: 11, borderRadius: 16 },
+    md: { padding: '8px 18px', fontSize: 13, borderRadius: 20 },
+    lg: { padding: '12px 24px', fontSize: 16, borderRadius: 24 }
+  };
+  const styles = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    textDecoration: 'none',
+    fontWeight: 700,
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+    ...buttonStyles[variant],
+    ...sizeStyles[size]
+  };
+  return (
+    <a href={GOOGLE_REVIEW_URL} target="_blank" rel="noopener noreferrer" style={styles} className="smooth-transition hover-lift">
+      <span style={{ fontSize: size === 'lg' ? 24 : size === 'sm' ? 14 : 18 }}>⭐</span>
+      {showText && <span>Rate on Google</span>}
+    </a>
+  );
+});
+
+// ============================================
+// 11. PAYMENT PROCESSING (Razorpay)
+// ============================================
+
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
+const processRazorpayPayment = async (amount, orderId, customerName, customerPhone) => {
+  const isScriptLoaded = await loadRazorpayScript();
+  if (!isScriptLoaded) {
+    alert("⚠️ Payment gateway could not load. Please try again.");
+    return false;
+  }
+  const options = {
+    key: RAZORPAY_KEY,
+    amount: Math.round(amount * 100),
+    currency: "INR",
+    name: RESTAURANT.name,
+    description: `Order #${orderId}`,
+    prefill: { name: customerName, contact: customerPhone },
+    theme: { color: COLORS.copper },
+    handler: function(response) { console.log("Payment successful:", response); return true; },
+    modal: { ondismiss: function() { console.log("Payment cancelled"); return false; } }
+  };
+  const razorpay = new window.Razorpay(options);
+  razorpay.open();
+  return true;
 };
 
 // ============================================
-// CUSTOMER VIEW (WITH ALL FEATURES)
+// 12. CUSTOMER VIEW (with all features)
 // ============================================
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState }) {
@@ -611,8 +553,8 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [activeModal, setActiveModal] = useState(null); 
-  const [myOrderIds, setMyOrderIds] = useState([]); 
+  const [activeModal, setActiveModal] = useState(null);
+  const [myOrderIds, setMyOrderIds] = useState([]);
   const [orderType, setOrderType] = useState("dine_in");
   const [custName, setCustName] = useState("");
   const [custPhone, setCustPhone] = useState("");
@@ -624,30 +566,24 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [toastType, setToastType] = useState('info');
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [claimedReward, setClaimedReward] = useState(null);
-
   const [otpStep, setOtpStep] = useState("phone");
   const [otpCode, setOtpCode] = useState("");
   const [generatedOtp, setGeneratedOtp] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(0);
-
   const [bookType, setBookType] = useState("table");
   const [bookData, setBookData] = useState({ name: "", phone: "", date: "", time: "", guests: "" });
   const [confirmedBooking, setConfirmedBooking] = useState(null);
-
   const [favorites, setFavorites] = useLocalStorage('favorites', []);
-
-  // === SCHEDULED ORDER ===
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [isScheduled, setIsScheduled] = useState(false);
-
-  // === PAYMENT METHOD ===
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
 
-  // === COMBO OFFERS & FLASH SALES ===
+  // ---------- Combo & Flash Sale static data ----------
   const comboOffers = [
     {
       id: 'combo1',
@@ -676,17 +612,55 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       image: '🍗'
     }
   ];
-
   const flashSaleItems = [
     { id: 'nv19', name: 'Fish Curry', price: 449, discountPrice: 299, stock: 10 }
   ];
 
-  const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
+  // ---------- Derived state ----------
+  const filteredItems = useMemo(() => {
+    let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
+    items = items.filter((m) => {
+      if (vegOnly && !m.veg) return false;
+      if (searchQuery.trim()) { const q = searchQuery.toLowerCase(); return m.name.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q); }
+      return true;
+    });
+    return items;
+  }, [menu, category, searchQuery, vegOnly]);
 
-  // ============================================
-  // PERSISTENCE
-  // ============================================
-  
+  const emptyReason = searchQuery.trim() ? "search_no_results" : (vegOnly ? "veg_filtered" : "category_empty");
+
+  const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
+  const cartCount = cartItems.reduce((s, [, q]) => s + q, 0);
+  const subtotal = cartItems.reduce((s, [id, q]) => { const item = menu.find((m) => m.id === id); return s + (item ? item.price * q : 0); }, 0);
+  const deliveryFee = orderType === "parcel" ? 40 : 0;
+  const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
+  const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
+
+  const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
+  const currentCoins = activeUser ? activeUser.coins : 0;
+  const loyaltyTier = getLoyaltyTier(currentCoins);
+  const loyaltyDiscount = loyaltyTier.discount * subtotal;
+  const finalTotal = cartTotal - loyaltyDiscount;
+  const newEarnedCoins = Math.floor(finalTotal / loyaltyRules.rate);
+
+  const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served" && o.status !== "cancelled");
+  const myOrders = orders.filter(o => myOrderIds.includes(o.id));
+  const myCoinLogs = coinHistory.filter(c => c.phone === custPhone);
+
+  const cartQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${finalTotal}&cu=INR`)}`;
+  const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
+
+  // ---------- Toast helper ----------
+  const showToast = useCallback((msg, type = 'info') => {
+    const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
+    if (type === 'reward' && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    if (type === 'order') playNotificationSound();
+    setToast(msg); setToastType(type);
+    const timeout = setTimeout(() => setToast(null), config.duration);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  // ---------- Persistence ----------
   useEffect(() => {
     const savedCustomer = localStorage.getItem('eatpark_customer');
     if (savedCustomer) {
@@ -698,24 +672,17 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         if (data.isLoggedIn) setIsLoggedIn(true);
       } catch(e) {}
     }
-    
     const savedCart = localStorage.getItem('eatpark_cart');
     if (savedCart) {
-      try {
-        const cartData = JSON.parse(savedCart);
-        setCart(cartData);
-      } catch(e) {}
+      try { setCart(JSON.parse(savedCart)); } catch(e) {}
     }
-    
     const savedOrders = localStorage.getItem('eatpark_orders');
     if (savedOrders) {
       try {
         const ordersData = JSON.parse(savedOrders);
-        const orderIds = ordersData.map(o => o.id);
-        setMyOrderIds(orderIds);
+        setMyOrderIds(ordersData.map(o => o.id));
       } catch(e) {}
     }
-
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission();
     }
@@ -738,41 +705,8 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   }, [cart]);
 
-  const filteredItems = useMemo(() => {
-    let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
-    items = items.filter((m) => {
-      if (vegOnly && !m.veg) return false;
-      if (searchQuery.trim()) { const q = searchQuery.toLowerCase(); return m.name.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q); }
-      return true;
-    });
-    return items;
-  }, [menu, category, searchQuery, vegOnly]);
-
-  const emptyReason = searchQuery.trim() ? "search_no_results" : (vegOnly ? "veg_filtered" : "category_empty");
-
-  const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
-  const cartCount = cartItems.reduce((s, [, q]) => s + q, 0);
-  const subtotal = cartItems.reduce((s, [id, q]) => { const item = menu.find((m) => m.id === id); return s + (item ? item.price * q : 0); }, 0);
-  
-  const deliveryFee = orderType === "parcel" ? 40 : 0;
-  const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
-  const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
-
-  const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
-  const currentCoins = activeUser ? activeUser.coins : 0;
-  const loyaltyTier = getLoyaltyTier(currentCoins);
-  const loyaltyDiscount = loyaltyTier.discount * subtotal;
-  const finalTotal = cartTotal - loyaltyDiscount;
-
-  const showToast = useCallback((msg, type = 'info') => {
-    const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
-    if (type === 'reward' && navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    if (type === 'order') playNotificationSound();
-    setToast(msg); setToastType(type);
-    setTimeout(() => setToast(null), config.duration);
-  }, []);
-
-  const handleSetQty = (id, q) => {
+  // ---------- Handlers ----------
+  const handleSetQty = useCallback((id, q) => {
     const oldQ = cart[id] || 0;
     setCart((c) => ({ ...c, [id]: q }));
     if (q > oldQ && q === 1) {
@@ -783,7 +717,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
           setTimeout(() => setAiSuggestion(null), 6000);
        }
     }
-  };
+  }, [cart, menu]);
 
   const toggleFavorite = useCallback((itemId) => {
     setFavorites(prev => {
@@ -797,43 +731,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     });
   }, [setFavorites, showToast]);
 
-  const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served" && o.status !== "cancelled");
-  const myOrders = orders.filter(o => myOrderIds.includes(o.id));
-  const myCoinLogs = coinHistory.filter(c => c.phone === custPhone);
-
-  const cartQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${finalTotal}&cu=INR`)}`;
-  const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
-
-  const newEarnedCoins = Math.floor(finalTotal / loyaltyRules.rate);
-
-  // === COMBO & FLASH SALE HANDLERS ===
-  const addComboToCart = (combo) => {
-    combo.items.forEach(item => {
-      setCart(prev => {
-        const existing = prev[item.id];
-        if (existing) {
-          return { ...prev, [item.id]: existing + item.quantity };
-        } else {
-          return { ...prev, [item.id]: item.quantity };
-        }
-      });
-    });
-    showToast(`🎉 ${combo.name} added to cart!`, 'success');
-  };
-
-  const addFlashSaleToCart = (item) => {
-    setCart(prev => {
-      const existing = prev[item.id];
-      if (existing) {
-        return { ...prev, [item.id]: existing + 1 };
-      } else {
-        return { ...prev, [item.id]: 1 };
-      }
-    });
-    showToast(`⚡ ${item.name} added to cart at special price!`, 'success');
-  };
-
-  // === PUSH NOTIFICATION ===
   const sendPushNotification = useCallback((title, message) => {
     if ('Notification' in window && Notification.permission === 'granted') {
       new Notification(title, {
@@ -845,20 +742,11 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   }, []);
 
-  // === ORDER CANCELLATION ===
   const cancelOrder = useCallback(async (orderId) => {
     if (!window.confirm("Are you sure you want to cancel this order?")) return;
-    
     try {
-      await updateDoc(doc(db, "orders", orderId), { 
-        status: "cancelled",
-        cancelledAt: Date.now()
-      });
-      
-      setOrdersState(prev => prev.map(o => 
-        o.id === orderId ? { ...o, status: "cancelled", cancelledAt: Date.now() } : o
-      ));
-      
+      await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now() });
+      setOrdersState(prev => prev.map(o => o.id === orderId ? { ...o, status: "cancelled", cancelledAt: Date.now() } : o));
       showToast("❌ Order cancelled successfully", 'warning');
       sendPushNotification("Order Cancelled", `Order #${orderId.slice(1,5)} has been cancelled`);
     } catch(e) {
@@ -867,7 +755,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   }, [setOrdersState, showToast, sendPushNotification]);
 
-  // === ORDER REORDER ===
   const reorderOrder = useCallback((order) => {
     const newCart = {};
     order.items.forEach(item => {
@@ -878,7 +765,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     showToast("🔄 Order items added to cart!", 'success');
   }, [setCart, showToast]);
 
-  // === ADD TO EXISTING ORDER ===
   const addToExistingOrder = useCallback(async (orderId, items) => {
     try {
       const orderRef = doc(db, "orders", orderId);
@@ -887,21 +773,12 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         const orderData = orderSnap.data();
         const existingItems = orderData.items || [];
         const newItems = [...existingItems];
-        
         items.forEach(item => {
           const existing = newItems.find(i => i.itemId === item.id);
-          if (existing) {
-            existing.qty += 1;
-          } else {
-            newItems.push({ itemId: item.id, name: item.name, price: item.price, qty: 1, portion: item.portion || "" });
-          }
+          if (existing) existing.qty += 1;
+          else newItems.push({ itemId: item.id, name: item.name, price: item.price, qty: 1, portion: item.portion || "" });
         });
-        
-        await updateDoc(orderRef, { 
-          items: newItems,
-          updatedAt: Date.now()
-        });
-        
+        await updateDoc(orderRef, { items: newItems, updatedAt: Date.now() });
         showToast("✅ Items added to existing order!", 'success');
         playNotificationSound();
         sendPushNotification("Order Updated", `New items added to order #${orderId.slice(1,5)}`);
@@ -912,10 +789,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   }, [showToast, sendPushNotification]);
 
-  // ============================================
-  // HANDLE SEND OTP
-  // ============================================
-
+  // ---------- OTP handlers ----------
   const handleSendOtp = () => {
     if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid 10-digit phone", 'error'); return; }
     const code = Math.floor(1000 + Math.random() * 9000).toString();
@@ -928,12 +802,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     if (otpCode === generatedOtp || otpCode === "1234") {
       setIsLoggedIn(true);
       setOtpStep("phone");
-      
       const saveUserToFirebase = async () => {
         try {
           const userRef = doc(db, "customers", custPhone);
           const userSnap = await getDoc(userRef);
-          
           if (!userSnap.exists()) {
             await setDoc(userRef, {
               phone: custPhone,
@@ -946,33 +818,27 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
             });
             showToast("✅ New customer registered!", 'success');
           } else {
-            await updateDoc(userRef, {
-              lastLogin: Date.now(),
-              name: custName || userSnap.data().name
-            });
+            await updateDoc(userRef, { lastLogin: Date.now(), name: custName || userSnap.data().name });
             showToast("✅ Welcome back!", 'success');
           }
-          
           localStorage.setItem('eatpark_customer', JSON.stringify({
             name: custName,
             phone: custPhone,
             address: custAddress,
             isLoggedIn: true
           }));
-          
         } catch (error) {
           console.error("Error saving user:", error);
+          showToast("⚠️ Could not save user info", 'error');
         }
       };
-      
       saveUserToFirebase();
-      showToast("✅ Login Successful!", 'success');
     } else {
       showToast("❌ Incorrect OTP", 'error');
     }
   };
 
-  const checkExistingCustomer = async (phone) => {
+  const checkExistingCustomer = useCallback(async (phone) => {
     if (phone.length === 10) {
       try {
         const userRef = doc(db, "customers", phone);
@@ -988,7 +854,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         console.log("Customer check error:", e);
       }
     }
-  };
+  }, [showToast]);
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) { showToast("Geolocation not supported", 'error'); return; }
@@ -1020,18 +886,14 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     showToast(coupon.msg, 'success');
   };
 
-  // ============================================
-  // HANDLE PLACE ORDER (WITH ALL FEATURES)
-  // ============================================
-
-  async function handlePlaceOrder() {
+  // ---------- Place Order ----------
+  const handlePlaceOrder = useCallback(async () => {
     if (cartItems.length === 0) return;
     if (!custName.trim()) { showToast("⚠️ Please enter your Name", 'error'); return; }
     if (!custPhone.trim() || custPhone.length < 10) { showToast("⚠️ Please enter valid 10-digit Phone", 'error'); return; }
     if (orderType === "parcel" && !custAddress.trim()) { showToast("⚠️ Please enter Delivery Address", 'error'); return; }
 
     setIsProcessingPayment(true);
-
     try {
       if (paymentMethod === "razorpay") {
         const success = await processRazorpayPayment(finalTotal, uid("o"), custName, custPhone);
@@ -1045,7 +907,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       }
 
       const orderId = uid("o");
-      const itemStrings = cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return `${qty}x ${m.name}` }).join(", ");
+      const itemStrings = cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return `${qty}x ${m.name}`; }).join(", ");
       const claimedText = claimedReward ? `\n🎁 *Free Reward Claimed:* ${claimedReward.item}` : "";
       const scheduleText = isScheduled && scheduleDate && scheduleTime ? `\n📅 *Scheduled:* ${scheduleDate} at ${scheduleTime}` : "";
 
@@ -1139,14 +1001,35 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     } finally {
       setIsProcessingPayment(false);
     }
-  }
+  }, [cartItems, custName, custPhone, custAddress, orderType, table, paymentMethod, finalTotal, claimedReward, isScheduled, scheduleDate, scheduleTime, appliedDiscount, loyaltyDiscount, loyaltyTier, notes, menu, placeOrder, sendPushNotification, myOrderIds, showToast]);
 
-  async function handleBooking() {
+  // ---------- Booking handler ----------
+  const handleBooking = async () => {
     if(!bookData.name || !bookData.phone || !bookData.date || !bookData.time || !bookData.guests) { showToast("⚠️ Please fill all fields", 'error'); return; }
     const newBooking = { ...bookData, type: bookType, id: uid("b"), status: "pending", createdAt: Date.now() };
     await bookEvent(newBooking); setConfirmedBooking(newBooking); setBookData({ name: "", phone: "", date: "", time: "", guests: "" }); showToast("✅ Booking Request Sent!", 'success');
-  }
+  };
 
+  // ---------- Combo & Flash handlers ----------
+  const addComboToCart = useCallback((combo) => {
+    combo.items.forEach(item => {
+      setCart(prev => {
+        const existing = prev[item.id];
+        return { ...prev, [item.id]: existing ? existing + item.quantity : item.quantity };
+      });
+    });
+    showToast(`🎉 ${combo.name} added to cart!`, 'success');
+  }, [showToast]);
+
+  const addFlashSaleToCart = useCallback((item) => {
+    setCart(prev => {
+      const existing = prev[item.id];
+      return { ...prev, [item.id]: existing ? existing + 1 : 1 };
+    });
+    showToast(`⚡ ${item.name} added to cart at special price!`, 'success');
+  }, [showToast]);
+
+  // ---------- Render ----------
   const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", transition: "all 0.2s ease" };
 
   return (
@@ -1154,22 +1037,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       {toast && <Toast message={toast} type={toastType} />}
 
       {orders.filter(o => o.status === "new" && !myOrderIds.includes(o.id)).length > 0 && (
-        <div style={{ 
-          position: "fixed", 
-          top: 16, 
-          right: 16, 
-          background: COLORS.copper, 
-          color: "#fff",
-          padding: "8px 16px",
-          borderRadius: 20,
-          fontSize: 12,
-          fontWeight: 700,
-          zIndex: 100,
-          boxShadow: "0 4px 12px rgba(226,89,56,0.4)",
-          animation: "notificationPulse 2s ease-in-out infinite"
-        }} className="notification-pulse">
-          🔔 New Order!
-        </div>
+        <div style={{ position: "fixed", top: 16, right: 16, background: COLORS.copper, color: "#fff", padding: "8px 16px", borderRadius: 20, fontSize: 12, fontWeight: 700, zIndex: 100, boxShadow: "0 4px 12px rgba(226,89,56,0.4)", animation: "notificationPulse 2s ease-in-out infinite" }} className="notification-pulse">🔔 New Order!</div>
       )}
 
       <button onClick={() => {requestWaiter(table); showToast("🔔 Waiter has been notified!", 'success');}} aria-label="Call waiter to your table" style={{ position: "fixed", top: 80, right: 16, background: COLORS.rust, color: "#fff", border: "none", borderRadius: 20, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 8px 24px rgba(192,57,43,0.4)", cursor: "pointer", zIndex: 60, fontSize: 13, fontWeight: 800 }} className="smooth-transition hover-lift scale-bounce" title="Call Waiter">🔔 Waiter Call</button>
@@ -1189,15 +1057,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
       {/* Daily Specials Banner */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
-        <div style={{ 
-          background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
-          padding: '12px 16px',
-          borderRadius: 12,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          color: '#fff'
-        }}>
+        <div style={{ background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)', padding: '12px 16px', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 12, color: '#fff' }}>
           <span style={{ fontSize: 24 }}>🌟</span>
           <div>
             <div style={{ fontWeight: 800, fontSize: 14 }}>Today's Special</div>
@@ -1212,62 +1072,22 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         </div>
       )}
 
-      {/* ========== COMBO OFFERS SECTION ========== */}
+      {/* COMBO OFFERS SECTION */}
       {!searchQuery.trim() && (
         <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
           <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, color: COLORS.ink, marginBottom: 12 }}>🎯 Combo Offers</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
-            {comboOffers.map(combo => (
-              <div key={combo.id} style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.gold}`, padding: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontSize: 32 }}>{combo.image}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.ink }}>{combo.name}</div>
-                    <ul style={{ fontSize: 12, color: COLORS.textLight, margin: '4px 0', paddingLeft: 16 }}>
-                      {combo.items.map(item => <li key={item.id}>{item.name} × {item.quantity}</li>)}
-                    </ul>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4 }}>
-                      <span style={{ fontWeight: 700, color: COLORS.copper }}>₹{combo.finalPrice}</span>
-                      <span style={{ textDecoration: 'line-through', fontSize: 12, color: COLORS.textLight }}>₹{combo.totalPrice}</span>
-                      <span style={{ background: COLORS.copper, color: '#fff', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{combo.discount}% OFF</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => addComboToCart(combo)}
-                    style={{ background: COLORS.sage, color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}
-                    className="smooth-transition hover-lift"
-                  >
-                    Add Combo
-                  </button>
-                </div>
-              </div>
-            ))}
+            {comboOffers.map(combo => <ComboCard key={combo.id} combo={combo} onAdd={() => addComboToCart(combo)} />)}
           </div>
         </div>
       )}
 
-      {/* ========== FLASH SALE SECTION ========== */}
+      {/* FLASH SALE SECTION */}
       {!searchQuery.trim() && flashSaleItems.length > 0 && (
         <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
           <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, color: COLORS.rust, marginBottom: 12 }}>⚡ Flash Sale</h3>
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto' }}>
-            {flashSaleItems.map(item => (
-              <div key={item.id} style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.error}`, padding: 12, minWidth: 150, flexShrink: 0 }}>
-                <div style={{ fontSize: 20 }}>🔥</div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.ink }}>{item.name}</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '4px 0' }}>
-                  <span style={{ fontWeight: 800, color: COLORS.error }}>₹{item.discountPrice}</span>
-                  <span style={{ textDecoration: 'line-through', fontSize: 12, color: COLORS.textLight }}>₹{item.price}</span>
-                </div>
-                <button
-                  onClick={() => addFlashSaleToCart(item)}
-                  style={{ background: COLORS.error, color: '#fff', border: 'none', padding: '4px 12px', borderRadius: 6, fontWeight: 700, width: '100%', cursor: 'pointer' }}
-                  className="smooth-transition hover-lift"
-                >
-                  Add
-                </button>
-              </div>
-            ))}
+            {flashSaleItems.map(item => <FlashSaleItem key={item.id} item={item} onAdd={() => addFlashSaleToCart(item)} />)}
           </div>
         </div>
       )}
@@ -1280,7 +1100,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
       <div style={{ padding: "16px" }}>
         <div style={{ display: "flex", gap: 10, marginBottom: 8, alignItems: "center" }}>
-          <SearchBar value={searchQuery} onChange={(val) => setSearchQuery(val)} />
+          <SearchBar value={searchQuery} onChange={setSearchQuery} />
           <button onClick={() => setVegOnly(!vegOnly)} aria-label={vegOnly ? "Showing vegetarian only, tap to show all" : "Showing all items, tap to filter vegetarian"} style={{ padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${vegOnly ? COLORS.sage : COLORS.line}`, background: vegOnly ? COLORS.sageLight : "transparent", color: vegOnly ? COLORS.sageDark : COLORS.textLight, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}><VegDot veg={true} /> <span style={{fontSize: 13}}>{vegOnly ? "Veg" : "All"}</span></button>
         </div>
 
@@ -1302,7 +1122,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 {item.desc && <div style={{ fontSize: 12, color: COLORS.textLight, lineHeight: 1.4, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.desc}</div>}
               </div>
               <div style={{ position: "relative", width: 90, height: 90, flexShrink: 0 }}>
-                <img src={item.image} alt={item.name} loading="lazy" decoding="async" className="keep-color" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 14, filter: item.available ? 'none' : 'grayscale(100%)' }} />
+                <img src={item.image} alt={item.name} loading="lazy" decoding="async" className="keep-color" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 14, filter: item.available ? 'none' : 'grayscale(100%)' }} 
+                  onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; }} 
+                />
                 <div style={{ position: "absolute", top: -4, right: -4 }}>
                   <button onClick={() => toggleFavorite(item.id)} style={{ background: 'white', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', cursor: 'pointer' }} aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
                     <span style={{ fontSize: 16, color: isFavorite ? '#FFD700' : '#CCC' }}>{isFavorite ? '⭐' : '☆'}</span>
@@ -1368,24 +1190,11 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               <SidebarBtn icon="🎉" text="Party Booking" onClick={() => {setShowSidebar(false); setBookType("party"); setActiveModal('booking');}} />
               <SidebarBtn icon="👑" text="VIP Loyalty Partner" onClick={() => {setShowSidebar(false); setActiveModal('loyalty');}} />
               <SidebarBtn icon="⭐" text="Rate us on Google" onClick={() => { setShowSidebar(false); window.open(GOOGLE_REVIEW_URL, '_blank'); }} highlight={true} />
-              
-              {/* QR CODE IN SIDEBAR */}
               <div style={{ marginTop: 16, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: 'center', border: `1px solid ${COLORS.line}` }}>
                 <QRCode value={window.location.href} size={100} />
                 <p style={{ fontSize: 11, color: COLORS.textLight, marginTop: 6 }}>📲 Scan to order on your phone</p>
               </div>
-
-              {/* CHAT BUTTON */}
-              <SidebarBtn
-                icon="💬"
-                text="Chat with Restaurant"
-                onClick={() => {
-                  setShowSidebar(false);
-                  setActiveOrderIdForChat(myActiveOrders[0]?.id || 'general');
-                  setActiveModal('chat');
-                }}
-                highlight={false}
-              />
+              <SidebarBtn icon="💬" text="Chat with Restaurant" onClick={() => { setShowSidebar(false); setActiveOrderIdForChat(myActiveOrders[0]?.id || 'general'); setActiveModal('chat'); }} highlight={false} />
             </div>
           </div>
           <div style={{ flex: 1, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(3px)" }} onClick={() => setShowSidebar(false)} className="fade-in" />
@@ -1394,30 +1203,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
       {myOrders.filter(o => o.status === "served").length > 0 && !cartOpen && !activeModal && (
         <div style={{ position: "fixed", bottom: 80, right: 16, zIndex: 50 }}>
-          <a 
-            href={GOOGLE_REVIEW_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              background: '#4285F4',
-              color: '#fff',
-              padding: '12px 16px',
-              borderRadius: 30,
-              textDecoration: 'none',
-              fontWeight: 700,
-              fontSize: 14,
-              boxShadow: '0 8px 24px rgba(66, 133, 244, 0.4)',
-              transition: 'all 0.3s ease',
-              animation: 'scaleInBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)'
-            }}
-            className="smooth-transition hover-lift"
-          >
-            <span style={{ fontSize: 20 }}>⭐</span>
-            Rate Us
-          </a>
+          <GoogleReviewButton variant="primary" size="md" showText={true} />
         </div>
       )}
 
@@ -1428,9 +1214,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
             {cartOpen && (
               <>
                 <ModalHeader title="Checkout" onClose={() => setCartOpen(false)} />
-                {cartItems.map(([id, q]) => { 
-                  const item = menu.find((m) => m.id === id); 
-                  return ( <div key={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "12px", background: COLORS.paper, borderRadius: 12, border: `1px solid ${COLORS.line}` }}><div style={{ fontSize: 15, fontWeight: 700 }}>{item.name} {item.portion && <span style={{fontSize: 12, color: COLORS.textLight}}>({item.portion})</span>}</div><Stepper qty={q} onChange={(nq) => handleSetQty(id, nq)} /></div> ); 
+                {cartItems.map(([id, q]) => {
+                  const item = menu.find((m) => m.id === id);
+                  return ( <div key={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "12px", background: COLORS.paper, borderRadius: 12, border: `1px solid ${COLORS.line}` }}><div style={{ fontSize: 15, fontWeight: 700 }}>{item.name} {item.portion && <span style={{fontSize: 12, color: COLORS.textLight}}>({item.portion})</span>}</div><Stepper qty={q} onChange={(nq) => handleSetQty(id, nq)} /></div> );
                 })}
                 
                 <div style={{ display: "flex", gap: 12, marginTop: 20, marginBottom: 16 }}>
@@ -1438,32 +1224,16 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <button onClick={() => setOrderType("parcel")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "parcel" ? COLORS.copper : COLORS.line}`, background: orderType === "parcel" ? COLORS.copper : "#fff", color: orderType === "parcel" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer", transition: "all 0.2s ease" }}>🛍️ Parcel (+₹40)</button>
                 </div>
 
-                {/* === SCHEDULED ORDER === */}
+                {/* Scheduled Order */}
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={isScheduled} 
-                      onChange={(e) => setIsScheduled(e.target.checked)}
-                      style={{ width: 18, height: 18, accentColor: COLORS.copper }}
-                    />
+                    <input type="checkbox" checked={isScheduled} onChange={(e) => setIsScheduled(e.target.checked)} style={{ width: 18, height: 18, accentColor: COLORS.copper }} />
                     <span style={{ fontWeight: 700, fontSize: 14 }}>📅 Schedule Order</span>
                   </label>
                   {isScheduled && (
                     <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
-                      <input 
-                        type="date" 
-                        value={scheduleDate} 
-                        onChange={(e) => setScheduleDate(e.target.value)}
-                        style={{ ...inputStyle, flex: 1 }}
-                        min={new Date().toISOString().split('T')[0]}
-                      />
-                      <input 
-                        type="time" 
-                        value={scheduleTime} 
-                        onChange={(e) => setScheduleTime(e.target.value)}
-                        style={{ ...inputStyle, flex: 1 }}
-                      />
+                      <input type="date" value={scheduleDate} onChange={(e) => setScheduleDate(e.target.value)} style={{ ...inputStyle, flex: 1 }} min={new Date().toISOString().split('T')[0]} />
+                      <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
                     </div>
                   )}
                 </div>
@@ -1474,16 +1244,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                     <div>
                       {otpStep === "phone" ? (
                         <div style={{ display: "flex", gap: 8 }}>
-                          <input 
-                            type="tel" 
-                            placeholder="10-digit Phone" 
-                            value={custPhone} 
-                            onChange={(e) => {
-                              setCustPhone(e.target.value);
-                              checkExistingCustomer(e.target.value);
-                            }} 
-                            style={{...inputStyle, flex: 1}} 
-                          />
+                          <input type="tel" placeholder="10-digit Phone" value={custPhone} onChange={(e) => { setCustPhone(e.target.value); checkExistingCustomer(e.target.value); }} style={{...inputStyle, flex: 1}} />
                           <button onClick={handleSendOtp} style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer" }}>Send OTP</button>
                         </div>
                       ) : (
@@ -1590,13 +1351,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                                   <span style={{ fontWeight: 600, color: COLORS.copper }}>{Math.round(progress)}%</span>
                                 </div>
                                 <div style={{ width: '100%', height: 4, background: COLORS.paper2, borderRadius: 999, overflow: 'hidden' }}>
-                                  <div style={{ 
-                                    width: `${Math.min(progress, 100)}%`, 
-                                    height: '100%', 
-                                    background: `linear-gradient(90deg, ${COLORS.gold}, ${COLORS.copper})`,
-                                    borderRadius: 999,
-                                    transition: 'width 0.5s ease'
-                                  }} />
+                                  <div style={{ width: `${Math.min(progress, 100)}%`, height: '100%', background: `linear-gradient(90deg, ${COLORS.gold}, ${COLORS.copper})`, borderRadius: 999, transition: 'width 0.5s ease' }} />
                                 </div>
                                 <div style={{ fontSize: 10, color: COLORS.textLight, marginTop: 2 }}>
                                   🪙 Need {pointsNeeded} more coins (₹{Math.ceil(pointsNeeded * loyaltyRules.rate)} spend)
@@ -1621,62 +1376,14 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special cooking instructions?" style={{ ...inputStyle, marginBottom: 20, resize: "none" }} rows={2} />
                 
-                {/* === PAYMENT METHOD SELECTION === */}
+                {/* Payment Method Selection */}
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Payment Method</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                    <button 
-                      onClick={() => setPaymentMethod('cash')}
-                      style={{ 
-                        padding: '10px', 
-                        borderRadius: 10, 
-                        border: `2px solid ${paymentMethod === 'cash' ? COLORS.copper : COLORS.line}`,
-                        background: paymentMethod === 'cash' ? COLORS.copperLight : 'transparent',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      💵 Cash
-                    </button>
-                    <button 
-                      onClick={() => setPaymentMethod('razorpay')}
-                      style={{ 
-                        padding: '10px', 
-                        borderRadius: 10, 
-                        border: `2px solid ${paymentMethod === 'razorpay' ? COLORS.copper : COLORS.line}`,
-                        background: paymentMethod === 'razorpay' ? COLORS.copperLight : 'transparent',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      💳 Razorpay
-                    </button>
-                    <button 
-                      onClick={() => setPaymentMethod('phonepe')}
-                      style={{ 
-                        padding: '10px', 
-                        borderRadius: 10, 
-                        border: `2px solid ${paymentMethod === 'phonepe' ? COLORS.copper : COLORS.line}`,
-                        background: paymentMethod === 'phonepe' ? COLORS.copperLight : 'transparent',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      📱 PhonePe
-                    </button>
-                    <button 
-                      onClick={() => setPaymentMethod('gpay')}
-                      style={{ 
-                        padding: '10px', 
-                        borderRadius: 10, 
-                        border: `2px solid ${paymentMethod === 'gpay' ? COLORS.copper : COLORS.line}`,
-                        background: paymentMethod === 'gpay' ? COLORS.copperLight : 'transparent',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      🟢 Google Pay
-                    </button>
+                    <button onClick={() => setPaymentMethod('cash')} style={{ padding: '10px', borderRadius: 10, border: `2px solid ${paymentMethod === 'cash' ? COLORS.copper : COLORS.line}`, background: paymentMethod === 'cash' ? COLORS.copperLight : 'transparent', fontWeight: 700, cursor: 'pointer' }}>💵 Cash</button>
+                    <button onClick={() => setPaymentMethod('razorpay')} style={{ padding: '10px', borderRadius: 10, border: `2px solid ${paymentMethod === 'razorpay' ? COLORS.copper : COLORS.line}`, background: paymentMethod === 'razorpay' ? COLORS.copperLight : 'transparent', fontWeight: 700, cursor: 'pointer' }}>💳 Razorpay</button>
+                    <button onClick={() => setPaymentMethod('phonepe')} style={{ padding: '10px', borderRadius: 10, border: `2px solid ${paymentMethod === 'phonepe' ? COLORS.copper : COLORS.line}`, background: paymentMethod === 'phonepe' ? COLORS.copperLight : 'transparent', fontWeight: 700, cursor: 'pointer' }}>📱 PhonePe</button>
+                    <button onClick={() => setPaymentMethod('gpay')} style={{ padding: '10px', borderRadius: 10, border: `2px solid ${paymentMethod === 'gpay' ? COLORS.copper : COLORS.line}`, background: paymentMethod === 'gpay' ? COLORS.copperLight : 'transparent', fontWeight: 700, cursor: 'pointer' }}>🟢 Google Pay</button>
                   </div>
                 </div>
                 
@@ -1744,7 +1451,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 <ModalHeader title="🖼️ Photo Gallery" onClose={() => setActiveModal(null)} />
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
                   {gallery.map((imgUrl, idx) => (
-                    <img key={idx} src={imgUrl} alt="Gallery item" style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }} />
+                    <img key={idx} src={imgUrl} alt="Gallery item" style={{ width: "100%", height: 140, objectFit: "cover", borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }} 
+                      onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; }} 
+                    />
                   ))}
                 </div>
               </>
@@ -1755,12 +1464,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 <ModalHeader title="📜 My Order History" onClose={() => setActiveModal(null)} />
                 
                 {myOrders.length > 0 && (
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(3, 1fr)', 
-                    gap: 10, 
-                    marginBottom: 16 
-                  }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
                     <div style={{ background: COLORS.paper, padding: 12, borderRadius: 10, textAlign: 'center' }}>
                       <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.copper }}>{myOrders.length}</div>
                       <div style={{ fontSize: 11, color: COLORS.textLight }}>Total Orders</div>
@@ -1862,46 +1566,12 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                             </div>
                             
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                              {/* === REORDER BUTTON === */}
                               {!isCancelled && (
-                                <button 
-                                  onClick={() => reorderOrder(o)}
-                                  style={{
-                                    padding: '4px 12px',
-                                    borderRadius: 8,
-                                    border: `1px solid ${COLORS.sage}`,
-                                    background: 'transparent',
-                                    color: COLORS.sage,
-                                    fontWeight: 700,
-                                    fontSize: 11,
-                                    cursor: 'pointer'
-                                  }}
-                                  className="smooth-transition hover-lift"
-                                >
-                                  🔄 Reorder
-                                </button>
+                                <button onClick={() => reorderOrder(o)} style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${COLORS.sage}`, background: 'transparent', color: COLORS.sage, fontWeight: 700, fontSize: 11, cursor: 'pointer' }} className="smooth-transition hover-lift">🔄 Reorder</button>
                               )}
-                              
                               <GoogleReviewButton variant="primary" size="sm" />
-                              
-                              {/* === CANCEL BUTTON === */}
                               {!isCompleted && !isCancelled && (o.status === "new" || o.status === "preparing") && (
-                                <button 
-                                  onClick={() => cancelOrder(o.id)}
-                                  style={{
-                                    padding: '4px 12px',
-                                    borderRadius: 8,
-                                    border: `1px solid ${COLORS.error}`,
-                                    background: 'transparent',
-                                    color: COLORS.error,
-                                    fontWeight: 700,
-                                    fontSize: 11,
-                                    cursor: 'pointer'
-                                  }}
-                                  className="smooth-transition hover-lift"
-                                >
-                                  ❌ Cancel
-                                </button>
+                                <button onClick={() => cancelOrder(o.id)} style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${COLORS.error}`, background: 'transparent', color: COLORS.error, fontWeight: 700, fontSize: 11, cursor: 'pointer' }} className="smooth-transition hover-lift">❌ Cancel</button>
                               )}
                             </div>
                           </div>
@@ -2006,16 +1676,8 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 ) : myActiveOrders.map(o => {
                   const estimatedTime = getEstimatedTime(o.items);
                   const isCancellable = o.status === "new" || o.status === "preparing";
-                  
                   return (
-                    <div key={o.id} style={{ 
-                      background: '#fff', 
-                      border: `1px solid ${COLORS.line}`, 
-                      borderRadius: 16, 
-                      padding: 20, 
-                      marginBottom: 16, 
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.06)' 
-                    }}>
+                    <div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, marginBottom: 16, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                         <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, color: COLORS.ink }}>
                           Order #{o.id.slice(1,5).toUpperCase()}
@@ -2036,54 +1698,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                       </div>
                       
                       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        <button onClick={() => setActiveModal(null)} style={{ 
-                          flex: 1,
-                          background: "transparent", 
-                          color: COLORS.copper, 
-                          border: `2px solid ${COLORS.copper}`, 
-                          borderRadius: 14, 
-                          padding: "13px 20px", 
-                          fontWeight: 800, 
-                          cursor: 'pointer'
-                        }}>
-                          Back to Menu
-                        </button>
-                        
-                        {/* === ADD TO EXISTING ORDER === */}
-                        <button 
-                          onClick={() => {
-                            setActiveModal(null);
-                            setCartOpen(true);
-                          }}
-                          style={{
-                            padding: "13px 20px",
-                            background: COLORS.sage,
-                            color: '#fff',
-                            border: 'none',
-                            borderRadius: 14,
-                            fontWeight: 800,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          ➕ Add Items
-                        </button>
-                        
-                        {/* === CANCEL ORDER === */}
+                        <button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back to Menu</button>
+                        <button onClick={() => { setActiveModal(null); setCartOpen(true); }} style={{ padding: "13px 20px", background: COLORS.sage, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>➕ Add Items</button>
                         {isCancellable && (
-                          <button 
-                            onClick={() => cancelOrder(o.id)}
-                            style={{
-                              padding: "13px 20px",
-                              background: 'transparent',
-                              color: COLORS.error,
-                              border: `2px solid ${COLORS.error}`,
-                              borderRadius: 14,
-                              fontWeight: 800,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            ❌ Cancel
-                          </button>
+                          <button onClick={() => cancelOrder(o.id)} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.error, border: `2px solid ${COLORS.error}`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>❌ Cancel</button>
                         )}
                       </div>
                     </div>
@@ -2092,7 +1710,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               </>
             )}
 
-            {/* ========== CHAT MODAL ========== */}
             {activeModal === 'chat' && (
               <>
                 <ModalHeader title="💬 Chat with Restaurant" onClose={() => setActiveModal(null)} />
@@ -2108,7 +1725,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 }
 
 // ============================================
-// STAFF VIEW (WITH SOUND NOTIFICATIONS & KEYBOARD SHORTCUTS)
+// 13. STAFF VIEW (with keyboard shortcuts & scheduled badge)
 // ============================================
 
 const STAFF_SHORTCUTS = {
@@ -2119,7 +1736,7 @@ const STAFF_SHORTCUTS = {
   'Shift+?': 'Toggle this help panel',
 };
 
-function KeyboardHelpModal({ onClose }) {
+const KeyboardHelpModal = memo(({ onClose }) => {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} className="fade-scale" style={{ background: '#fff', padding: 28, borderRadius: 20, width: '90%', maxWidth: 440 }}>
@@ -2136,7 +1753,7 @@ function KeyboardHelpModal({ onClose }) {
       </div>
     </div>
   );
-}
+});
 
 function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall }) {
   const active = orders.filter((o) => o.status !== "served" && o.status !== "cancelled").sort((a, b) => a.createdAt - b.createdAt);
@@ -2187,10 +1804,8 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
   const handlePrintReceipt = (order) => {
     const printWindow = window.open('', '_blank', 'width=300,height=600');
     if (!printWindow) return;
-    
     const itemsHtml = order.items.map(it => `<tr><td>${it.qty}x ${it.name}</td><td style="text-align:right">₹${it.price * it.qty}</td></tr>`).join('');
     const totalAmount = order.items.reduce((s, it) => s + (it.price * it.qty), 0) + (order.deliveryFee || 0) - (order.loyaltyDiscount || 0);
-    
     printWindow.document.write(`
       <html>
         <head>
@@ -2234,24 +1849,11 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
       <div style={{ fontSize: 15, color: COLORS.textLight, marginBottom: 24, fontWeight: 600 }}>Use ↑↓ to navigate, P/R to advance, Shift+? for help</div>
 
       {newOrderCount > 0 && (
-        <div style={{ 
-          background: 'rgba(226,89,56,0.1)', 
-          border: `2px solid ${COLORS.copper}`,
-          borderRadius: 16, 
-          padding: 16, 
-          marginBottom: 24,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12
-        }} className="slide-up">
+        <div style={{ background: 'rgba(226,89,56,0.1)', border: `2px solid ${COLORS.copper}`, borderRadius: 16, padding: 16, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }} className="slide-up">
           <span style={{ fontSize: 24 }}>🛎️</span>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.copper }}>
-              {newOrderCount} New Order{newOrderCount > 1 ? 's' : ''}!
-            </div>
-            <div style={{ fontSize: 13, color: COLORS.textLight }}>
-              {newOrderCount === 1 ? 'Order is waiting for your attention' : 'Orders are waiting for your attention'}
-            </div>
+            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.copper }}>{newOrderCount} New Order{newOrderCount > 1 ? 's' : ''}!</div>
+            <div style={{ fontSize: 13, color: COLORS.textLight }}>{newOrderCount === 1 ? 'Order is waiting for your attention' : 'Orders are waiting for your attention'}</div>
           </div>
         </div>
       )}
@@ -2291,9 +1893,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
                         <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800, color: isSelected ? '#fff' : (o.orderType === "parcel" ? COLORS.rust : COLORS.ink) }}>
                           {o.orderType === "parcel" ? "🛍️ PARCEL" : `🍽️ Table ${o.table}`}
                           {o.isScheduled && (
-                            <span style={{ fontSize: 12, marginLeft: 8, color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.info }}>
-                              📅
-                            </span>
+                            <span style={{ fontSize: 14, marginLeft: 8, color: isSelected ? 'rgba(255,255,255,0.9)' : COLORS.info, fontWeight: 700, background: isSelected ? 'rgba(255,255,255,0.2)' : COLORS.paper2, padding: '2px 8px', borderRadius: 12 }}>📅 Scheduled</span>
                           )}
                         </div>
                         <div style={{ fontSize: 13, color: isSelected ? 'rgba(255,255,255,0.8)' : COLORS.textLight, fontWeight: 700, background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, padding: '4px 10px', borderRadius: 12 }}>{timeAgo(o.createdAt)}</div>
@@ -2333,7 +1933,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
 }
 
 // ============================================
-// ADMIN VIEW (WITH PDF REPORT & INVENTORY)
+// 14. ADMIN VIEW (with PDF report, CSV, inventory, etc.)
 // ============================================
 
 function KitchenMetrics({ filteredOrders }) {
@@ -2386,23 +1986,19 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const [newInv, setNewInv] = useState({ name: "", stock: "", unit: "kg" });
   const [newOffer, setNewOffer] = useState({ title: "", desc: "" });
   const [newReward, setNewReward] = useState({ cost: "", item: "" });
-
   const [editingItem, setEditingItem] = useState(null);
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [newItemCat, setNewItemCat] = useState(CATEGORIES[0]);
   const [newItemImage, setNewItemImage] = useState("");
-
   const [addMenuName, setAddMenuName] = useState("");
   const [addMenuPrice, setAddMenuPrice] = useState("");
   const [addMenuCat, setAddMenuCat] = useState(CATEGORIES[0]);
   const [addMenuVeg, setAddMenuVeg] = useState(true);
   const [addMenuDesc, setAddMenuDesc] = useState("");
   const [addMenuImage, setAddMenuImage] = useState("");
-
   const [newGalleryImg, setNewGalleryImg] = useState("");
   const [heroImgInput, setHeroImgInput] = useState(settings?.heroImage || "");
-
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const filteredOrders = useMemo(() => {
@@ -2412,9 +2008,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0), 0);
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
 
-  // ============================================
-  // PDF REPORT GENERATION — CDN FIX
-  // ============================================
+  // ---------- PDF Report ----------
   const generatePDFReport = async () => {
     setIsGeneratingPDF(true);
     try {
@@ -2441,12 +2035,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
         return;
       }
 
-      const canvas = await html2canvas(reportElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false
-      });
-
+      const canvas = await html2canvas(reportElement, { scale: 2, useCORS: true, logging: false });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgWidth = 210;
@@ -2462,65 +2051,58 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
     }
   };
 
-  const handleAddOffer = () => { if(newOffer.title) { addOffer({ id: uid("off"), title: newOffer.title, desc: newOffer.desc }); setNewOffer({ title: "", desc: "" }); } }
-
+  // ---------- Handlers ----------
+  const handleAddOffer = () => { if(newOffer.title) { addOffer({ id: uid("off"), title: newOffer.title, desc: newOffer.desc }); setNewOffer({ title: "", desc: "" }); } };
   const handleAddReward = () => {
     if(newReward.cost && newReward.item) {
       setLoyaltyRules({ ...loyaltyRules, rewards: [...loyaltyRules.rewards, { id: uid("rwd"), cost: Number(newReward.cost), item: newReward.item }] });
       setNewReward({ cost: "", item: "" });
     }
-  }
-
+  };
   const handleSaveMenuItem = async () => {
     if (!editingItem) return;
     const updatedMenu = menu.map(m => m.id === editingItem.id ? { ...m, name: newItemName, price: Number(newItemPrice), category: newItemCat, ...(newItemImage ? { image: newItemImage } : {}) } : m);
     setMenuState(updatedMenu);
-    try { await setDoc(doc(db, "settings", "menu"), { items: updatedMenu }); } catch(e) {}
+    try { await setDoc(doc(db, "settings", "menu"), { items: updatedMenu }); } catch(e) { alert("⚠️ Failed to save menu to Firebase."); }
     setEditingItem(null);
     setNewItemImage("");
   };
-
   const handleDeleteMenuItem = async (id) => {
     if (window.confirm("Are you sure you want to delete this menu item?")) {
       const updatedMenu = menu.filter(m => m.id !== id);
       setMenuState(updatedMenu);
-      try { await setDoc(doc(db, "settings", "menu"), { items: updatedMenu }); } catch(e) {}
+      try { await setDoc(doc(db, "settings", "menu"), { items: updatedMenu }); } catch(e) { alert("⚠️ Failed to delete from Firebase."); }
     }
   };
-
   const handleAddNewDish = async () => {
     if (!addMenuName.trim() || !addMenuPrice) { alert("Please enter dish name and price."); return; }
     const newDish = mi(uid("m"), addMenuName.trim(), Number(addMenuPrice), addMenuCat, addMenuVeg, addMenuDesc.trim(), "", false, true, addMenuImage.trim());
     const updatedMenu = [newDish, ...menu];
     setMenuState(updatedMenu);
-    try { await setDoc(doc(db, "settings", "menu"), { items: updatedMenu }); } catch(e) {}
+    try { await setDoc(doc(db, "settings", "menu"), { items: updatedMenu }); } catch(e) { alert("⚠️ Failed to save dish."); }
     setAddMenuName(""); setAddMenuPrice(""); setAddMenuDesc(""); setAddMenuImage("");
     alert("✅ New dish added successfully!");
   };
-
   const handleAddGalleryPhoto = async () => {
     if (!newGalleryImg.trim()) return;
     const updatedGallery = [...gallery, newGalleryImg.trim()];
     setGallery(updatedGallery);
-    try { await setDoc(doc(db, "settings", "gallery"), { images: updatedGallery }); } catch(e) {}
+    try { await setDoc(doc(db, "settings", "gallery"), { images: updatedGallery }); } catch(e) { alert("⚠️ Failed to save gallery."); }
     setNewGalleryImg("");
     alert("✅ Photo added to gallery!");
   };
-
   const handleDeleteGalleryPhoto = async (index) => {
     const updatedGallery = gallery.filter((_, i) => i !== index);
     setGallery(updatedGallery);
-    try { await setDoc(doc(db, "settings", "gallery"), { images: updatedGallery }); } catch(e) {}
+    try { await setDoc(doc(db, "settings", "gallery"), { images: updatedGallery }); } catch(e) { alert("⚠️ Failed to update gallery."); }
   };
-
   const handleSaveHeroImage = async () => {
     if (!heroImgInput.trim()) return;
     const newSettings = { ...settings, heroImage: heroImgInput.trim() };
     setSettings(newSettings);
-    try { await setDoc(doc(db, "settings", "appSettings"), newSettings); } catch(e) {}
+    try { await setDoc(doc(db, "settings", "appSettings"), newSettings); } catch(e) { alert("⚠️ Failed to save hero image."); }
     alert("✅ Hero front image updated successfully!");
   };
-
   const handleExportCSV = () => {
     const rows = [["Time", "Type", "Items", "Total", "Paid", "Loyalty Tier", "Payment Method"]];
     filteredOrders.forEach(o => {
@@ -2560,26 +2142,8 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             <span style={{fontWeight: 700, fontSize: 15}}>📅 Select Date:</span>
             <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} style={{...inputStyle, width: 150, background: COLORS.paper}} />
-            
             <button onClick={handleExportCSV} style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, padding: "10px 16px", cursor: "pointer", fontWeight: 700 }}>📊 Export CSV</button>
-            
-            {/* PDF Report Button — uses CDN fix */}
-            <button 
-              onClick={generatePDFReport} 
-              disabled={isGeneratingPDF}
-              style={{ 
-                background: COLORS.copper, 
-                color: "#fff", 
-                border: "none", 
-                borderRadius: 10, 
-                padding: "10px 16px", 
-                cursor: isGeneratingPDF ? 'not-allowed' : 'pointer',
-                fontWeight: 700,
-                opacity: isGeneratingPDF ? 0.6 : 1
-              }}
-            >
-              {isGeneratingPDF ? '⏳ Generating...' : '📄 PDF Report'}
-            </button>
+            <button onClick={generatePDFReport} disabled={isGeneratingPDF} style={{ background: COLORS.copper, color: "#fff", border: "none", borderRadius: 10, padding: "10px 16px", cursor: isGeneratingPDF ? 'not-allowed' : 'pointer', fontWeight: 700, opacity: isGeneratingPDF ? 0.6 : 1 }}>{isGeneratingPDF ? '⏳ Generating...' : '📄 PDF Report'}</button>
           </div>
           
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, marginBottom: 28 }}>
@@ -2612,7 +2176,9 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           {heroImgInput && (
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: COLORS.textLight }}>Preview:</div>
-              <img src={heroImgInput} alt="Hero Preview" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12 }} />
+              <img src={heroImgInput} alt="Hero Preview" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12 }} 
+                onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80"; }} 
+              />
             </div>
           )}
         </div>
@@ -2632,7 +2198,9 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
             {gallery.map((imgUrl, idx) => (
               <div key={idx} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 14, overflow: 'hidden', padding: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
-                <img src={imgUrl} alt="Gallery item" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 10, marginBottom: 10 }} />
+                <img src={imgUrl} alt="Gallery item" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 10, marginBottom: 10 }} 
+                  onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; }} 
+                />
                 <button onClick={() => handleDeleteGalleryPhoto(idx)} style={{ width: "100%", background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 0', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Delete Photo</button>
               </div>
             ))}
@@ -2666,7 +2234,9 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
             {menu.map(item => (
               <div key={item.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                <img src={item.image} alt={item.name} style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 10 }} />
+                <img src={item.image} alt={item.name} style={{ width: 50, height: 50, objectFit: 'cover', borderRadius: 10 }} 
+                  onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; }} 
+                />
                 <div style={{ flex: 1 }}>
                   <div style={{fontWeight: 800, fontSize: 16, color: COLORS.ink}}>{item.name} <span style={{fontSize: 12, color: COLORS.textLight}}>({item.category})</span></div>
                   <div style={{fontFamily: "'JetBrains Mono', monospace", color: COLORS.copper, fontWeight: 800}}>{inr(item.price)}</div>
@@ -2852,7 +2422,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
 }
 
 // ============================================
-// DEFAULT DATA
+// 15. DEFAULT DATA
 // ============================================
 
 const DEFAULT_MENU = [
@@ -2944,7 +2514,74 @@ const DEFAULT_GALLERY = [
 ];
 
 // ============================================
-// MAIN APP COMPONENT
+// 16. MyOrderStats (used inside CustomerView)
+// ============================================
+
+const MyOrderStats = memo(({ myOrders, loyaltyCoins }) => {
+  if (!myOrders || myOrders.length === 0) return null;
+  const totalSpent = myOrders.reduce((s, o) => s + o.items.reduce((a, i) => a + i.price * i.qty, 0), 0);
+  const favoriteDish = (() => {
+    const dishes = {};
+    myOrders.forEach(o => o.items.forEach(i => { dishes[i.name] = (dishes[i.name] || 0) + i.qty; }));
+    const sorted = Object.entries(dishes).sort((a, b) => b[1] - a[1]);
+    return sorted.length > 0 ? sorted[0][0] : "—";
+  })();
+
+  return (
+    <div style={{ background: 'linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%)', padding: 16, borderRadius: 14, marginBottom: 20, border: `1px solid ${COLORS.line}` }}>
+      <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 12, color: COLORS.ink }}>📊 Your Journey</div>
+      <div style={{ display: 'grid', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
+          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Total Spent</span>
+          <strong style={{ color: COLORS.copper }}>{inr(totalSpent)}</strong>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
+          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Orders</span>
+          <strong style={{ color: COLORS.sage }}>{myOrders.length}</strong>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
+          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>Favorite</span>
+          <strong style={{ color: COLORS.ink, fontSize: 12 }}>{favoriteDish}</strong>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
+          <span style={{ color: COLORS.textLight, fontWeight: 600 }}>EatCoins</span>
+          <strong style={{ color: COLORS.gold }}>{loyaltyCoins} 🪙</strong>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ============================================
+// 17. ProgressRing & OrderTimer
+// ============================================
+
+const ProgressRing = memo(({ progress, size = 60, strokeWidth = 3 }) => {
+  const circumference = 2 * Math.PI * ((size - strokeWidth) / 2);
+  const offset = circumference - (progress / 100) * circumference;
+  return (
+    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+      <circle cx={size/2} cy={size/2} r={(size-strokeWidth)/2} fill="none" stroke={COLORS.line} strokeWidth={strokeWidth} />
+      <circle cx={size/2} cy={size/2} r={(size-strokeWidth)/2} fill="none" stroke={COLORS.sage} strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset} style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
+      <text x="50%" y="50%" textAnchor="middle" dy="0.3em" fontSize="16" fontWeight="700" fill={COLORS.sage}>{progress}%</text>
+    </svg>
+  );
+});
+
+const OrderTimer = memo(({ createdAt, estimatedTime }) => {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => { const timer = setInterval(() => setElapsed(Math.floor((Date.now() - createdAt) / 1000)), 1000); return () => clearInterval(timer); }, [createdAt]);
+  const minutes = Math.floor(elapsed / 60); const seconds = elapsed % 60; const isOvertime = elapsed > (estimatedTime * 60);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: isOvertime ? 'rgba(239, 68, 68, 0.1)' : COLORS.sageLight, borderRadius: 10, borderLeft: `3px solid ${isOvertime ? COLORS.error : COLORS.sage}` }}>
+      <span style={{ fontSize: 11, fontWeight: 800, color: isOvertime ? COLORS.error : COLORS.sageDark }}>⏱️ {minutes}:{seconds.toString().padStart(2, '0')}</span>
+      <span style={{ fontSize: 11, color: COLORS.textLight, fontWeight: 600 }}>/ {estimatedTime}m</span>
+    </div>
+  );
+});
+
+// ============================================
+// 18. MAIN APP COMPONENT
 // ============================================
 
 export default function App() {
@@ -2954,21 +2591,18 @@ export default function App() {
   const [inventory, setInventory] = useState([]);
   const [offersList, setOffersList] = useState(DEFAULT_OFFERS);
   const [gallery, setGallery] = useState(DEFAULT_GALLERY);
-
   const [loyaltyRules, setLoyaltyRules] = useState({
     rate: 10, 
     rewards: [{ id: "r1", cost: 300, item: "Free French Fry" }]
   });
   const [loyaltyUsers, setLoyaltyUsers] = useState([]);
   const [coinHistory, setCoinHistory] = useState([]);
-
   const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); return params.has("table") ? Number(params.get("table")) : 1; });
   const [menu, setMenuState] = useState(DEFAULT_MENU);
   const [orders, setOrdersState] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80", adminPin: "9876", staffPin: "5432" });
   const [loading, setLoading] = useState(true);
-
   const [showPinModal, setShowPinModal] = useState(false);
   const [targetRole, setTargetRole] = useState("staff");
   const [pinInput, setPinInput] = useState("");
@@ -3001,6 +2635,7 @@ export default function App() {
     }
   };
 
+  // Firebase initial fetch
   useEffect(() => {
     const fetchAllData = async () => {
       try {
@@ -3037,6 +2672,7 @@ export default function App() {
     return () => unsubscribeOrders();
   }, []);
 
+  // ---------- Handlers passed to child views ----------
   const deleteBooking = async (id) => { 
     if(window.confirm("Delete this booking?")) {
       try { await deleteDoc(doc(db, "bookings", id)); } catch(e){}
@@ -3056,7 +2692,6 @@ export default function App() {
 
   const requestWaiter = async (tbl) => { setCalls([...calls, { id: uid("call"), table: tbl, time: Date.now(), status: "active" }]); };
   const resolveCall = async (id) => { setCalls(calls.filter(c=>c.id!==id)); };
-  
   const addOffer = async (off) => { setOffersList([...offersList, off]); };
   const removeOffer = async (id) => { setOffersList(offersList.filter(o=>o.id!==id)); };
 
