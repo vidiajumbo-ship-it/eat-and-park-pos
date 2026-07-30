@@ -14,9 +14,6 @@ import {
   orderBy,
   serverTimestamp
 } from "firebase/firestore";
-// पुराना
-
-// नया
 import { QRCodeSVG } from 'qrcode.react';
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
@@ -272,6 +269,7 @@ const SidebarBtn = memo(({ icon, text, onClick, highlight }) => {
 });
 
 const ComboCard = memo(({ combo, onAdd }) => {
+  if (!combo.active) return null; // only show active combos
   return (
     <div style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.gold}`, padding: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -294,6 +292,7 @@ const ComboCard = memo(({ combo, onAdd }) => {
 });
 
 const FlashSaleItem = memo(({ item, onAdd }) => {
+  if (!item.active) return null; // only show active flash items
   return (
     <div style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.error}`, padding: 12, minWidth: 150, flexShrink: 0 }}>
       <div style={{ fontSize: 20 }}>🔥</div>
@@ -548,7 +547,7 @@ const processRazorpayPayment = async (amount, orderId, customerName, customerPho
 // 12. CUSTOMER VIEW
 // ============================================
 
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories }) {
+function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers }) {
   const [category, setCategory] = useState(categories[0] || "Drinks");
   const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
@@ -583,37 +582,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
 
-  const comboOffers = [
-    {
-      id: 'combo1',
-      name: 'Family Combo (Pizza + Biryani + Paneer)',
-      items: [
-        { id: 'f2', name: 'Eat & Park Special Pizza', price: 280, quantity: 1, portion: '' },
-        { id: 'br5', name: 'Chicken Biryani', price: 210, quantity: 1, portion: '' },
-        { id: 'pn1', name: 'Paneer Masala', price: 250, quantity: 1, portion: '' }
-      ],
-      totalPrice: 740,
-      discount: 20,
-      finalPrice: 592,
-      image: '🍕'
-    },
-    {
-      id: 'combo2',
-      name: 'Weekend Special (Butter Chicken + Naan + Soft Drink)',
-      items: [
-        { id: 'nv8', name: 'Chicken Butter Masala', price: 350, quantity: 1, portion: '' },
-        { id: 'b8', name: 'Garlic Naan', price: 70, quantity: 2, portion: '' },
-        { id: 'd10', name: 'Cold Drink', price: 50, quantity: 2, portion: '' }
-      ],
-      totalPrice: 590,
-      discount: 25,
-      finalPrice: 442,
-      image: '🍗'
-    }
-  ];
-  const flashSaleItems = [
-    { id: 'nv19', name: 'Fish Curry', price: 449, discountPrice: 299, stock: 10 }
-  ];
+  // Remove hardcoded comboOffers and flashSaleItems
 
   const filteredItems = useMemo(() => {
     let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
@@ -917,11 +886,12 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         payment: paymentMethod,
         paymentStatus: paymentMethod === "cash" ? "pending" : "paid",
         status: "new", 
-        paid: paymentMethod !== "cash",
+        paid: paymentMethod !== "cash",   // online payments mark paid initially
         createdAt: Date.now(),
         scheduledDate: isScheduled ? scheduleDate : null,
         scheduledTime: isScheduled ? scheduleTime : null,
-        isScheduled: isScheduled
+        isScheduled: isScheduled,
+        coinsClaimed: false   // <-- NEW: coins not yet claimed
       };
       
       const orderHistory = JSON.parse(localStorage.getItem('eatpark_orders') || '[]');
@@ -1043,20 +1013,20 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         </div>
       )}
 
-      {!searchQuery.trim() && (
+      {!searchQuery.trim() && comboOffers && comboOffers.filter(c => c.active).length > 0 && (
         <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
           <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, color: COLORS.ink, marginBottom: 12 }}>🎯 Combo Offers</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
-            {comboOffers.map(combo => <ComboCard key={combo.id} combo={combo} onAdd={() => addComboToCart(combo)} />)}
+            {comboOffers.filter(c => c.active).map(combo => <ComboCard key={combo.id} combo={combo} onAdd={() => addComboToCart(combo)} />)}
           </div>
         </div>
       )}
 
-      {!searchQuery.trim() && flashSaleItems.length > 0 && (
+      {!searchQuery.trim() && flashSaleItems && flashSaleItems.filter(f => f.active).length > 0 && (
         <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
           <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, color: COLORS.rust, marginBottom: 12 }}>⚡ Flash Sale</h3>
           <div style={{ display: 'flex', gap: 12, overflowX: 'auto' }}>
-            {flashSaleItems.map(item => <FlashSaleItem key={item.id} item={item} onAdd={() => addFlashSaleToCart(item)} />)}
+            {flashSaleItems.filter(f => f.active).map(item => <FlashSaleItem key={item.id} item={item} onAdd={() => addFlashSaleToCart(item)} />)}
           </div>
         </div>
       )}
@@ -1165,10 +1135,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               <SidebarBtn icon="🎉" text="Party Booking" onClick={() => {setShowSidebar(false); setBookType("party"); setActiveModal('booking');}} />
               <SidebarBtn icon="👑" text="VIP Loyalty Partner" onClick={() => {setShowSidebar(false); setActiveModal('loyalty');}} />
               <SidebarBtn icon="⭐" text="Rate us on Google" onClick={() => { setShowSidebar(false); window.open(GOOGLE_REVIEW_URL, '_blank'); }} highlight={true} />
-             <div style={{ marginTop: 16, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: 'center', border: `1px solid ${COLORS.line}` }}>
-  <QRCodeSVG value={window.location.href} size={100} />
-  <p style={{ fontSize: 11, color: COLORS.textLight, marginTop: 6 }}>📲 Scan to order on your phone</p>
-</div>
+              <div style={{ marginTop: 16, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: 'center', border: `1px solid ${COLORS.line}` }}>
+                <QRCodeSVG value={window.location.href} size={100} />
+                <p style={{ fontSize: 11, color: COLORS.textLight, marginTop: 6 }}>📲 Scan to order on your phone</p>
+              </div>
               <SidebarBtn icon="💬" text="Chat with Restaurant" onClick={() => { setShowSidebar(false); setActiveOrderIdForChat(myActiveOrders[0]?.id || 'general'); setActiveModal('chat'); }} highlight={false} />
             </div>
           </div>
@@ -1953,7 +1923,7 @@ function InventoryAlertBanner({ inventory }) {
   );
 }
 
-function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery, categories, updateCategories }) {
+function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery, categories, updateCategories, flashSaleItems, setFlashSaleItems, comboOffers, setComboOffers, savePromotions }) {
   const [tab, setTab] = useState("overview");
   const [filterDate, setFilterDate] = useState(toLocalISODate(Date.now()));
   const [newInv, setNewInv] = useState({ name: "", stock: "", unit: "kg" });
@@ -2131,7 +2101,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, alignItems: 'center' }}><div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>📊 Admin Dashboard</div><button onClick={() => requestPinPrompt("customer")} style={{ background: COLORS.paper2, border: "none", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontWeight: 700 }}>← Exit</button></div>
        
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto", scrollbarWidth: "none" }}>
-        {["overview", "menu", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings"].map((t) => ( <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", marginRight: 10, fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button> ))}
+        {["overview", "menu", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings", "promotions"].map((t) => ( <button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", marginRight: 10, fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button> ))}
       </div>
 
       {tab === "overview" && (
@@ -2207,7 +2177,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
 
       {tab === "menu" && (
         <div className="slide-up">
-          {/* ⭐ NEW: Category Management Block */}
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30, border: `1px solid ${COLORS.line}` }}>
             <h3 style={{ fontFamily: "'Outfit', sans-serif", marginTop: 0, marginBottom: 16 }}>📂 Manage Categories</h3>
             <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
@@ -2276,7 +2245,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
               ))}
             </div>
           </div>
-          {/* END Category Management Block */}
 
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30, border: `1px solid ${COLORS.line}` }}>
             <h3 style={{ fontFamily: "'Outfit', sans-serif", marginTop: 0, marginBottom: 16 }}>➕ Add New Menu Item (with Image)</h3>
@@ -2485,6 +2453,46 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           </table>
         </div>
       )}
+
+      {/* NEW: Promotions Tab */}
+      {tab === "promotions" && (
+        <div className="slide-up">
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", marginBottom: 16 }}>⚡ Flash Sale Items</h3>
+          {flashSaleItems.map((item, idx) => (
+            <div key={item.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 12, marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input value={item.name} onChange={e => { const updated = [...flashSaleItems]; updated[idx].name = e.target.value; setFlashSaleItems(updated); }} style={{...inputStyle, flex: 2, minWidth: 120}} placeholder="Name" />
+                <input type="number" value={item.discountPrice} onChange={e => { const updated = [...flashSaleItems]; updated[idx].discountPrice = Number(e.target.value); setFlashSaleItems(updated); }} style={{...inputStyle, width: 100}} placeholder="Disc Price" />
+                <input type="number" value={item.stock} onChange={e => { const updated = [...flashSaleItems]; updated[idx].stock = Number(e.target.value); setFlashSaleItems(updated); }} style={{...inputStyle, width: 80}} placeholder="Stock" />
+                <button onClick={() => { const updated = [...flashSaleItems]; updated[idx].active = !updated[idx].active; setFlashSaleItems(updated); }} style={{ background: item.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                  {item.active ? '✅ Active' : '❌ Inactive'}
+                </button>
+                <button onClick={() => { if(window.confirm('Delete this flash item?')) setFlashSaleItems(flashSaleItems.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
+              </div>
+            </div>
+          ))}
+          <button onClick={() => setFlashSaleItems([...flashSaleItems, { id: 'flash'+Date.now(), name: 'New Item', price: 0, discountPrice: 0, stock: 0, active: true }])} style={{...primaryBtn, background: COLORS.sage, marginBottom: 30 }}>+ Add Flash Item</button>
+
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", marginBottom: 16 }}>🎯 Combo Offers</h3>
+          {comboOffers.map((combo, idx) => (
+            <div key={combo.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 12, marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input value={combo.name} onChange={e => { const updated = [...comboOffers]; updated[idx].name = e.target.value; setComboOffers(updated); }} style={{...inputStyle, flex: 2, minWidth: 150}} placeholder="Combo Name" />
+                <input type="number" value={combo.discount} onChange={e => { const updated = [...comboOffers]; updated[idx].discount = Number(e.target.value); updated[idx].finalPrice = Math.round(updated[idx].totalPrice * (1 - updated[idx].discount/100)); setComboOffers(updated); }} style={{...inputStyle, width: 100}} placeholder="Discount %" />
+                <input value={combo.image} onChange={e => { const updated = [...comboOffers]; updated[idx].image = e.target.value; setComboOffers(updated); }} style={{...inputStyle, width: 80}} placeholder="Emoji" />
+                <button onClick={() => { const updated = [...comboOffers]; updated[idx].active = !updated[idx].active; setComboOffers(updated); }} style={{ background: combo.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>
+                  {combo.active ? '✅ Active' : '❌ Inactive'}
+                </button>
+                <button onClick={() => { if(window.confirm('Delete this combo?')) setComboOffers(comboOffers.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
+              </div>
+              <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 8 }}>Items: {combo.items.map(it => it.name).join(', ')}</div>
+            </div>
+          ))}
+          <button onClick={() => setComboOffers([...comboOffers, { id: 'combo'+Date.now(), name: 'New Combo', items: [{ id: 'f2', name: 'Pizza', price: 280, quantity: 1 }], totalPrice: 280, discount: 10, finalPrice: 252, image: '🍽️', active: true }])} style={{...primaryBtn, background: COLORS.gold, marginBottom: 20 }}>+ Add Combo</button>
+
+          <button onClick={savePromotions} style={{...primaryBtn, background: COLORS.copper, width: '100%' }}>💾 Save All Promotions</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2678,6 +2686,41 @@ export default function App() {
   // New: categories state
   const [categories, setCategories] = useState(CATEGORIES);
 
+  // NEW: Flash Sale and Combo Offers state (with default examples)
+  const [flashSaleItems, setFlashSaleItems] = useState([
+    { id: 'nv19', name: 'Fish Curry', price: 449, discountPrice: 299, stock: 10, active: true }
+  ]);
+  const [comboOffers, setComboOffers] = useState([
+    {
+      id: 'combo1',
+      name: 'Family Combo (Pizza + Biryani + Paneer)',
+      items: [
+        { id: 'f2', name: 'Eat & Park Special Pizza', price: 280, quantity: 1, portion: '' },
+        { id: 'br5', name: 'Chicken Biryani', price: 210, quantity: 1, portion: '' },
+        { id: 'pn1', name: 'Paneer Masala', price: 250, quantity: 1, portion: '' }
+      ],
+      totalPrice: 740,
+      discount: 20,
+      finalPrice: 592,
+      image: '🍕',
+      active: true
+    },
+    {
+      id: 'combo2',
+      name: 'Weekend Special (Butter Chicken + Naan + Soft Drink)',
+      items: [
+        { id: 'nv8', name: 'Chicken Butter Masala', price: 350, quantity: 1, portion: '' },
+        { id: 'b8', name: 'Garlic Naan', price: 70, quantity: 2, portion: '' },
+        { id: 'd10', name: 'Cold Drink', price: 50, quantity: 2, portion: '' }
+      ],
+      totalPrice: 590,
+      discount: 25,
+      finalPrice: 442,
+      image: '🍗',
+      active: true
+    }
+  ]);
+
   const requestPinPrompt = (target) => {
     setTargetRole(target);
     setShowPinModal(true);
@@ -2716,6 +2759,19 @@ export default function App() {
     }
   };
 
+  // NEW: Save promotions to Firebase
+  const savePromotions = async () => {
+    try {
+      await setDoc(doc(db, "settings", "promotions"), {
+        flashSale: flashSaleItems,
+        comboOffers: comboOffers
+      });
+      alert("✅ Promotions saved successfully!");
+    } catch(e) {
+      alert("❌ Failed to save: " + e.message);
+    }
+  };
+
   useEffect(() => {
     const fetchAllData = async () => {
       try {
@@ -2738,6 +2794,11 @@ export default function App() {
           // Load categories from Firebase
           if (docSnap.id === "categories" && data.categories) {
             setCategories(data.categories);
+          }
+          // Load promotions
+          if (docSnap.id === "promotions") {
+            if (data.flashSale) setFlashSaleItems(data.flashSale);
+            if (data.comboOffers) setComboOffers(data.comboOffers);
           }
         });
       } catch (e) { 
@@ -2778,43 +2839,14 @@ export default function App() {
   const addOffer = async (off) => { setOffersList([...offersList, off]); };
   const removeOffer = async (id) => { setOffersList(offersList.filter(o=>o.id!==id)); };
 
+  // Modified placeOrder – no coin awarding, just store coins in order
   const placeOrder = async (order, rewardCost = 0) => {  
     try {
+      // Ensure order has coinsClaimed false
+      order.coinsClaimed = false;
       await setDoc(doc(db, "orders", order.id), order);
     } catch (e) { console.error(e); }
-
-    if(order.customer.phone && order.customer.phone.length >= 10) {
-       const netCoins = order.earnedCoins - rewardCost;
-       const existingUserIndex = loyaltyUsers.findIndex(u => u.phone === order.customer.phone);
-       let updatedUsers = [...loyaltyUsers];
-       
-       if(existingUserIndex >= 0) {
-          updatedUsers[existingUserIndex].coins = Math.max(0, updatedUsers[existingUserIndex].coins + netCoins);
-          updatedUsers[existingUserIndex].name = order.customer.name || updatedUsers[existingUserIndex].name;
-       } else if (netCoins > 0) {
-          updatedUsers.push({ phone: order.customer.phone, name: order.customer.name, coins: netCoins });
-       }
-       setLoyaltyUsers(updatedUsers);
-
-       if(existingUserIndex >= 0) {
-          try { await setDoc(doc(db, "loyaltyUsers", order.customer.phone), updatedUsers[existingUserIndex]); } catch(e){}
-       } else {
-          try { await setDoc(doc(db, "loyaltyUsers", order.customer.phone), { phone: order.customer.phone, name: order.customer.name, coins: netCoins }); } catch(e){}
-       }
-
-       let newLogs = [...coinHistory];
-       if (order.earnedCoins > 0) {
-          const logEarn = { phone: order.customer.phone, coins: order.earnedCoins, reason: `Earned from Order #${order.id.slice(1,5).toUpperCase()}`, timestamp: Date.now() };
-          newLogs.push(logEarn);
-          try { await setDoc(doc(db, "coinHistory", uid("ch")), logEarn); } catch(e){}
-       }
-       if (rewardCost > 0) {
-          const logRedeem = { phone: order.customer.phone, coins: -rewardCost, reason: `Redeemed for reward`, timestamp: Date.now() };
-          newLogs.push(logRedeem);
-          try { await setDoc(doc(db, "coinHistory", uid("ch")), logRedeem); } catch(e){}
-       }
-       setCoinHistory(newLogs);
-    }
+    // Do NOT update loyaltyUsers or coinHistory here
   };
 
   const advanceStatus = async (orderId, currentStatus) => { 
@@ -2825,9 +2857,70 @@ export default function App() {
     setOrdersState(orders.map(o=>o.id===orderId?{...o, ...updateData}:o)); 
   };
 
-  const markPaid = async (orderId, paid) => { 
-    try { await updateDoc(doc(db, "orders", orderId), { paid }); } catch(e){}
-    setOrdersState(orders.map(o=>o.id===orderId?{...o,paid}:o)); 
+  // Modified markPaid – award coins only when paid and not already claimed
+  const markPaid = async (orderId, paid) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // If marking as paid and coins not yet claimed
+    if (paid && !order.coinsClaimed) {
+      const netCoins = (order.earnedCoins || 0) - (order.rewardUsedCoins || 0);
+      const phone = order.customer?.phone;
+      if (phone && phone.length >= 10 && netCoins !== 0) {
+        try {
+          const userRef = doc(db, "loyaltyUsers", phone);
+          const userSnap = await getDoc(userRef);
+          let newCoins = netCoins;
+          if (userSnap.exists()) {
+            newCoins += userSnap.data().coins || 0;
+            await updateDoc(userRef, { coins: newCoins });
+          } else {
+            await setDoc(userRef, { phone, name: order.customer.name || "Guest", coins: newCoins });
+          }
+
+          // Add coin history entries
+          if (order.earnedCoins > 0) {
+            await addDoc(collection(db, "coinHistory"), {
+              phone,
+              coins: order.earnedCoins,
+              reason: `Earned from Order #${order.id.slice(1,5).toUpperCase()}`,
+              timestamp: Date.now()
+            });
+          }
+          if (order.rewardUsedCoins > 0) {
+            await addDoc(collection(db, "coinHistory"), {
+              phone,
+              coins: -order.rewardUsedCoins,
+              reason: `Redeemed reward in Order #${order.id.slice(1,5).toUpperCase()}`,
+              timestamp: Date.now()
+            });
+          }
+
+          // Update local state
+          setLoyaltyUsers(prev => {
+            const exist = prev.find(u => u.phone === phone);
+            if (exist) {
+              return prev.map(u => u.phone === phone ? { ...u, coins: newCoins } : u);
+            } else {
+              return [...prev, { phone, name: order.customer.name || "Guest", coins: newCoins }];
+            }
+          });
+          // Optionally update coinHistory local state
+          // ...
+        } catch (e) {
+          console.error("Coin claim error:", e);
+        }
+      }
+      // Mark coins as claimed and paid
+      await updateDoc(doc(db, "orders", orderId), { paid: true, coinsClaimed: true });
+    } else {
+      // Just update paid status
+      await updateDoc(doc(db, "orders", orderId), { paid });
+    }
+    // Update local orders state
+    setOrdersState(prev => prev.map(o => 
+      o.id === orderId ? { ...o, paid, coinsClaimed: paid ? true : o.coinsClaimed } : o
+    ));
   };
 
   const bookEvent = async (booking) => { 
@@ -2848,12 +2941,12 @@ export default function App() {
       <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <style>{FONTS}</style>
         <div className="app-content">
-          {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} />}
+          {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={flashSaleItems} comboOffers={comboOffers} />}
           {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} />}
-          {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} />}
+          {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} />}
            
           {!["customer", "staff", "admin"].includes(role) && (
-            <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} />
+            <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={flashSaleItems} comboOffers={comboOffers} />
           )}
         </div>
 
