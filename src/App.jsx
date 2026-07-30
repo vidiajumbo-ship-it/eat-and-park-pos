@@ -2009,31 +2009,47 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
 
   // ---------- PDF Report ----------
-  const generatePDFReport = async () => {
-    setIsGeneratingPDF(true);
-    try {
-      const loadScript = (src) => {
-        return new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = src;
-          script.onload = resolve;
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-      };
+const generatePDFReport = async () => {
+  setIsGeneratingPDF(true);
+  try {
+    const loadScript = (src) => {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    };
 
-      await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
-      await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
 
-      const html2canvas = window.html2canvas;
-      const jsPDF = window.jspdf.jsPDF;
+    const html2canvas = window.html2canvas;
+    const jsPDF = window.jspdf.jsPDF;
 
-      const reportElement = document.getElementById('report-content');
-      if (!reportElement) {
-        alert('Report content not found.');
-        setIsGeneratingPDF(false);
-        return;
-      }
+    const reportElement = document.getElementById('report-content');
+    if (!reportElement) {
+      alert('Report content not found.');
+      setIsGeneratingPDF(false);
+      return;
+    }
+
+    const canvas = await html2canvas(reportElement, { scale: 2, useCORS: true, logging: false });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgWidth = 210;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+    pdf.save(`Sales_Report_${filterDate}.pdf`);
+  } catch (e) {
+    console.error('PDF Error:', e);
+    alert('⚠️ Could not generate PDF. Please check your internet connection and try again.');
+  } finally {
+    setIsGeneratingPDF(false);
+  }
+};
 
       const canvas = await html2canvas(reportElement, { scale: 2, useCORS: true, logging: false });
       const imgData = canvas.toDataURL('image/png');
