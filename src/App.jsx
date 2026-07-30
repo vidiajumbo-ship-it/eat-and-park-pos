@@ -1165,10 +1165,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               <SidebarBtn icon="🎉" text="Party Booking" onClick={() => {setShowSidebar(false); setBookType("party"); setActiveModal('booking');}} />
               <SidebarBtn icon="👑" text="VIP Loyalty Partner" onClick={() => {setShowSidebar(false); setActiveModal('loyalty');}} />
               <SidebarBtn icon="⭐" text="Rate us on Google" onClick={() => { setShowSidebar(false); window.open(GOOGLE_REVIEW_URL, '_blank'); }} highlight={true} />
-              <div style={{ marginTop: 16, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: 'center', border: `1px solid ${COLORS.line}` }}>
-                <QRCode value={window.location.href} size={100} />
-                <p style={{ fontSize: 11, color: COLORS.textLight, marginTop: 6 }}>📲 Scan to order on your phone</p>
-              </div>
+             <div style={{ marginTop: 16, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: 'center', border: `1px solid ${COLORS.line}` }}>
+  <QRCodeSVG value={window.location.href} size={100} />
+  <p style={{ fontSize: 11, color: COLORS.textLight, marginTop: 6 }}>📲 Scan to order on your phone</p>
+</div>
               <SidebarBtn icon="💬" text="Chat with Restaurant" onClick={() => { setShowSidebar(false); setActiveOrderIdForChat(myActiveOrders[0]?.id || 'general'); setActiveModal('chat'); }} highlight={false} />
             </div>
           </div>
