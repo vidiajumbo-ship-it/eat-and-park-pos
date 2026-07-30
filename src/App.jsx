@@ -14,8 +14,10 @@ import {
   orderBy,
   serverTimestamp
 } from "firebase/firestore";
-import * as QRCodeModule from 'qrcode.react';
-const QRCode = QRCodeModule.default || QRCodeModule;
+// पुराना
+
+// नया
+import { QRCodeSVG } from 'qrcode.react';
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
    🍽️ EAT & PARK RESTAURANT — FINAL V14.2 (FIXED & ENHANCED)
