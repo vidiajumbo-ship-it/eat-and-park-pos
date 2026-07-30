@@ -1193,6 +1193,13 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const myCoinLogs = coinHistory.filter(c => c.phone === custPhone);
   const newEarnedCoins = Math.floor(finalTotal / loyaltyRules.rate);
 
+  // ---- FIX: Compute emptyReason ----
+  const emptyReason = (() => {
+    if (vegOnly) return 'veg_filtered';
+    if (searchQuery) return 'search_no_results';
+    return 'category_empty';
+  })();
+
   const showToast = useCallback((msg, type = 'info') => {
     const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
     if (type === 'reward' && navigator.vibrate) navigator.vibrate([100, 50, 100]);
@@ -1900,7 +1907,12 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 {orderType === "parcel" && paymentMethod === "cash" && (
                   <div style={{ textAlign: "center", padding: "20px", background: COLORS.paper, border: `2px dashed ${COLORS.line}`, borderRadius: 16, marginBottom: 20 }}>
                     <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.ink, marginBottom: 12 }}>Scan to Pay {inr(finalTotal)}</div>
-                    <img src={cartQrSrc} alt="UPI QR Code" loading="lazy" style={{ width: 160, height: 160, borderRadius: 14, border: '4px solid #fff', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }} />
+                    {/* FIX: Replaced missing cartQrSrc with QRCode component */}
+                    <QRCode
+                      value={`upi://pay?pa=${RESTAURANT.upiId}&am=${finalTotal}&cu=INR`}
+                      size={160}
+                      style={{ borderRadius: 14, border: '4px solid #fff', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}
+                    />
                   </div>
                 )}
                 <button onClick={handlePlaceOrder} disabled={isProcessingPayment} style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 14, padding: "16px", fontWeight: 800, fontSize: 16, cursor: isProcessingPayment ? 'not-allowed' : 'pointer', width: "100%", opacity: isProcessingPayment ? 0.6 : 1, boxShadow: "0 8px 24px rgba(0,0,0,0.2)" }} className="hover-lift smooth-transition">
@@ -2034,7 +2046,13 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <div style={{ fontSize: 15, opacity: 0.9, marginBottom: 24, lineHeight: 1.6, fontWeight: 500 }}>Become a premium partner for just <strong style={{ fontSize: 20, color: COLORS.gold }}>₹999/month</strong>. Get exclusive 20% off on all dine-in orders!</div>
                   <div style={{ background: "#fff", padding: 20, borderRadius: 16 }}>
                     <div style={{ color: COLORS.ink, fontWeight: 800, marginBottom: 10, fontSize: 15 }}>Scan to Join</div>
-                    <img src={loyaltyQrSrc} alt="Pay 999" loading="lazy" className="keep-color" style={{ width: 160, height: 160 }} />
+                    {/* FIX: Replaced missing loyaltyQrSrc with QRCode component */}
+                    <QRCode
+                      value={`upi://pay?pa=${RESTAURANT.upiId}&am=999&cu=INR`}
+                      size={160}
+                      className="keep-color"
+                      style={{ width: 160, height: 160 }}
+                    />
                   </div>
                 </div>
               </>
