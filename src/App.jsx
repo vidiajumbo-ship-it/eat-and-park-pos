@@ -2009,7 +2009,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
 
   // ---------- PDF Report ----------
-const generatePDFReport = async () => {
+const generatePDFReport = async () => {   // <-- note the "async"
   setIsGeneratingPDF(true);
   try {
     const loadScript = (src) => {
@@ -2034,6 +2034,22 @@ const generatePDFReport = async () => {
       setIsGeneratingPDF(false);
       return;
     }
+
+    const canvas = await html2canvas(reportElement, { scale: 2, useCORS: true, logging: false });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgWidth = 210;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+    pdf.save(`Sales_Report_${filterDate}.pdf`);
+  } catch (e) {
+    console.error('PDF Error:', e);
+    alert('⚠️ Could not generate PDF. Please check your internet connection and try again.');
+  } finally {
+    setIsGeneratingPDF(false);
+  }
+};
 
     const canvas = await html2canvas(reportElement, { scale: 2, useCORS: true, logging: false });
     const imgData = canvas.toDataURL('image/png');
