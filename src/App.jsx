@@ -1,13 +1,23 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { db } from "./firebase";
-import { collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc, getDocs, getDoc } from "firebase/firestore";
-<<<<<<< HEAD
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  onSnapshot, 
+  updateDoc, 
+  deleteDoc, 
+  getDocs, 
+  getDoc,
+  addDoc,
+  query,
+  orderBy,
+  serverTimestamp
+} from "firebase/firestore";
 import QRCode from 'qrcode.react';
-=======
->>>>>>> 2f42c934da658633de032e88d5f56786e78db4f9
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — FINAL V13.0 (CDN PDF FIX)
+   🍽️ EAT & PARK RESTAURANT — FINAL V14.0 (FIXED & ENHANCED)
    ═══════════════════════════════════════════════════════════════════════════════════ */
 
 // ============================================
@@ -522,322 +532,81 @@ async function processRazorpayPayment(amount, orderId, customerName, customerPho
 }
 
 // ============================================
-// CUSTOMER VIEW (WITH ALL FEATURES)
-// ============================================
-<<<<<<< HEAD
-// ============================================
-// CUSTOMER VIEW (WITH ALL 5 NEW FEATURES)
+// CHAT BOX COMPONENT
 // ============================================
 
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState }) {
-  // ... (all existing state declarations remain exactly the same)
+const ChatBox = ({ orderId, customerId }) => {
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const messagesRef = collection(db, 'chats', orderId, 'messages');
 
-  // ============================================
-  // NEW: QR CODE — Add in sidebar (see render)
-  // NEW: COMBO OFFERS DATA
-  // NEW: FLASH SALE DATA
-  // NEW: CHAT STATE
-  // ============================================
-
-  const comboOffers = [
-    {
-      id: 'combo1',
-      name: 'Family Combo (Pizza + Biryani + Paneer)',
-      items: [
-        { id: 1, name: 'Margherita Pizza', price: 299, quantity: 1, portion: '' },
-        { id: 4, name: 'Biryani', price: 349, quantity: 1, portion: '' },
-        { id: 5, name: 'Paneer Tikka', price: 279, quantity: 1, portion: '' }
-      ],
-      totalPrice: 927,
-      discount: 20,
-      finalPrice: 742,
-      image: '🍕'
-    },
-    {
-      id: 'combo2',
-      name: 'Weekend Special (Butter Chicken + Naan + Soft Drink)',
-      items: [
-        { id: 8, name: 'Butter Chicken', price: 399, quantity: 1, portion: '' },
-        { id: 7, name: 'Garlic Naan', price: 70, quantity: 2, portion: '' },
-        { id: 10, name: 'Cold Drink', price: 50, quantity: 2, portion: '' }
-      ],
-      totalPrice: 589,
-      discount: 25,
-      finalPrice: 442,
-      image: '🍗'
-    }
-  ];
-
-  const flashSaleItems = [
-    { id: 6, name: 'Fish Curry', price: 449, discountPrice: 299, stock: 10 }
-  ];
-
-  const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
-
-  // ============================================
-  // NEW: COMBO & FLASH SALE ADD TO CART
-  // ============================================
-
-  const addComboToCart = (combo) => {
-    combo.items.forEach(item => {
-      setCart(prev => {
-        const existing = prev[item.id];
-        if (existing) {
-          return { ...prev, [item.id]: existing + item.quantity };
-        } else {
-          return { ...prev, [item.id]: item.quantity };
-        }
-      });
-    });
-    showToast(`🎉 ${combo.name} added to cart!`, 'success');
-  };
-
-  const addFlashSaleToCart = (item) => {
-    setCart(prev => {
-      const existing = prev[item.id];
-      if (existing) {
-        return { ...prev, [item.id]: existing + 1 };
-      } else {
-        return { ...prev, [item.id]: 1 };
-      }
-    });
-    showToast(`⚡ ${item.name} added to cart at special price!`, 'success');
-  };
-
-  // ============================================
-  // NEW: CHAT BOX COMPONENT (Inline)
-  // ============================================
-
-  const ChatBox = ({ orderId, customerId }) => {
-    const [messages, setMessages] = useState([]);
-    const [newMessage, setNewMessage] = useState('');
-    const messagesRef = collection(db, 'chats', orderId, 'messages');
-
-    useEffect(() => {
+  useEffect(() => {
+    try {
       const q = query(messagesRef, orderBy('timestamp', 'asc'));
       const unsubscribe = onSnapshot(q, (snap) => {
         setMessages(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       });
       return unsubscribe;
-    }, [orderId]);
+    } catch (e) {
+      console.error('Chat error:', e);
+    }
+  }, [orderId]);
 
-    const sendMessage = async () => {
-      if (!newMessage.trim()) return;
-      try {
-        await addDoc(messagesRef, {
-          text: newMessage,
-          senderId: customerId,
-          senderName: customerId === 'customer' ? 'Customer' : 'Restaurant',
-          timestamp: serverTimestamp()
-        });
-        setNewMessage('');
-      } catch (e) {
-        console.error('Chat send error:', e);
-      }
-    };
-
-    return (
-      <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, background: '#fff' }}>
-        <div style={{ maxHeight: 250, overflowY: 'auto', marginBottom: 8 }}>
-          {messages.map((msg) => (
-            <div key={msg.id} style={{ textAlign: msg.senderId === customerId ? 'right' : 'left', margin: '4px 0' }}>
-              <span style={{
-                background: msg.senderId === customerId ? COLORS.copper : '#e9ecef',
-                color: msg.senderId === customerId ? '#fff' : '#000',
-                padding: '6px 12px',
-                borderRadius: 12,
-                display: 'inline-block',
-                maxWidth: '80%'
-              }}>
-                {msg.text}
-              </span>
-              {msg.senderName && <div style={{ fontSize: 10, color: '#999', marginTop: 2 }}>{msg.senderName}</div>}
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type a message..."
-            style={{ flex: 1, padding: 8, border: '1px solid #ccc', borderRadius: 4 }}
-            onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-          />
-          <button onClick={sendMessage} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 4, cursor: 'pointer' }}>
-            Send
-          </button>
-        </div>
-      </div>
-    );
+  const sendMessage = async () => {
+    if (!newMessage.trim()) return;
+    try {
+      await addDoc(messagesRef, {
+        text: newMessage,
+        senderId: customerId,
+        senderName: customerId === 'customer' ? 'Customer' : 'Restaurant',
+        timestamp: serverTimestamp()
+      });
+      setNewMessage('');
+    } catch (e) {
+      console.error('Chat send error:', e);
+    }
   };
 
-  // ============================================
-  // RENDER (Modified with NEW sections)
-  // ============================================
-
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: cartCount ? 120 : 60, background: "var(--bg-color, #fff)", minHeight: "100vh", position: "relative" }}>
-      {toast && <Toast message={toast} type={toastType} />}
-
-      {/* New Order Notification — unchanged */}
-
-      {/* Waiter Call — unchanged */}
-
-      {/* Hero Header — unchanged */}
-
-      {/* Daily Specials Banner — unchanged */}
-
-      {/* ========== NEW: COMBO OFFERS SECTION ========== */}
-      {!searchQuery.trim() && (
-        <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
-          <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, color: COLORS.ink, marginBottom: 12 }}>🎯 Combo Offers</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
-            {comboOffers.map(combo => (
-              <div key={combo.id} style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.gold}`, padding: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontSize: 32 }}>{combo.image}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.ink }}>{combo.name}</div>
-                    <ul style={{ fontSize: 12, color: COLORS.textLight, margin: '4px 0', paddingLeft: 16 }}>
-                      {combo.items.map(item => <li key={item.id}>{item.name} × {item.quantity}</li>)}
-                    </ul>
-                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4 }}>
-                      <span style={{ fontWeight: 700, color: COLORS.copper }}>₹{combo.finalPrice}</span>
-                      <span style={{ textDecoration: 'line-through', fontSize: 12, color: COLORS.textLight }}>₹{combo.totalPrice}</span>
-                      <span style={{ background: COLORS.copper, color: '#fff', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{combo.discount}% OFF</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => addComboToCart(combo)}
-                    style={{ background: COLORS.sage, color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}
-                    className="smooth-transition hover-lift"
-                  >
-                    Add Combo
-                  </button>
-                </div>
-              </div>
-            ))}
+    <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, background: '#fff' }}>
+      <div style={{ maxHeight: 250, overflowY: 'auto', marginBottom: 8 }}>
+        {messages.map((msg) => (
+          <div key={msg.id} style={{ textAlign: msg.senderId === customerId ? 'right' : 'left', margin: '4px 0' }}>
+            <span style={{
+              background: msg.senderId === customerId ? COLORS.copper : '#e9ecef',
+              color: msg.senderId === customerId ? '#fff' : '#000',
+              padding: '6px 12px',
+              borderRadius: 12,
+              display: 'inline-block',
+              maxWidth: '80%'
+            }}>
+              {msg.text}
+            </span>
+            {msg.senderName && <div style={{ fontSize: 10, color: '#999', marginTop: 2 }}>{msg.senderName}</div>}
           </div>
-        </div>
-      )}
-
-      {/* ========== NEW: FLASH SALE SECTION ========== */}
-      {!searchQuery.trim() && flashSaleItems.length > 0 && (
-        <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
-          <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, color: COLORS.rust, marginBottom: 12 }}>⚡ Flash Sale</h3>
-          <div style={{ display: 'flex', gap: 12, overflowX: 'auto' }}>
-            {flashSaleItems.map(item => (
-              <div key={item.id} style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.error}`, padding: 12, minWidth: 150, flexShrink: 0 }}>
-                <div style={{ fontSize: 20 }}>🔥</div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.ink }}>{item.name}</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '4px 0' }}>
-                  <span style={{ fontWeight: 800, color: COLORS.error }}>₹{item.discountPrice}</span>
-                  <span style={{ textDecoration: 'line-through', fontSize: 12, color: COLORS.textLight }}>₹{item.price}</span>
-                </div>
-                <button
-                  onClick={() => addFlashSaleToCart(item)}
-                  style={{ background: COLORS.error, color: '#fff', border: 'none', padding: '4px 12px', borderRadius: 6, fontWeight: 700, width: '100%', cursor: 'pointer' }}
-                  className="smooth-transition hover-lift"
-                >
-                  Add
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Active Orders button — unchanged */}
-
-      {/* Category Tabs — unchanged */}
-
-      {/* Search & Veg filter — unchanged */}
-
-      {/* Menu Items — unchanged */}
-
-      {/* Footer (address, login buttons) — unchanged */}
-
-      {/* AI Suggestion — unchanged */}
-
-      {/* Menu button (top-left) — unchanged */}
-
-      {/* Cart button (bottom) — unchanged */}
-
-      {/* ========== NEW: QR CODE INSIDE SIDEBAR ========== */}
-      {showSidebar && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex" }}>
-          <div style={{ width: "80%", maxWidth: 300, background: "#fff", height: "100%", padding: "24px", display: "flex", flexDirection: "column", boxShadow: "4px 0 30px rgba(0,0,0,0.2)", overflowY: "auto" }} className="slide-right">
-            {/* ... (existing sidebar header, MyOrderStats, buttons) */}
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
-              {/* ... (all existing SidebarBtn items) */}
-
-              {/* ========== NEW: QR CODE ========== */}
-              <div style={{ marginTop: 16, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: 'center', border: `1px solid ${COLORS.line}` }}>
-                <QRCode value={window.location.href} size={100} />
-                <p style={{ fontSize: 11, color: COLORS.textLight, marginTop: 6 }}>📲 Scan to order on your phone</p>
-              </div>
-
-              {/* ========== NEW: CHAT BUTTON IN SIDEBAR ========== */}
-              <SidebarBtn
-                icon="💬"
-                text="Chat with Restaurant"
-                onClick={() => {
-                  setShowSidebar(false);
-                  setActiveOrderIdForChat(myActiveOrders[0]?.id || 'general');
-                  setActiveModal('chat');
-                }}
-                highlight={false}
-              />
-
-            </div>
-          </div>
-          <div style={{ flex: 1, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(3px)" }} onClick={() => setShowSidebar(false)} className="fade-in" />
-        </div>
-      )}
-
-      {/* Floating Rate Us button — unchanged */}
-
-      {/* ========== CHAT MODAL (NEW) ========== */}
-      {(cartOpen || activeModal) && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-end", zIndex: 70 }} onClick={() => {setCartOpen(false); setActiveModal(null); setConfirmedBooking(null);}}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", width: "100%", maxWidth: 480, margin: "0 auto", borderRadius: "24px 24px 0 0", padding: "24px 20px 30px", maxHeight: "85vh", overflowY: "auto", boxShadow: "0 -10px 40px rgba(0,0,0,0.15)" }} className="slide-up">
-            
-            {/* Checkout Modal — unchanged */}
-
-            {/* Gallery Modal — unchanged */}
-
-            {/* Order History Modal — unchanged */}
-
-            {/* Coin History Modal — unchanged */}
-
-            {/* Offers Modal — unchanged */}
-
-            {/* Loyalty Modal — unchanged */}
-
-            {/* Booking Modal — unchanged */}
-
-            {/* Track Modal — unchanged */}
-
-            {/* ========== NEW: CHAT MODAL ========== */}
-            {activeModal === 'chat' && (
-              <>
-                <ModalHeader title="💬 Chat with Restaurant" onClose={() => setActiveModal(null)} />
-                <ChatBox orderId={activeOrderIdForChat || 'general'} customerId={custPhone || 'customer'} />
-              </>
-            )}
-
-          </div>
-        </div>
-      )}
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          placeholder="Type a message..."
+          style={{ flex: 1, padding: 8, border: '1px solid #ccc', borderRadius: 4 }}
+          onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+        />
+        <button onClick={sendMessage} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 4, cursor: 'pointer' }}>
+          Send
+        </button>
+      </div>
     </div>
   );
-}
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState }) {
-=======
+};
+
+// ============================================
+// CUSTOMER VIEW (WITH ALL FEATURES)
+// ============================================
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState }) {
->>>>>>> 2f42c934da658633de032e88d5f56786e78db4f9
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
@@ -877,6 +646,42 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   // === PAYMENT METHOD ===
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+  // === COMBO OFFERS & FLASH SALES ===
+  const comboOffers = [
+    {
+      id: 'combo1',
+      name: 'Family Combo (Pizza + Biryani + Paneer)',
+      items: [
+        { id: 'f2', name: 'Eat & Park Special Pizza', price: 280, quantity: 1, portion: '' },
+        { id: 'br5', name: 'Chicken Biryani', price: 210, quantity: 1, portion: '' },
+        { id: 'pn1', name: 'Paneer Masala', price: 250, quantity: 1, portion: '' }
+      ],
+      totalPrice: 740,
+      discount: 20,
+      finalPrice: 592,
+      image: '🍕'
+    },
+    {
+      id: 'combo2',
+      name: 'Weekend Special (Butter Chicken + Naan + Soft Drink)',
+      items: [
+        { id: 'nv8', name: 'Chicken Butter Masala', price: 350, quantity: 1, portion: '' },
+        { id: 'b8', name: 'Garlic Naan', price: 70, quantity: 2, portion: '' },
+        { id: 'd10', name: 'Cold Drink', price: 50, quantity: 2, portion: '' }
+      ],
+      totalPrice: 590,
+      discount: 25,
+      finalPrice: 442,
+      image: '🍗'
+    }
+  ];
+
+  const flashSaleItems = [
+    { id: 'nv19', name: 'Fish Curry', price: 449, discountPrice: 299, stock: 10 }
+  ];
+
+  const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
 
   // ============================================
   // PERSISTENCE
@@ -1000,6 +805,33 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
 
   const newEarnedCoins = Math.floor(finalTotal / loyaltyRules.rate);
+
+  // === COMBO & FLASH SALE HANDLERS ===
+  const addComboToCart = (combo) => {
+    combo.items.forEach(item => {
+      setCart(prev => {
+        const existing = prev[item.id];
+        if (existing) {
+          return { ...prev, [item.id]: existing + item.quantity };
+        } else {
+          return { ...prev, [item.id]: item.quantity };
+        }
+      });
+    });
+    showToast(`🎉 ${combo.name} added to cart!`, 'success');
+  };
+
+  const addFlashSaleToCart = (item) => {
+    setCart(prev => {
+      const existing = prev[item.id];
+      if (existing) {
+        return { ...prev, [item.id]: existing + 1 };
+      } else {
+        return { ...prev, [item.id]: 1 };
+      }
+    });
+    showToast(`⚡ ${item.name} added to cart at special price!`, 'success');
+  };
 
   // === PUSH NOTIFICATION ===
   const sendPushNotification = useCallback((title, message) => {
@@ -1380,6 +1212,66 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         </div>
       )}
 
+      {/* ========== COMBO OFFERS SECTION ========== */}
+      {!searchQuery.trim() && (
+        <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, color: COLORS.ink, marginBottom: 12 }}>🎯 Combo Offers</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+            {comboOffers.map(combo => (
+              <div key={combo.id} style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.gold}`, padding: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 32 }}>{combo.image}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.ink }}>{combo.name}</div>
+                    <ul style={{ fontSize: 12, color: COLORS.textLight, margin: '4px 0', paddingLeft: 16 }}>
+                      {combo.items.map(item => <li key={item.id}>{item.name} × {item.quantity}</li>)}
+                    </ul>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4 }}>
+                      <span style={{ fontWeight: 700, color: COLORS.copper }}>₹{combo.finalPrice}</span>
+                      <span style={{ textDecoration: 'line-through', fontSize: 12, color: COLORS.textLight }}>₹{combo.totalPrice}</span>
+                      <span style={{ background: COLORS.copper, color: '#fff', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>{combo.discount}% OFF</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => addComboToCart(combo)}
+                    style={{ background: COLORS.sage, color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}
+                    className="smooth-transition hover-lift"
+                  >
+                    Add Combo
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========== FLASH SALE SECTION ========== */}
+      {!searchQuery.trim() && flashSaleItems.length > 0 && (
+        <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
+          <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, color: COLORS.rust, marginBottom: 12 }}>⚡ Flash Sale</h3>
+          <div style={{ display: 'flex', gap: 12, overflowX: 'auto' }}>
+            {flashSaleItems.map(item => (
+              <div key={item.id} style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.error}`, padding: 12, minWidth: 150, flexShrink: 0 }}>
+                <div style={{ fontSize: 20 }}>🔥</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.ink }}>{item.name}</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '4px 0' }}>
+                  <span style={{ fontWeight: 800, color: COLORS.error }}>₹{item.discountPrice}</span>
+                  <span style={{ textDecoration: 'line-through', fontSize: 12, color: COLORS.textLight }}>₹{item.price}</span>
+                </div>
+                <button
+                  onClick={() => addFlashSaleToCart(item)}
+                  style={{ background: COLORS.error, color: '#fff', border: 'none', padding: '4px 12px', borderRadius: 6, fontWeight: 700, width: '100%', cursor: 'pointer' }}
+                  className="smooth-transition hover-lift"
+                >
+                  Add
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {!searchQuery.trim() && (
         <div style={{ display: "flex", gap: 10, overflowX: "auto", padding: "8px 16px", scrollbarWidth: "none", borderBottom: `1px solid ${COLORS.line}` }}>
           {CATEGORIES.map((c) => ( <button key={c} onClick={() => setCategory(c)} style={{ whiteSpace: "nowrap", padding: "8px 16px", borderRadius: 12, border: `1.5px solid ${category === c ? COLORS.copper : COLORS.line}`, background: category === c ? COLORS.copper : "transparent", color: category === c ? "#fff" : COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }} className="smooth-transition">{c}</button> ))}
@@ -1476,6 +1368,24 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               <SidebarBtn icon="🎉" text="Party Booking" onClick={() => {setShowSidebar(false); setBookType("party"); setActiveModal('booking');}} />
               <SidebarBtn icon="👑" text="VIP Loyalty Partner" onClick={() => {setShowSidebar(false); setActiveModal('loyalty');}} />
               <SidebarBtn icon="⭐" text="Rate us on Google" onClick={() => { setShowSidebar(false); window.open(GOOGLE_REVIEW_URL, '_blank'); }} highlight={true} />
+              
+              {/* QR CODE IN SIDEBAR */}
+              <div style={{ marginTop: 16, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: 'center', border: `1px solid ${COLORS.line}` }}>
+                <QRCode value={window.location.href} size={100} />
+                <p style={{ fontSize: 11, color: COLORS.textLight, marginTop: 6 }}>📲 Scan to order on your phone</p>
+              </div>
+
+              {/* CHAT BUTTON */}
+              <SidebarBtn
+                icon="💬"
+                text="Chat with Restaurant"
+                onClick={() => {
+                  setShowSidebar(false);
+                  setActiveOrderIdForChat(myActiveOrders[0]?.id || 'general');
+                  setActiveModal('chat');
+                }}
+                highlight={false}
+              />
             </div>
           </div>
           <div style={{ flex: 1, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(3px)" }} onClick={() => setShowSidebar(false)} className="fade-in" />
@@ -2182,6 +2092,14 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
               </>
             )}
 
+            {/* ========== CHAT MODAL ========== */}
+            {activeModal === 'chat' && (
+              <>
+                <ModalHeader title="💬 Chat with Restaurant" onClose={() => setActiveModal(null)} />
+                <ChatBox orderId={activeOrderIdForChat || 'general'} customerId={custPhone || 'customer'} />
+              </>
+            )}
+
           </div>
         </div>
       )}
@@ -2190,7 +2108,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 }
 
 // ============================================
-// STAFF VIEW (WITH SOUND NOTIFICATIONS)
+// STAFF VIEW (WITH SOUND NOTIFICATIONS & KEYBOARD SHORTCUTS)
 // ============================================
 
 const STAFF_SHORTCUTS = {
@@ -2415,7 +2333,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
 }
 
 // ============================================
-// ADMIN VIEW (WITH CDN PDF FIX)
+// ADMIN VIEW (WITH PDF REPORT & INVENTORY)
 // ============================================
 
 function KitchenMetrics({ filteredOrders }) {
@@ -2500,7 +2418,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const generatePDFReport = async () => {
     setIsGeneratingPDF(true);
     try {
-      // Load html2canvas and jsPDF from CDN dynamically
       const loadScript = (src) => {
         return new Promise((resolve, reject) => {
           const script = document.createElement('script');
