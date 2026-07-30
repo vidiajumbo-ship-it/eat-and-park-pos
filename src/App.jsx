@@ -17,7 +17,7 @@ import {
 import QRCode from 'qrcode.react';
 
 /* ═══════════════════════════════════════════════════════════════════════════════════
-   🍽️ EAT & PARK RESTAURANT — FINAL V14.1 (FIXED & ENHANCED)
+   🍽️ EAT & PARK RESTAURANT — FINAL V14.2 (FIXED & ENHANCED)
    ═══════════════════════════════════════════════════════════════════════════════════ */
 
 // ============================================
@@ -77,7 +77,6 @@ const RESTAURANT = {
 const GOOGLE_PLACE_ID = "ChIJc8jv-j9fjTkRYFQLM7KK1aA";
 const GOOGLE_REVIEW_URL = `https://search.google.com/local/writereview?placeid=${GOOGLE_PLACE_ID}`;
 
-// Use environment variables for sensitive keys (fallback to placeholders)
 const RAZORPAY_KEY = process.env.REACT_APP_RAZORPAY_KEY || "YOUR_RAZORPAY_KEY_ID";
 const PHONEPE_MERCHANT_ID = process.env.REACT_APP_PHONEPE_MERCHANT_ID || "YOUR_MERCHANT_ID";
 
@@ -158,7 +157,7 @@ const EMPTY_STATES = {
 };
 
 // ============================================
-// 4. REUSABLE COMPONENTS (memoized for performance)
+// 4. REUSABLE COMPONENTS
 // ============================================
 
 const ErrorBoundary = React.memo(({ children }) => {
@@ -269,7 +268,6 @@ const SidebarBtn = memo(({ icon, text, onClick, highlight }) => {
   );
 });
 
-// ---------- new helper components ----------
 const ComboCard = memo(({ combo, onAdd }) => {
   return (
     <div style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.gold}`, padding: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
@@ -335,7 +333,7 @@ const useLocalStorage = (key, initialValue) => {
 };
 
 // ============================================
-// 6. NOTIFICATION SOUND (single instance)
+// 6. NOTIFICATION SOUND
 // ============================================
 
 const notificationAudio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
@@ -400,7 +398,7 @@ const LoyaltyProgress = memo(({ currentPoints, nextTier, loyaltyRules }) => {
 });
 
 // ============================================
-// 9. CHAT BOX COMPONENT (with local timestamp fallback)
+// 9. CHAT BOX COMPONENT
 // ============================================
 
 const ChatBox = memo(({ orderId, customerId }) => {
@@ -414,7 +412,6 @@ const ChatBox = memo(({ orderId, customerId }) => {
       const unsubscribe = onSnapshot(q, (snap) => {
         const msgs = snap.docs.map(doc => {
           const data = doc.data();
-          // Fallback to local time if serverTimestamp not yet set
           if (!data.timestamp) data.timestamp = Date.now();
           return { id: doc.id, ...data };
         });
@@ -545,7 +542,7 @@ const processRazorpayPayment = async (amount, orderId, customerName, customerPho
 };
 
 // ============================================
-// 12. CUSTOMER VIEW (with all features)
+// 12. CUSTOMER VIEW
 // ============================================
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState }) {
@@ -583,7 +580,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
 
-  // ---------- Combo & Flash Sale static data ----------
   const comboOffers = [
     {
       id: 'combo1',
@@ -616,7 +612,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     { id: 'nv19', name: 'Fish Curry', price: 449, discountPrice: 299, stock: 10 }
   ];
 
-  // ---------- Derived state ----------
   const filteredItems = useMemo(() => {
     let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
     items = items.filter((m) => {
@@ -650,7 +645,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const cartQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${finalTotal}&cu=INR`)}`;
   const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
 
-  // ---------- Toast helper ----------
   const showToast = useCallback((msg, type = 'info') => {
     const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
     if (type === 'reward' && navigator.vibrate) navigator.vibrate([100, 50, 100]);
@@ -660,7 +654,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     return () => clearTimeout(timeout);
   }, []);
 
-  // ---------- Persistence ----------
   useEffect(() => {
     const savedCustomer = localStorage.getItem('eatpark_customer');
     if (savedCustomer) {
@@ -705,7 +698,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   }, [cart]);
 
-  // ---------- Handlers ----------
   const handleSetQty = useCallback((id, q) => {
     const oldQ = cart[id] || 0;
     setCart((c) => ({ ...c, [id]: q }));
@@ -765,31 +757,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     showToast("🔄 Order items added to cart!", 'success');
   }, [setCart, showToast]);
 
-  const addToExistingOrder = useCallback(async (orderId, items) => {
-    try {
-      const orderRef = doc(db, "orders", orderId);
-      const orderSnap = await getDoc(orderRef);
-      if (orderSnap.exists()) {
-        const orderData = orderSnap.data();
-        const existingItems = orderData.items || [];
-        const newItems = [...existingItems];
-        items.forEach(item => {
-          const existing = newItems.find(i => i.itemId === item.id);
-          if (existing) existing.qty += 1;
-          else newItems.push({ itemId: item.id, name: item.name, price: item.price, qty: 1, portion: item.portion || "" });
-        });
-        await updateDoc(orderRef, { items: newItems, updatedAt: Date.now() });
-        showToast("✅ Items added to existing order!", 'success');
-        playNotificationSound();
-        sendPushNotification("Order Updated", `New items added to order #${orderId.slice(1,5)}`);
-      }
-    } catch(e) {
-      console.error("Add to order error:", e);
-      showToast("⚠️ Failed to add items", 'error');
-    }
-  }, [showToast, sendPushNotification]);
-
-  // ---------- OTP handlers ----------
   const handleSendOtp = () => {
     if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid 10-digit phone", 'error'); return; }
     const code = Math.floor(1000 + Math.random() * 9000).toString();
@@ -886,7 +853,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     showToast(coupon.msg, 'success');
   };
 
-  // ---------- Place Order ----------
   const handlePlaceOrder = useCallback(async () => {
     if (cartItems.length === 0) return;
     if (!custName.trim()) { showToast("⚠️ Please enter your Name", 'error'); return; }
@@ -1003,14 +969,12 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   }, [cartItems, custName, custPhone, custAddress, orderType, table, paymentMethod, finalTotal, claimedReward, isScheduled, scheduleDate, scheduleTime, appliedDiscount, loyaltyDiscount, loyaltyTier, notes, menu, placeOrder, sendPushNotification, myOrderIds, showToast]);
 
-  // ---------- Booking handler ----------
   const handleBooking = async () => {
     if(!bookData.name || !bookData.phone || !bookData.date || !bookData.time || !bookData.guests) { showToast("⚠️ Please fill all fields", 'error'); return; }
     const newBooking = { ...bookData, type: bookType, id: uid("b"), status: "pending", createdAt: Date.now() };
     await bookEvent(newBooking); setConfirmedBooking(newBooking); setBookData({ name: "", phone: "", date: "", time: "", guests: "" }); showToast("✅ Booking Request Sent!", 'success');
   };
 
-  // ---------- Combo & Flash handlers ----------
   const addComboToCart = useCallback((combo) => {
     combo.items.forEach(item => {
       setCart(prev => {
@@ -1029,7 +993,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     showToast(`⚡ ${item.name} added to cart at special price!`, 'success');
   }, [showToast]);
 
-  // ---------- Render ----------
   const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, fontFamily: "'Plus Jakarta Sans', sans-serif", width: "100%", boxSizing: "border-box", transition: "all 0.2s ease" };
 
   return (
@@ -1055,7 +1018,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         </div>
       </div>
 
-      {/* Daily Specials Banner */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
         <div style={{ background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)', padding: '12px 16px', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 12, color: '#fff' }}>
           <span style={{ fontSize: 24 }}>🌟</span>
@@ -1072,7 +1034,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         </div>
       )}
 
-      {/* COMBO OFFERS SECTION */}
       {!searchQuery.trim() && (
         <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
           <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, color: COLORS.ink, marginBottom: 12 }}>🎯 Combo Offers</h3>
@@ -1082,7 +1043,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         </div>
       )}
 
-      {/* FLASH SALE SECTION */}
       {!searchQuery.trim() && flashSaleItems.length > 0 && (
         <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
           <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, color: COLORS.rust, marginBottom: 12 }}>⚡ Flash Sale</h3>
@@ -1104,7 +1064,13 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
           <button onClick={() => setVegOnly(!vegOnly)} aria-label={vegOnly ? "Showing vegetarian only, tap to show all" : "Showing all items, tap to filter vegetarian"} style={{ padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${vegOnly ? COLORS.sage : COLORS.line}`, background: vegOnly ? COLORS.sageLight : "transparent", color: vegOnly ? COLORS.sageDark : COLORS.textLight, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}><VegDot veg={true} /> <span style={{fontSize: 13}}>{vegOnly ? "Veg" : "All"}</span></button>
         </div>
 
-        {filteredItems.length === 0 && <EmptyState reason={emptyReason} />}
+        {filteredItems.length === 0 && (
+          <div style={{ textAlign: "center", padding: "40px 20px", color: COLORS.textLight }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>{EMPTY_STATES[emptyReason].icon}</div>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>{EMPTY_STATES[emptyReason].title}</div>
+            <div style={{ fontSize: 13 }}>{EMPTY_STATES[emptyReason].subtitle}</div>
+          </div>
+        )}
 
         {filteredItems.map((item) => {
           const isFavorite = favorites.includes(item.id);
@@ -1224,7 +1190,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <button onClick={() => setOrderType("parcel")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "parcel" ? COLORS.copper : COLORS.line}`, background: orderType === "parcel" ? COLORS.copper : "#fff", color: orderType === "parcel" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer", transition: "all 0.2s ease" }}>🛍️ Parcel (+₹40)</button>
                 </div>
 
-                {/* Scheduled Order */}
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                     <input type="checkbox" checked={isScheduled} onChange={(e) => setIsScheduled(e.target.checked)} style={{ width: 18, height: 18, accentColor: COLORS.copper }} />
@@ -1376,7 +1341,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special cooking instructions?" style={{ ...inputStyle, marginBottom: 20, resize: "none" }} rows={2} />
                 
-                {/* Payment Method Selection */}
                 <div style={{ marginBottom: 20 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Payment Method</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
@@ -1725,7 +1689,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 }
 
 // ============================================
-// 13. STAFF VIEW (with keyboard shortcuts & scheduled badge)
+// 13. STAFF VIEW
 // ============================================
 
 const STAFF_SHORTCUTS = {
@@ -1933,7 +1897,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
 }
 
 // ============================================
-// 14. ADMIN VIEW (with PDF report, CSV, inventory, etc.)
+// 14. ADMIN VIEW
 // ============================================
 
 function KitchenMetrics({ filteredOrders }) {
@@ -2008,80 +1972,31 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0), 0);
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
 
-  // ---------- PDF Report ----------
-const generatePDFReport = async () => {   // <-- note the "async"
-  setIsGeneratingPDF(true);
-  try {
-    const loadScript = (src) => {
-      return new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = src;
-        script.onload = resolve;
-        script.onerror = reject;
-        document.head.appendChild(script);
-      });
-    };
+  const generatePDFReport = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      const loadScript = (src) => {
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = src;
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      };
 
-    await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
-    await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+      await loadScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js');
+      await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
 
-    const html2canvas = window.html2canvas;
-    const jsPDF = window.jspdf.jsPDF;
+      const html2canvas = window.html2canvas;
+      const jsPDF = window.jspdf.jsPDF;
 
-    const reportElement = document.getElementById('report-content');
-    if (!reportElement) {
-      alert('Report content not found.');
-      setIsGeneratingPDF(false);
-      return;
-    }
-
-    const canvas = await html2canvas(reportElement, { scale: 2, useCORS: true, logging: false });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgWidth = 210;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-    pdf.save(`Sales_Report_${filterDate}.pdf`);
-  } catch (e) {
-    console.error('PDF Error:', e);
-    alert('⚠️ Could not generate PDF. Please check your internet connection and try again.');
-  } finally {
-    setIsGeneratingPDF(false);
-  }
-};
-
-    const canvas = await html2canvas(reportElement, { scale: 2, useCORS: true, logging: false });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgWidth = 210;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-    pdf.save(`Sales_Report_${filterDate}.pdf`);
-  } catch (e) {
-    console.error('PDF Error:', e);
-    alert('⚠️ Could not generate PDF. Please check your internet connection and try again.');
-  } finally {
-    setIsGeneratingPDF(false);
-  }
-};
-
-    const canvas = await html2canvas(reportElement, { scale: 2, useCORS: true, logging: false });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgWidth = 210;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-    pdf.save(`Sales_Report_${filterDate}.pdf`);
-  } catch (e) {
-    console.error('PDF Error:', e);
-    alert('⚠️ Could not generate PDF. Please check your internet connection and try again.');
-  } finally {
-    setIsGeneratingPDF(false);
-  }
-};
+      const reportElement = document.getElementById('report-content');
+      if (!reportElement) {
+        alert('Report content not found.');
+        setIsGeneratingPDF(false);
+        return;
+      }
 
       const canvas = await html2canvas(reportElement, { scale: 2, useCORS: true, logging: false });
       const imgData = canvas.toDataURL('image/png');
@@ -2099,7 +2014,6 @@ const generatePDFReport = async () => {   // <-- note the "async"
     }
   };
 
-  // ---------- Handlers ----------
   const handleAddOffer = () => { if(newOffer.title) { addOffer({ id: uid("off"), title: newOffer.title, desc: newOffer.desc }); setNewOffer({ title: "", desc: "" }); } };
   const handleAddReward = () => {
     if(newReward.cost && newReward.item) {
@@ -2562,7 +2476,7 @@ const DEFAULT_GALLERY = [
 ];
 
 // ============================================
-// 16. MyOrderStats (used inside CustomerView)
+// 16. MyOrderStats
 // ============================================
 
 const MyOrderStats = memo(({ myOrders, loyaltyCoins }) => {
@@ -2683,7 +2597,6 @@ export default function App() {
     }
   };
 
-  // Firebase initial fetch
   useEffect(() => {
     const fetchAllData = async () => {
       try {
@@ -2720,7 +2633,6 @@ export default function App() {
     return () => unsubscribeOrders();
   }, []);
 
-  // ---------- Handlers passed to child views ----------
   const deleteBooking = async (id) => { 
     if(window.confirm("Delete this booking?")) {
       try { await deleteDoc(doc(db, "bookings", id)); } catch(e){}
