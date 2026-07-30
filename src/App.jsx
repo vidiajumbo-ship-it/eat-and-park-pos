@@ -269,7 +269,7 @@ const SidebarBtn = memo(({ icon, text, onClick, highlight }) => {
 });
 
 const ComboCard = memo(({ combo, onAdd }) => {
-  if (!combo.active) return null; // only show active combos
+  if (!combo.active) return null;
   return (
     <div style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.gold}`, padding: 16, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -292,7 +292,7 @@ const ComboCard = memo(({ combo, onAdd }) => {
 });
 
 const FlashSaleItem = memo(({ item, onAdd }) => {
-  if (!item.active) return null; // only show active flash items
+  if (!item.active) return null;
   return (
     <div style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.error}`, padding: 12, minWidth: 150, flexShrink: 0 }}>
       <div style={{ fontSize: 20 }}>🔥</div>
@@ -582,8 +582,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
 
-  // Remove hardcoded comboOffers and flashSaleItems
-
   const filteredItems = useMemo(() => {
     let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
     items = items.filter((m) => {
@@ -594,7 +592,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     return items;
   }, [menu, category, searchQuery, vegOnly]);
 
-  // ---- FIX: Compute emptyReason ----
   let emptyReason = 'category_empty';
   if (vegOnly) {
     emptyReason = 'veg_filtered';
@@ -1943,8 +1940,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const [newGalleryImg, setNewGalleryImg] = useState("");
   const [heroImgInput, setHeroImgInput] = useState(settings?.heroImage || "");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-   
-  // New state for categories management
   const [newCategoryInput, setNewCategoryInput] = useState('');
 
   const filteredOrders = useMemo(() => {
@@ -1954,7 +1949,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0), 0);
   const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
 
-  // Category management functions
   const handleAddCategory = () => {
     if (!newCategoryInput.trim()) return;
     updateCategories([...categories, newCategoryInput.trim()]);
@@ -2454,7 +2448,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
         </div>
       )}
 
-      {/* NEW: Promotions Tab */}
       {tab === "promotions" && (
         <div className="slide-up">
           <h3 style={{ fontFamily: "'Outfit', sans-serif", marginBottom: 16 }}>⚡ Flash Sale Items</h3>
@@ -2682,11 +2675,9 @@ export default function App() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [targetRole, setTargetRole] = useState("staff");
   const [pinInput, setPinInput] = useState("");
-   
-  // New: categories state
   const [categories, setCategories] = useState(CATEGORIES);
 
-  // NEW: Flash Sale and Combo Offers state (with default examples)
+  // Flash Sale and Combo Offers state
   const [flashSaleItems, setFlashSaleItems] = useState([
     { id: 'nv19', name: 'Fish Curry', price: 449, discountPrice: 299, stock: 10, active: true }
   ]);
@@ -2730,7 +2721,6 @@ export default function App() {
   const handlePinSubmit = () => {
     const aPin = settings?.adminPin || "9876";
     const sPin = settings?.staffPin || "5432";
-     
     if (targetRole === "admin" && pinInput === aPin) {
       setRole("admin");
       setShowPinModal(false);
@@ -2749,7 +2739,6 @@ export default function App() {
     }
   };
 
-  // Function to update categories (saves to Firebase)
   const updateCategories = async (newCategories) => {
     setCategories(newCategories);
     try {
@@ -2759,7 +2748,6 @@ export default function App() {
     }
   };
 
-  // NEW: Save promotions to Firebase
   const savePromotions = async () => {
     try {
       await setDoc(doc(db, "settings", "promotions"), {
@@ -2791,11 +2779,9 @@ export default function App() {
           if (docSnap.id === "appSettings") {
             setSettings(prev => ({ ...prev, ...data }));
           }
-          // Load categories from Firebase
           if (docSnap.id === "categories" && data.categories) {
             setCategories(data.categories);
           }
-          // Load promotions
           if (docSnap.id === "promotions") {
             if (data.flashSale) setFlashSaleItems(data.flashSale);
             if (data.comboOffers) setComboOffers(data.comboOffers);
@@ -2839,14 +2825,11 @@ export default function App() {
   const addOffer = async (off) => { setOffersList([...offersList, off]); };
   const removeOffer = async (id) => { setOffersList(offersList.filter(o=>o.id!==id)); };
 
-  // Modified placeOrder – no coin awarding, just store coins in order
   const placeOrder = async (order, rewardCost = 0) => {  
     try {
-      // Ensure order has coinsClaimed false
       order.coinsClaimed = false;
       await setDoc(doc(db, "orders", order.id), order);
     } catch (e) { console.error(e); }
-    // Do NOT update loyaltyUsers or coinHistory here
   };
 
   const advanceStatus = async (orderId, currentStatus) => { 
@@ -2857,12 +2840,10 @@ export default function App() {
     setOrdersState(orders.map(o=>o.id===orderId?{...o, ...updateData}:o)); 
   };
 
-  // Modified markPaid – award coins only when paid and not already claimed
   const markPaid = async (orderId, paid) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
-    // If marking as paid and coins not yet claimed
     if (paid && !order.coinsClaimed) {
       const netCoins = (order.earnedCoins || 0) - (order.rewardUsedCoins || 0);
       const phone = order.customer?.phone;
@@ -2878,7 +2859,6 @@ export default function App() {
             await setDoc(userRef, { phone, name: order.customer.name || "Guest", coins: newCoins });
           }
 
-          // Add coin history entries
           if (order.earnedCoins > 0) {
             await addDoc(collection(db, "coinHistory"), {
               phone,
@@ -2896,7 +2876,6 @@ export default function App() {
             });
           }
 
-          // Update local state
           setLoyaltyUsers(prev => {
             const exist = prev.find(u => u.phone === phone);
             if (exist) {
@@ -2905,19 +2884,14 @@ export default function App() {
               return [...prev, { phone, name: order.customer.name || "Guest", coins: newCoins }];
             }
           });
-          // Optionally update coinHistory local state
-          // ...
         } catch (e) {
           console.error("Coin claim error:", e);
         }
       }
-      // Mark coins as claimed and paid
       await updateDoc(doc(db, "orders", orderId), { paid: true, coinsClaimed: true });
     } else {
-      // Just update paid status
       await updateDoc(doc(db, "orders", orderId), { paid });
     }
-    // Update local orders state
     setOrdersState(prev => prev.map(o => 
       o.id === orderId ? { ...o, paid, coinsClaimed: paid ? true : o.coinsClaimed } : o
     ));
@@ -2944,7 +2918,6 @@ export default function App() {
           {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={flashSaleItems} comboOffers={comboOffers} />}
           {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} />}
           {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} />}
-           
           {!["customer", "staff", "admin"].includes(role) && (
             <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={flashSaleItems} comboOffers={comboOffers} />
           )}
