@@ -109,7 +109,17 @@ function getEstimatedTime(items) {
   return maxTime + 2;
 }
 
-function getOrderProgress(status) { const map = { new: 15, preparing: 50, ready: 85, served: 100 }; return map[status] || 0; }
+function getOrderProgress(status) { const map = { new: 15, preparing: 50, ready: 85, served: 100 }; return map[status] || // Cart helpers — Flash sale / Combo price override handle karte hain
+function getCartQty(cartEntry) {
+  if (!cartEntry) return 0;
+  if (typeof cartEntry === 'number') return cartEntry;
+  return cartEntry.qty || 0;
+}
+function getCartLineTotal(cartEntry, menuItem) {
+  if (!cartEntry || !menuItem) return 0;
+  const price = cartEntry.priceOverride ?? menuItem.price;
+  return price * getCartQty(cartEntry);
+}
 
 function getSmartSuggestionPool(menu, cart) {
   const hour = new Date().getHours();
@@ -799,8 +809,12 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filtered = menu.filter(m => m.available && (!search.trim() || m.name.toLowerCase().includes(search.toLowerCase())));
-  const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
-  const subtotal = cartItems.reduce((s, [id, q]) => { const m = menu.find(x => x.id === id); return s + (m ? m.price * q : 0); }, 0);
+  const cartItems = Object.entries(cart).filter(([, e]) => getCartQty(e) > 0);
+const cartCount = cartItems.reduce((s, [, e]) => s + getCartQty(e), 0);
+const subtotal = cartItems.reduce((s, [id, e]) => {
+  const item = menu.find((m) => m.id === id);
+  return s + getCartLineTotal(e, item);
+}, 0);
   const setQty = (id, q) => { setCart(prev => { const next = { ...prev, [id]: q }; if (q <= 0) delete next[id]; return next; }); };
   const inputStyle = { padding: 12, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "'Plus Jakarta Sans', sans-serif" };
 
