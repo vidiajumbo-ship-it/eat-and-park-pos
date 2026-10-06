@@ -575,6 +575,7 @@ const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
 // ============================================
 
 const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAddMoreItems }) => {
+  const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAddMoreItems, orders }) => {
   const [cart, setCart] = useState({});
   const [search, setSearch] = useState("");
   const [waiterName, setWaiterName] = useState("");
@@ -589,6 +590,16 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   const subtotal = cartItems.reduce((s, [id, q]) => { const m = menu.find(x => x.id === id); return s + (m ? m.price * q : 0); }, 0);
   const setQty = (id, q) => { setCart(prev => { const next = { ...prev, [id]: q }; if (q <= 0) delete next[id]; return next; }); };
   const inputStyle = { padding: 12, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "'Plus Jakarta Sans', sans-serif" };
+
+  // 🔥 Running tables — saare active dine-in orders
+  const runningTables = useMemo(() => {
+    return (orders || [])
+      .filter(o => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled")
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [orders]);
+
+  // Current table pe running order hai kya?
+  const currentTableRunning = runningTables.find(o => Number(o.table) === Number(table));
 
   const handleSubmit = async () => {
     if (cartItems.length === 0) return;
@@ -623,6 +634,62 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
       <p style="text-align:center;margin-top:12px;font-size:11px">— Thank You —</p>
       <script>window.print();setTimeout(()=>window.close(),500)</script></body></html>`);
     w.document.close();
+  };
+
+  // 🔥 Running Tables List Component (reusable)
+  const RunningTablesList = () => {
+    if (runningTables.length === 0) return null;
+    return (
+      <div style={{ background: 'linear-gradient(135deg, #FFF8E1 0%, #FFE0B2 100%)', borderRadius: 14, padding: 14, marginBottom: 16, border: `1.5px solid ${COLORS.warning}` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ fontWeight: 800, fontSize: 14, color: '#E65100', display: 'flex', alignItems: 'center', gap: 6 }}>
+            🔥 Running Tables ({runningTables.length})
+          </div>
+          <div style={{ fontSize: 11, color: '#BF360C', fontWeight: 700 }}>Tap to add items</div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+          {runningTables.map(o => (
+            <button
+              key={o.id}
+              onClick={() => onAddMoreItems(o.id)}
+              style={{
+                background: '#fff', border: `1px solid ${COLORS.line}`,
+                borderRadius: 10, padding: 10, cursor: 'pointer',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                textAlign: 'left', fontFamily: 'inherit', width: '100%'
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, color: COLORS.ink, marginBottom: 2 }}>
+                  🍽️ Table {o.table}
+                  <span style={{ marginLeft: 6, fontSize: 11, color: COLORS.textLight, fontWeight: 600 }}>
+                    #{o.id.slice(1, 5).toUpperCase()}
+                  </span>
+                  {o.kots?.length > 1 && (
+                    <span style={{ marginLeft: 6, background: COLORS.info, color: '#fff', fontSize: 9, padding: '1px 6px', borderRadius: 6, fontWeight: 800 }}>
+                      {o.kots.length} KOT
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: COLORS.textLight, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {o.waiter && <span>🧑‍🍳 {o.waiter}</span>}
+                  <span>· {o.items.length} item{o.items.length !== 1 ? 's' : ''}</span>
+                  <span>· ₹{o.items.reduce((s, it) => s + it.price * it.qty, 0)}</span>
+                  <span>· {timeAgo(o.createdAt)}</span>
+                </div>
+              </div>
+              <div style={{
+                background: COLORS.info, color: '#fff', borderRadius: 8,
+                padding: '6px 10px', fontWeight: 800, fontSize: 12,
+                display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginLeft: 8
+              }}>
+                ➕ Add
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   // ✅ ORDER PLACED — Confirmation view
@@ -678,7 +745,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
               ➕ Add More Items
             </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
             <button onClick={() => { setPlacedOrder(null); setWaiterName(""); setCustomerName(""); setCustomerPhone(""); }}
               style={{ padding: 14, borderRadius: 12, border: `2px solid ${COLORS.sage}`, background: 'transparent', color: COLORS.sage, fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>
               🆕 New Order
@@ -689,8 +756,11 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
             </button>
           </div>
 
-          <div style={{ fontSize: 11, color: COLORS.textLight, textAlign: 'center', marginTop: 14, lineHeight: 1.5 }}>
-            💡 <strong>Add More Items</strong> opens same order and creates a new KOT for kitchen.
+          {/* 🔥 Running Tables list bhi dikhao confirmation pe */}
+          <RunningTablesList />
+
+          <div style={{ fontSize: 11, color: COLORS.textLight, textAlign: 'center', lineHeight: 1.5 }}>
+            💡 Tap any running table above to add extra items (new KOT).
           </div>
         </div>
       </div>
@@ -708,6 +778,28 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
           </div>
           <button onClick={onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, fontSize: 18, cursor: "pointer" }}>✕</button>
         </div>
+
+        {/* 🔥 Running Tables list */}
+        <RunningTablesList />
+
+        {/* Warn if current table already has a running order */}
+        {currentTableRunning && (
+          <div style={{ background: '#FFF3E0', border: `1.5px solid ${COLORS.warning}`, borderRadius: 12, padding: 12, marginBottom: 12 }}>
+            <div style={{ fontSize: 13, color: '#E65100', fontWeight: 700, marginBottom: 8 }}>
+              ⚠️ Table {table} already has a running order (#{currentTableRunning.id.slice(1, 5).toUpperCase()})
+            </div>
+            <button
+              onClick={() => onAddMoreItems(currentTableRunning.id)}
+              style={{
+                width: '100%', padding: 10, borderRadius: 10,
+                border: 'none', background: COLORS.info, color: '#fff',
+                fontWeight: 800, fontSize: 13, cursor: 'pointer'
+              }}>
+              ➕ Add items to Table {table} instead
+            </button>
+          </div>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
           <input placeholder="Waiter Name" value={waiterName} onChange={e => setWaiterName(e.target.value)} style={inputStyle} />
           <select value={table} onChange={e => setTable(Number(e.target.value))} style={{ ...inputStyle, background: "#fff" }}>
@@ -749,7 +841,6 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
     </div>
   );
 });
-
 // ============================================
 // 16. CUSTOMER VIEW
 // ============================================
