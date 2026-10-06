@@ -570,8 +570,220 @@ const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
   );
 });
 // ============================================
-// 15. WAITER ORDER PANEL (V15 NEW
+// 14.5 TABLE STATUS BOARD
 // ============================================
+
+const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = true, compact = false }) => {
+  const tableData = useMemo(() => {
+    const activeOrders = (orders || []).filter(o =>
+      o.orderType === "dine_in" &&
+      o.status !== "served" &&
+      o.status !== "cancelled"
+    );
+
+    const map = {};
+    for (let i = 1; i <= tables; i++) {
+      map[i] = { table: i, order: null, status: "empty" };
+    }
+
+    activeOrders.forEach(o => {
+      const t = Number(o.table);
+      if (map[t]) {
+        map[t].order = o;
+        if (o.status === "ready" || o.status === "served") map[t].status = "billing";
+        else map[t].status = "occupied";
+      }
+    });
+
+    return Object.values(map);
+  }, [orders, tables]);
+
+  const stats = useMemo(() => {
+    const active = tableData.filter(t => t.order);
+    const totalAmount = active.reduce((s, t) => 
+      s + t.order.items.reduce((a, i) => a + i.price * i.qty, 0), 0
+    );
+    return {
+      occupied: active.length,
+      empty: tables - active.length,
+      running: totalAmount
+    };
+  }, [tableData, tables]);
+
+  const statusColors = {
+    empty: { bg: "#E8F5E9", border: "#4A7C59", label: "Empty", emoji: "🟢" },
+    occupied: { bg: "#FFEBEE", border: "#EF4444", label: "Occupied", emoji: "🔴" },
+    billing: { bg: "#FFF8E1", border: "#FF9800", label: "Billing", emoji: "🟡" }
+  };
+
+  const formatTime = (ts) => {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    return `${h}h ${m % 60}m`;
+  };
+
+  if (compact) {
+    return (
+      <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${COLORS.line}`, padding: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ fontWeight: 800, fontSize: 13 }}>🍽️ Table Status</div>
+          <div style={{ fontSize: 11, color: COLORS.textLight }}>
+            <span style={{ color: COLORS.error, fontWeight: 700 }}>{stats.occupied}</span> occupied ·{' '}
+            <span style={{ color: COLORS.sage, fontWeight: 700 }}>{stats.empty}</span> free
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
+          {tableData.map(t => {
+            const c = statusColors[t.status];
+            return (
+              <button
+                key={t.table}
+                onClick={() => t.order && onTableClick && onTableClick(t.order)}
+                disabled={!t.order}
+                style={{
+                  aspectRatio: '1', borderRadius: 8,
+                  background: c.bg, border: `1.5px solid ${c.border}`,
+                  fontWeight: 800, fontSize: 13, color: COLORS.ink,
+                  cursor: t.order ? 'pointer' : 'default',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  padding: 0
+                }}>
+                {t.table}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: '#fff', borderRadius: 18, border: `1px solid ${COLORS.line}`, padding: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 24 }}>🍽️</span>
+          <div>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800 }}>Table Status Board</div>
+            <div style={{ fontSize: 12, color: COLORS.textLight, fontWeight: 600 }}>Live · {tables} tables</div>
+          </div>
+        </div>
+
+        {showStats && (
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ background: '#FFEBEE', border: `1px solid ${COLORS.error}`, borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18 }}>🔴</span>
+              <div>
+                <div style={{ fontSize: 10, color: COLORS.error, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Occupied</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, color: COLORS.error }}>{stats.occupied}</div>
+              </div>
+            </div>
+            <div style={{ background: '#E8F5E9', border: `1px solid ${COLORS.sage}`, borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18 }}>🟢</span>
+              <div>
+                <div style={{ fontSize: 10, color: COLORS.sageDark, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Free</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, color: COLORS.sageDark }}>{stats.empty}</div>
+              </div>
+            </div>
+            <div style={{ background: '#F0EFEB', border: `1px solid ${COLORS.line}`, borderRadius: 10, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18 }}>💰</span>
+              <div>
+                <div style={{ fontSize: 10, color: COLORS.textLight, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Running</div>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 16, fontWeight: 800, color: COLORS.copper }}>{inr(stats.running)}</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, marginBottom: 16, fontSize: 11, fontWeight: 700, color: COLORS.textLight, flexWrap: 'wrap' }}>
+        <span><span style={{ color: COLORS.sage }}>●</span> Empty</span>
+        <span><span style={{ color: COLORS.error }}>●</span> Occupied</span>
+        <span><span style={{ color: '#E65100' }}>●</span> Billing / Ready</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
+        {tableData.map(t => {
+          const c = statusColors[t.status];
+          const o = t.order;
+          const total = o ? o.items.reduce((s, i) => s + i.price * i.qty, 0) : 0;
+          const itemCount = o ? o.items.reduce((s, i) => s + i.qty, 0) : 0;
+
+          return (
+            <button
+              key={t.table}
+              onClick={() => o && onTableClick && onTableClick(o)}
+              disabled={!o}
+              style={{
+                background: c.bg,
+                border: `2px solid ${c.border}`,
+                borderRadius: 14, padding: 14,
+                cursor: o ? 'pointer' : 'default',
+                textAlign: 'left',
+                fontFamily: 'inherit',
+                transition: 'all 0.2s ease',
+                position: 'relative',
+                minHeight: 120,
+                display: 'flex', flexDirection: 'column', justifyContent: 'space-between'
+              }}
+              className={o ? 'hover-lift' : ''}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 26, fontWeight: 800, color: COLORS.ink, lineHeight: 1 }}>
+                  {t.table}
+                </div>
+                <span style={{ fontSize: 16 }}>{c.emoji}</span>
+              </div>
+
+              {!o ? (
+                <div style={{ fontSize: 11, color: COLORS.textLight, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Available
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 10, color: COLORS.textLight, fontWeight: 700 }}>
+                    <span>{o.waiter ? `🧑‍🍳 ${o.waiter}` : '🧑‍🍳 —'}</span>
+                    <span>⏱️ {formatTime(o.createdAt)}</span>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, color: COLORS.textLight, fontWeight: 700 }}>
+                      #{o.id.slice(1, 5).toUpperCase()}
+                    </div>
+                    <div style={{ fontSize: 10, color: COLORS.textLight, fontWeight: 700 }}>
+                      {itemCount} item{itemCount !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
+                    <div>
+                      <div style={{ fontSize: 9, color: COLORS.textLight, fontWeight: 800, textTransform: 'uppercase' }}>Total</div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 800, color: COLORS.copper }}>
+                        {inr(total)}
+                      </div>
+                    </div>
+                    {o.status === "ready" && (
+                      <div style={{ background: '#E65100', color: '#fff', fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 6, textTransform: 'uppercase' }}>
+                        Ready
+                      </div>
+                    )}
+                    {(o.status === "new" || o.status === "preparing") && (
+                      <div style={{ background: COLORS.info, color: '#fff', fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 6, textTransform: 'uppercase' }}>
+                        {o.status === "new" ? "New" : "Cooking"}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
 // ============================================)
 // 15. WAITER ORDER PANEL (V15 NEW)
 // ============================================
@@ -593,16 +805,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   const inputStyle = { padding: 12, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "'Plus Jakarta Sans', sans-serif" };
 
   // 🔥 Running tables — saare active dine-in orders
-          {/* 🍽️ Compact Table Board */}
-        <div style={{ marginBottom: 12 }}>
-          <TableStatusBoard
-            orders={orders}
-            tables={12}
-            onTableClick={(o) => onAddMoreItems(o.id)}
-            showStats={false}
-            compact={true}
-          />
-        </div>
+         
   const runningTables = useMemo(() => {
     return (orders || [])
       .filter(o => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled")
