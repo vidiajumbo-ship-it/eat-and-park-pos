@@ -2832,7 +2832,15 @@ export default function App() {
 
     const qCalls = query(collection(db, "calls"), where("status", "==", "active"));
     const unsubCalls = onSnapshot(qCalls, (snap) => { setCalls(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
-    const unsubOrders = onSnapshot(collection(db, "orders"), (snap) => { setOrdersState(snap.docs.map(d => ({ id: d.id, ...d.data() }))); });
+    const startOfToday = new Date();
+startOfToday.setHours(0, 0, 0, 0);
+const ordersQuery = query(
+  collection(db, "orders"),
+  where("createdAt", ">=", startOfToday.getTime())
+);
+const unsubOrders = onSnapshot(ordersQuery, (snap) => {
+  setOrdersState(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+});
     return () => { unsubCalls(); unsubOrders(); };
   }, []);
 
