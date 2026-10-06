@@ -1823,7 +1823,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
         </>
       )}
 
-      {tab === "settings" && (
+            {tab === "settings" && (
         <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16 }}>
           <h3 style={{ marginTop: 0, marginBottom: 16 }}>🖼️ Hero Image</h3>
           <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
@@ -1832,22 +1832,147 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           </div>
           {heroImgInput && (<img src={heroImgInput} alt="" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12 }} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80"; }} />)}
 
+          {/* ═══════════════════════════════════════════════
+              🔐 SECURITY PINs — Manage All
+             ═══════════════════════════════════════════════ */}
           <div style={{ borderTop: `1px solid ${COLORS.line}`, marginTop: 28, paddingTop: 24 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>🧑‍🍳 Waiter Mode PIN</h3>
-            <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 14 }}>Waiter will use this PIN to unlock Waiter Mode on customer screen</div>
-            <div style={{ display: "flex", gap: 12, maxWidth: 400 }}>
-              <input type="text" placeholder="Waiter PIN" value={settings?.waiterPin || "1234"}
-                onChange={e => setSettings({ ...settings, waiterPin: e.target.value })}
-                style={{ ...inputStyle, flex: 1, fontFamily: "'JetBrains Mono', monospace", fontSize: 20, textAlign: 'center', letterSpacing: 4 }} />
-              <button onClick={async () => {
-                try { await setDoc(doc(db, "settings", "appSettings"), settings); alert("✅ Waiter PIN saved!"); }
-                catch (e) { alert("⚠️ Failed to save"); }
-              }} style={{ ...primaryBtn }}>💾 Save PIN</button>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>🔐 Security PINs</h3>
+            <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 18 }}>
+              Manage PINs for Waiter, Staff, and Admin access. Changes apply instantly.
             </div>
-            <div style={{ fontSize: 12, color: COLORS.sage, marginTop: 10, fontWeight: 700 }}>
-              Current PIN: <strong style={{ fontFamily: "'JetBrains Mono', monospace" }}>{settings?.waiterPin || "1234"}</strong>
+
+            {/* Waiter PIN */}
+            <div style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 22 }}>🧑‍🍳</span>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 15 }}>Waiter PIN</div>
+                    <div style={{ fontSize: 11, color: COLORS.textLight }}>Unlocks Waiter Mode on customer screen</div>
+                  </div>
+                </div>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", background: COLORS.info, color: '#fff', padding: '4px 10px', borderRadius: 8, fontWeight: 800, fontSize: 13 }}>
+                  {settings?.waiterPin || "1234"}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input type="text" inputMode="numeric" maxLength={6} value={settings?.waiterPin || "1234"}
+                  onChange={e => setSettings({ ...settings, waiterPin: e.target.value.replace(/\D/g, '') })}
+                  placeholder="4-6 digits"
+                  style={{ ...inputStyle, flex: 1, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 18, letterSpacing: 4, fontWeight: 800 }} />
+                <button onClick={async () => {
+                  const pin = (settings?.waiterPin || "1234").toString();
+                  if (pin.length < 4) { alert("⚠️ PIN must be at least 4 digits"); return; }
+                  try { await setDoc(doc(db, "settings", "appSettings"), settings); alert("✅ Waiter PIN updated to: " + pin); }
+                  catch (e) { alert("⚠️ Failed to save"); }
+                }} style={{ ...primaryBtn, whiteSpace: 'nowrap' }}>💾 Save</button>
+              </div>
+            </div>
+
+            {/* Staff PIN */}
+            <div style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 22 }}>🍳</span>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 15 }}>Staff PIN</div>
+                    <div style={{ fontSize: 11, color: COLORS.textLight }}>Unlocks Kitchen Board</div>
+                  </div>
+                </div>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", background: COLORS.copper, color: '#fff', padding: '4px 10px', borderRadius: 8, fontWeight: 800, fontSize: 13 }}>
+                  {settings?.staffPin || "5432"}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input type="text" inputMode="numeric" maxLength={6} value={settings?.staffPin || "5432"}
+                  onChange={e => setSettings({ ...settings, staffPin: e.target.value.replace(/\D/g, '') })}
+                  placeholder="4-6 digits"
+                  style={{ ...inputStyle, flex: 1, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 18, letterSpacing: 4, fontWeight: 800 }} />
+                <button onClick={async () => {
+                  const pin = (settings?.staffPin || "5432").toString();
+                  if (pin.length < 4) { alert("⚠️ PIN must be at least 4 digits"); return; }
+                  try { await setDoc(doc(db, "settings", "appSettings"), settings); alert("✅ Staff PIN updated to: " + pin); }
+                  catch (e) { alert("⚠️ Failed to save"); }
+                }} style={{ ...primaryBtn, whiteSpace: 'nowrap' }}>💾 Save</button>
+              </div>
+            </div>
+
+            {/* Admin PIN */}
+            <div style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 22 }}>⚙️</span>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 15 }}>Admin PIN</div>
+                    <div style={{ fontSize: 11, color: COLORS.textLight }}>Unlocks Admin Dashboard (highest access)</div>
+                  </div>
+                </div>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", background: COLORS.ink, color: '#fff', padding: '4px 10px', borderRadius: 8, fontWeight: 800, fontSize: 13 }}>
+                  {settings?.adminPin || "9876"}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input type="text" inputMode="numeric" maxLength={6} value={settings?.adminPin || "9876"}
+                  onChange={e => setSettings({ ...settings, adminPin: e.target.value.replace(/\D/g, '') })}
+                  placeholder="4-6 digits"
+                  style={{ ...inputStyle, flex: 1, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 18, letterSpacing: 4, fontWeight: 800 }} />
+                <button onClick={async () => {
+                  const pin = (settings?.adminPin || "9876").toString();
+                  if (pin.length < 4) { alert("⚠️ PIN must be at least 4 digits"); return; }
+                  try { await setDoc(doc(db, "settings", "appSettings"), settings); alert("✅ Admin PIN updated to: " + pin); }
+                  catch (e) { alert("⚠️ Failed to save"); }
+                }} style={{ ...primaryBtn, whiteSpace: 'nowrap' }}>💾 Save</button>
+              </div>
+            </div>
+
+            {/* 🔄 Reset All PINs */}
+            <div style={{ background: 'rgba(239, 68, 68, 0.06)', border: `1.5px dashed ${COLORS.error}`, borderRadius: 12, padding: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
+                <span style={{ fontSize: 26 }}>⚠️</span>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: COLORS.error }}>Reset All PINs</div>
+                  <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2, lineHeight: 1.5 }}>
+                    Restores all PINs to factory defaults. Use if you forgot any PIN.
+                  </div>
+                </div>
+              </div>
+              <div style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 12, fontSize: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                  <span style={{ color: COLORS.textLight, fontWeight: 600 }}>🧑‍🍳 Waiter</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800 }}>1234</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                  <span style={{ color: COLORS.textLight, fontWeight: 600 }}>🍳 Staff</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800 }}>5432</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+                  <span style={{ color: COLORS.textLight, fontWeight: 600 }}>⚙️ Admin</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800 }}>9876</span>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!window.confirm("⚠️ Reset ALL PINs to defaults?\n\nWaiter: 1234\nStaff: 5432\nAdmin: 9876\n\nThis will overwrite your current PINs.")) return;
+                  const resetSettings = { ...settings, waiterPin: "1234", staffPin: "5432", adminPin: "9876" };
+                  setSettings(resetSettings);
+                  try {
+                    await setDoc(doc(db, "settings", "appSettings"), resetSettings);
+                    alert("✅ All PINs reset to defaults!\n\nWaiter: 1234\nStaff: 5432\nAdmin: 9876");
+                  } catch (e) {
+                    alert("⚠️ Failed to reset. Check your internet.");
+                  }
+                }}
+                style={{
+                  width: '100%', padding: 14, border: 'none', borderRadius: 12,
+                  background: COLORS.error, color: '#fff', fontWeight: 800,
+                  fontSize: 14, cursor: 'pointer', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', gap: 8
+                }}>
+                🔄 Reset All PINs to Default
+              </button>
             </div>
           </div>
+          {/* ═══════════════════════════════════════════════ */}
         </div>
       )}
 
