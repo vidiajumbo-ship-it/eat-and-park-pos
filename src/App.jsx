@@ -1449,9 +1449,16 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   }, [showToast]);
 
   const addFlashSaleToCart = useCallback((item) => {
-    setCart(prev => ({ ...prev, [item.id]: (prev[item.id] || 0) + 1 }));
-    showToast(`⚡ ${item.name} added!`, 'success');
-  }, [showToast]);
+  setCart(prev => {
+    const existing = prev[item.id];
+    const qty = getCartQty(existing) + 1;
+    return {
+      ...prev,
+      [item.id]: { qty, priceOverride: item.discountPrice }
+    };
+  });
+  showToast(`⚡ ${item.name} added!`, 'success');
+}, [showToast]);
 
   const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, width: "100%", boxSizing: "border-box" };
 
