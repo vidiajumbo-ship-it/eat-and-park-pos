@@ -2621,15 +2621,23 @@ const DEFAULT_GALLERY = [
 // ============================================
 // 20. ProgressRing & OrderTimer
 // ============================================
-
 const ProgressRing = memo(({ progress, size = 60, strokeWidth = 3 }) => {
   const circumference = 2 * Math.PI * ((size - strokeWidth) / 2);
   const offset = circumference - (progress / 100) * circumference;
   return (
-    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx={size / 2} cy={size / 2} r={(size - strokeWidth) / 2} fill="none" stroke={COLORS.line} strokeWidth={strokeWidth} />
-      <circle cx={size / 2} cy={size / 2} r={(size - strokeWidth) / 2} fill="none" stroke={COLORS.sage} strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset} style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
-      <text x="50%" y="50%" textAnchor="middle" dy="0.3em" fontSize="16" fontWeight="700" fill={COLORS.sage}>{progress}%</text>
+    <svg width={size} height={size}>
+      <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+        <circle cx={size / 2} cy={size / 2} r={(size - strokeWidth) / 2}
+          fill="none" stroke={COLORS.line} strokeWidth={strokeWidth} />
+        <circle cx={size / 2} cy={size / 2} r={(size - strokeWidth) / 2}
+          fill="none" stroke={COLORS.sage} strokeWidth={strokeWidth}
+          strokeDasharray={circumference} strokeDashoffset={offset}
+          style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
+      </g>
+      <text x="50%" y="50%" textAnchor="middle" dy="0.35em"
+        fontSize="16" fontWeight="700" fill={COLORS.sage}>
+        {progress}%
+      </text>
     </svg>
   );
 });
