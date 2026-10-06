@@ -1606,3 +1606,195 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {offersList.map(offer
+                                    // ============================================
+// 13. STAFF VIEW — V15 (Touch to proceed · Live notifications)
+// ============================================
+
+const STAFF_SHORTCUTS = {
+  'Ctrl+K': 'Focus first order',
+  '↑ / ↓': 'Navigate between orders',
+  'Enter / Space': 'Advance selected order',
+  'Shift+?': 'Toggle this help panel',
+};
+
+const KeyboardHelpModal = memo(({ onClose }) => (
+  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={onClose}>
+    <div onClick={e => e.stopPropagation()} className="fade-scale" style={{ background: '#fff', padding: 28, borderRadius: 20, width: '90%', maxWidth: 440 }}>
+      <h2 style={{ margin: '0 0 20px', fontFamily: "'Outfit', sans-serif" }}>⌨️ Keyboard Shortcuts</h2>
+      <div style={{ display: 'grid', gap: 10 }}>
+        {Object.entries(STAFF_SHORTCUTS).map(([key, desc]) => (
+          <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: COLORS.paper, borderRadius: 10 }}>
+            <kbd style={{ background: COLORS.copper, color: '#fff', padding: '4px 10px', borderRadius: 6, fontWeight: 800, fontFamily: 'monospace', fontSize: 12 }}>{key}</kbd>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>{desc}</span>
+          </div>
+        ))}
+      </div>
+      <button onClick={onClose} style={{ background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 14, padding: '13px 20px', fontWeight: 800, width: '100%', marginTop: 20, cursor: 'pointer' }}>Close</button>
+    </div>
+  </div>
+));
+
+function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall, cancelOrderByStaff }) {
+  const active = orders.filter((o) => o.status !== "served" && o.status !== "cancelled").sort((a, b) => a.createdAt - b.createdAt);
+  const activeCalls = calls.filter(c => c.status === 'active');
+  const columns = ["new", "preparing", "ready"];
+  const newOrderCount = active.filter(o => o.status === "new").length;
+  const prevCountRef = useRef(newOrderCount);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+
+  useEffect(() => {
+    if (newOrderCount > prevCountRef.current) {
+      playNotificationSound();
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('🛎️ New Order Received!', { body: `${newOrderCount} new order${newOrderCount > 1 ? 's' : ''} waiting`, icon: '/icon-192.png', vibrate: [200, 100, 200] });
+      }
+    }
+    prevCountRef.current = newOrderCount;
+  }, [newOrderCount]);
+
+  const prevCallsRef = useRef(activeCalls.length);
+  useEffect(() => {
+    if (activeCalls.length > prevCallsRef.current) {
+      const bell = new Audio("https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3");
+      bell.play().catch(() => {});
+    }
+    prevCallsRef.current = activeCalls.length;
+  }, [activeCalls.length]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'k' && e.ctrlKey) { e.preventDefault(); if (active[0]) setSelectedOrderId(active[0].id); }
+      if (e.key === 'ArrowUp') { const i = active.findIndex(o => o.id === selectedOrderId); if (i > 0) setSelectedOrderId(active[i - 1].id); }
+      if (e.key === 'ArrowDown') { const i = active.findIndex(o => o.id === selectedOrderId); if (i < active.length - 1 && i >= 0) setSelectedOrderId(active[i + 1].id); }
+      if ((e.key === 'Enter' || e.key === ' ') && selectedOrderId) { const o = active.find(x => x.id === selectedOrderId); if (o) { e.preventDefault(); advanceStatus(o.id, o.status); } }
+      if ((e.key === '?' || e.key === '/') && e.shiftKey) { e.preventDefault(); setShowHelpModal(v => !v); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedOrderId, active, advanceStatus]);
+
+  const handlePrintReceipt = (order) => {
+    const w = window.open('', '_blank', 'width=300,height=600');
+    if (!w) return;
+    const kots = order.kots?.length ? order.kots : [{ kotNumber: 1, items: order.items, createdAt: order.createdAt }];
+    const itemsHtml = kots.map(kot => `
+      <div style="margin-top:10px;border-top:1px dashed #000;padding-top:6px">
+        <strong>KOT #${kot.kotNumber}${kot.isRunning ? ' (RUNNING)' : ''}</strong>
+        ${kot.items.map(it => `<div>${it.qty}x ${it.name}</div>`).join('')}
+      </div>
+    `).join('');
+    const totalAmount = order.items.reduce((s, it) => s + (it.price * it.qty), 0) + (order.deliveryFee || 0) - (order.loyaltyDiscount || 0);
+    w.document.write(`
+      <html><head><title>KOT #${order.id.slice(1,5)}</title>
+      <style>body{font-family:'JetBrains Mono',monospace;font-size:12px;padding:10px;width:260px}
+      h2,h4{text-align:center;margin:4px 0}</style></head><body>
+      <h2>${RESTAURANT.name}</h2>
+      <h4>${order.orderType === 'parcel' ? '🛍️ PARCEL' : `🍽️ TABLE ${order.table}`}</h4>
+      <p>Order: #${order.id.toUpperCase()}<br/>Customer: ${order.customer.name}</p>
+      ${itemsHtml}
+      <div style="text-align:right;font-weight:bold;margin-top:10px">Total: ₹${totalAmount}</div>
+      <script>window.print();setTimeout(()=>window.close(),500)</script></body></html>
+    `);
+    w.document.close();
+  };
+
+  return (
+    <div style={{ padding: "26px 20px 60px", maxWidth: 1200, margin: "0 auto" }}>
+      <KitchenNotificationColumn orders={active} selectedOrderId={selectedOrderId} onSelect={setSelectedOrderId} />
+
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: COLORS.ink, fontWeight: 800 }}>🍳 Kitchen Board</div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => setShowHelpModal(true)} title="Keyboard Shortcuts" style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 12, padding: "10px 16px", cursor: "pointer", fontWeight: 700 }}>⌨️ Shortcuts</button>
+          <button onClick={() => requestPinPrompt("admin")} style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontWeight: 700, cursor: 'pointer' }}>⚙️ Admin</button>
+        </div>
+      </div>
+      <div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 24, fontWeight: 600 }}>
+        👆 Tap any button to advance. No sliding needed.
+      </div>
+
+      {newOrderCount > 0 && (
+        <div className="slide-up" style={{ background: 'rgba(226,89,56,0.1)', border: `2px solid ${COLORS.copper}`, borderRadius: 16, padding: 16, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 24 }}>🛎️</span>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.copper }}>{newOrderCount} New Order{newOrderCount > 1 ? 's' : ''}!</div>
+            <div style={{ fontSize: 13, color: COLORS.textLight }}>Tap the card to advance</div>
+          </div>
+        </div>
+      )}
+
+      {showHelpModal && <KeyboardHelpModal onClose={() => setShowHelpModal(false)} />}
+
+      {activeCalls.length > 0 && (
+        <div className="slide-up" style={{ background: "rgba(239,68,68,0.1)", border: `2px solid ${COLORS.error}`, borderRadius: 16, padding: 16, marginBottom: 24 }}>
+          <h3 style={{ color: COLORS.error, margin: "0 0 12px 0" }}>🚨 Waiter Requested!</h3>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {activeCalls.map(c => (
+              <div key={c.id} style={{ background: '#fff', padding: "12px 16px", borderRadius: 12, display: 'flex', alignItems: 'center', gap: 16 }}>
+                <span style={{ fontWeight: 800, fontSize: 16 }}>Table {c.table}</span>
+                <button onClick={() => resolveCall(c.id)} style={{ background: COLORS.success, color: '#fff', border: 'none', padding: "6px 12px", borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>✓ Resolved</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24 }}>
+        {columns.map((status) => {
+          const list = active.filter((o) => o.status === status);
+          return (
+            <div key={status} style={{ background: COLORS.paper, border: `1px solid ${COLORS.line}`, borderRadius: 18, padding: 20 }}>
+              <div style={{ display: "flex", gap: 10, marginBottom: 20, alignItems: "center" }}>
+                <div style={{ width: 12, height: 12, borderRadius: "50%", background: STATUS_COLOR[status] }} />
+                <div style={{ fontSize: 15, textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.05em", color: STATUS_COLOR[status] }}>{STATUS_LABEL[status]}</div>
+                <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, background: STATUS_COLOR[status], color: "#fff", padding: "3px 10px", borderRadius: 14, fontWeight: 700, marginLeft: "auto" }}>{list.length}</span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {list.map((o) => {
+                  const isSelected = selectedOrderId === o.id;
+                  const runningCount = (o.kots || []).filter(k => k.isRunning).length;
+                  return (
+                    <div key={o.id} onClick={() => setSelectedOrderId(o.id)} style={{ background: isSelected ? COLORS.copper : '#fff', border: `2px solid ${isSelected ? COLORS.copper : COLORS.line}`, borderRadius: 16, padding: 18, boxShadow: isSelected ? '0 12px 24px rgba(226,89,56,0.2)' : '0 8px 24px rgba(0,0,0,0.05)', cursor: 'pointer', transition: 'all 0.2s ease' }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: "center" }}>
+                        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800, color: isSelected ? '#fff' : (o.orderType === "parcel" ? COLORS.rust : COLORS.ink), display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                          {o.orderType === "parcel" ? "🛍️ PARCEL" : `🍽️ Table ${o.table}`}
+                          <KotBadge kots={o.kots} />
+                          {runningCount > 0 && (<span style={{ background: isSelected ? 'rgba(255,255,255,0.3)' : COLORS.info, color: '#fff', fontSize: 10, padding: "2px 6px", borderRadius: 8, fontWeight: 800 }}>RUNNING</span>)}
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: isSelected ? 'rgba(255,255,255,0.85)' : COLORS.textLight, background: isSelected ? 'rgba(255,255,255,0.2)' : COLORS.paper2, padding: '4px 10px', borderRadius: 12 }}>{timeAgo(o.createdAt)}</div>
+                      </div>
+
+                      <div style={{ borderTop: isSelected ? `1px solid rgba(255,255,255,0.3)` : `1.5px dashed ${COLORS.line}`, paddingTop: 14, marginBottom: 14 }}>
+                        {o.items.map((it, idx) => (
+                          <div key={idx} style={{ fontSize: 15, marginBottom: 6, fontWeight: 600, color: isSelected ? '#fff' : COLORS.ink }}>
+                            <span style={{ fontWeight: 800, display: 'inline-block', width: 28 }}>{it.qty}×</span> {it.name}
+                            {it.kotNumber > 1 && (<span style={{ fontSize: 10, marginLeft: 6, color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.info, fontWeight: 700 }}>KOT#{it.kotNumber}</span>)}
+                          </div>
+                        ))}
+                        {o.claimedReward && (<div style={{ fontSize: 14, marginTop: 10, padding: '6px 10px', background: isSelected ? 'rgba(255,255,255,0.2)' : COLORS.sageLight, color: isSelected ? '#fff' : COLORS.sageDark, borderRadius: 8, fontWeight: 800 }}>🎁 FREE: {o.claimedReward}</div>)}
+                        {o.payment && (<div style={{ fontSize: 11, marginTop: 6, color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.textLight, fontWeight: 600 }}>💳 {o.payment} {o.paid ? '✅' : '⏳'}</div>)}
+                      </div>
+
+                      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                        <button onClick={(e) => { e.stopPropagation(); advanceStatus(o.id, status); }} style={{ flex: 1, padding: "14px 12px", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: "pointer", transition: "all 0.15s ease", background: status === "ready" ? COLORS.sage : (status === "preparing" ? COLORS.copper : COLORS.ink), color: "#fff", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+                          {status === "new" ? "👨‍🍳 Start Cooking" : status === "preparing" ? "✅ Mark Ready" : "🍽️ Mark Served"}
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(o); }} title="Print KOT" style={{ background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, color: isSelected ? '#fff' : COLORS.ink, border: 'none', width: 48, height: 48, borderRadius: 12, fontSize: 20, cursor: 'pointer' }}>🖨️</button>
+                        <button onClick={(e) => { e.stopPropagation(); if (window.confirm(`Cancel order #${o.id.slice(1, 5)}?`)) { cancelOrderByStaff && cancelOrderByStaff(o.id); } }} title="Cancel order" style={{ background: 'transparent', color: isSelected ? '#fff' : COLORS.error, border: `1.5px solid ${isSelected ? 'rgba(255,255,255,0.5)' : COLORS.error}`, width: 48, height: 48, borderRadius: 12, fontSize: 18, cursor: 'pointer', fontWeight: 800 }}>✕</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {list.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "20px 0", color: COLORS.textLight, fontSize: 13, fontStyle: "italic" }}>No orders</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
