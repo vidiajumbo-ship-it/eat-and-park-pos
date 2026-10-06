@@ -569,8 +569,10 @@ const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
     </div>
   );
 });
-
 // ============================================
+// 15. WAITER ORDER PANEL (V15 NEW
+// ============================================
+// ============================================)
 // 15. WAITER ORDER PANEL (V15 NEW)
 // ============================================
 
@@ -591,6 +593,16 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   const inputStyle = { padding: 12, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "'Plus Jakarta Sans', sans-serif" };
 
   // 🔥 Running tables — saare active dine-in orders
+          {/* 🍽️ Compact Table Board */}
+        <div style={{ marginBottom: 12 }}>
+          <TableStatusBoard
+            orders={orders}
+            tables={12}
+            onTableClick={(o) => onAddMoreItems(o.id)}
+            showStats={false}
+            compact={true}
+          />
+        </div>
   const runningTables = useMemo(() => {
     return (orders || [])
       .filter(o => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled")
@@ -1690,6 +1702,15 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
           <div><div style={{ fontWeight: 800, fontSize: 16, color: COLORS.copper }}>{newOrderCount} New Order{newOrderCount > 1 ? 's' : ''}!</div><div style={{ fontSize: 13, color: COLORS.textLight }}>Tap the card to advance</div></div>
         </div>
       )}
+            {/* 🍽️ Table Status Board */}
+      <div style={{ marginBottom: 24 }}>
+        <TableStatusBoard
+          orders={orders}
+          tables={12}
+          onTableClick={(o) => setSelectedOrderId(o.id)}
+          showStats={true}
+        />
+      </div>
 
       {showHelpModal && <KeyboardHelpModal onClose={() => setShowHelpModal(false)} />}
 
@@ -1891,8 +1912,18 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto" }}>
-        {["overview", "menu", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings", "promotions"].map((t) => (<button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button>))}
+        {["overview", "menu","tables", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings", "promotions"].map((t) => (<button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button>))}
       </div>
+      {tab === "tables" && (
+        <TableStatusBoard
+          orders={orders}
+          tables={12}
+          onTableClick={(o) => {
+            setTab("orders");
+          }}
+          showStats={true}
+        />
+      )}
 
       {tab === "overview" && (
         <>
