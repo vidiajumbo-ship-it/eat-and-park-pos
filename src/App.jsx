@@ -790,6 +790,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
   const [runningOrderId, setRunningOrderId] = useState(null);
   const [showWaiterMode, setShowWaiterMode] = useState(false);
+    const [showWaiterPinModal, setShowWaiterPinModal] = useState(false);
+  const [waiterPinInput, setWaiterPinInput] = useState("");
+  const [waiterUnlocked, setWaiterUnlocked] = useState(false);
 
   const filteredItems = useMemo(() => {
     let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
@@ -946,11 +949,26 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     playNotificationSound();
     const waText = `🧑‍🍳 *WAITER ORDER* (#${orderId.slice(1, 5).toUpperCase()})\nTable ${t} · Waiter: ${waiterName || "Staff"}\nCustomer: ${customerName}\n` + items.map(i => `• ${i.qty}x ${i.name}`).join("\n") + (orderNotes ? `\nNotes: ${orderNotes}` : "") + `\n\nTotal: ₹${total}`;
     window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
-    setShowWaiterMode(false);
-    showToast("✅ Waiter order placed!", "success");
+       return order;
   }, [placeOrder, showToast]);
 
   const handleSendOtp = () => {
+          const handleWaiterPinSubmit = () => {
+    const wPin = settings?.waiterPin || "1234";
+    const sPin = settings?.staffPin || "5432";
+    const aPin = settings?.adminPin || "9876";
+    if (waiterPinInput === wPin || waiterPinInput === sPin || waiterPinInput === aPin) {
+      setWaiterUnlocked(true);
+      setShowWaiterPinModal(false);
+      setWaiterPinInput("");
+      setShowWaiterMode(true);
+      showToast("🔓 Waiter Mode Unlocked!", "success");
+    } else {
+      showToast("❌ Incorrect Waiter PIN", "error");
+      setWaiterPinInput("");
+    }
+  };
+
     if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid phone", 'error'); return; }
     const code = Math.floor(1000 + Math.random() * 9000).toString();
     setGeneratedOtp(code); setOtpStep("verify");
@@ -1120,8 +1138,11 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       <button onClick={() => { requestWaiter(table); showToast("🔔 Waiter notified!", 'success'); }}
         style={{ position: "fixed", top: 80, right: 16, background: COLORS.rust, color: "#fff", border: "none", borderRadius: 20, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 8px 24px rgba(192,57,43,0.4)", cursor: "pointer", zIndex: 60, fontSize: 13, fontWeight: 800 }}>🔔 Waiter Call</button>
 
-      <button onClick={() => setShowWaiterMode(true)}
-        style={{ position: "fixed", top: 130, right: 16, background: COLORS.info, color: "#fff", border: "none", borderRadius: 20, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 8px 24px rgba(59,130,246,0.4)", cursor: "pointer", zIndex: 60, fontSize: 13, fontWeight: 800 }}>🧑‍🍳 Waiter Mode</button>
+            <button onClick={() => {
+        if (waiterUnlocked) setShowWaiterMode(true);
+        else setShowWaiterPinModal(true);
+      }}
+        style={{ position: "fixed", top: 130, right: 16, background: waiterUnlocked ? COLORS.info : COLORS.ink, color: "#fff", border: "none", borderRadius: 20, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 8px 24px rgba(59,130,246,0.4)", cursor: "pointer", zIndex: 60, fontSize: 13, fontWeight: 800 }}>{waiterUnlocked ? "🧑‍🍳 Waiter Mode" : "🔒 Waiter Mode"}</button>
 
       <div style={{ position: "relative", height: 220, borderRadius: "0 0 24px 24px", overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", marginBottom: 16 }}>
         <div className="keep-color" style={{ position: "absolute", inset: 0, backgroundImage: `url('${settings?.heroImage || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80"}')`, backgroundSize: "cover", backgroundPosition: "center" }} />
@@ -1442,8 +1463,40 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         </div>
       )}
 
-      {showWaiterMode && (<WaiterOrderPanel menu={menu} table={table} setTable={setTable} onSubmit={handleWaiterOrder} onClose={() => setShowWaiterMode(false)} />)}
+      {showWaiterMode && (
+        <WaiterOrderPanel
+          menu={menu}
+          table={table}
+          setTable={setTable}
+          onSubmit={handleWaiterOrder}
+          onClose={() => setShowWaiterMode(false)}
+          onAddMoreItems={(orderId) => {
+            setShowWaiterMode(false);
+            setRunningOrderId(orderId);
+          }}
+        />
+      )}
 
+      {showWaiterPinModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowWaiterPinModal(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center" }} className="slide-up">
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🧑‍🍳</div>
+            <h3 style={{ margin: "0 0 8px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 800 }}>Waiter Access</h3>
+            <div style={{ fontSize: 13, color: COLORS.textLight, marginBottom: 20 }}>Enter waiter PIN to continue</div>
+            <input type="password" placeholder="••••" autoFocus value={waiterPinInput}
+              onChange={(e) => setWaiterPinInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleWaiterPinSubmit(); }}
+              style={{ padding: "14px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 28, width: "100%", boxSizing: "border-box", textAlign: "center", letterSpacing: 10, marginBottom: 20, fontWeight: 800 }} />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => { setShowWaiterPinModal(false); setWaiterPinInput(""); }}
+                style={{ flex: 1, padding: "13px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleWaiterPinSubmit}
+                style={{ flex: 1, padding: "13px", borderRadius: 12, background: COLORS.info, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Unlock</button>
+            </div>
+            <div style={{ fontSize: 11, color: COLORS.textLight, marginTop: 12 }}>Default PIN: <strong>1234</strong></div>
+          </div>
+        </div>
+      )}
       {runningOrderId && orders.find(o => o.id === runningOrderId) && (
         <RunningOrderModal order={orders.find(o => o.id === runningOrderId)} menu={menu} onConfirm={(items) => addRunningItems(runningOrderId, items)} onClose={() => setRunningOrderId(null)} />
       )}
@@ -1778,6 +1831,23 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
             <button onClick={handleSaveHeroImage} style={{ ...primaryBtn, flex: 1 }}>Save</button>
           </div>
           {heroImgInput && (<img src={heroImgInput} alt="" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12 }} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80"; }} />)}
+
+          <div style={{ borderTop: `1px solid ${COLORS.line}`, marginTop: 28, paddingTop: 24 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>🧑‍🍳 Waiter Mode PIN</h3>
+            <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 14 }}>Waiter will use this PIN to unlock Waiter Mode on customer screen</div>
+            <div style={{ display: "flex", gap: 12, maxWidth: 400 }}>
+              <input type="text" placeholder="Waiter PIN" value={settings?.waiterPin || "1234"}
+                onChange={e => setSettings({ ...settings, waiterPin: e.target.value })}
+                style={{ ...inputStyle, flex: 1, fontFamily: "'JetBrains Mono', monospace", fontSize: 20, textAlign: 'center', letterSpacing: 4 }} />
+              <button onClick={async () => {
+                try { await setDoc(doc(db, "settings", "appSettings"), settings); alert("✅ Waiter PIN saved!"); }
+                catch (e) { alert("⚠️ Failed to save"); }
+              }} style={{ ...primaryBtn }}>💾 Save PIN</button>
+            </div>
+            <div style={{ fontSize: 12, color: COLORS.sage, marginTop: 10, fontWeight: 700 }}>
+              Current PIN: <strong style={{ fontFamily: "'JetBrains Mono', monospace" }}>{settings?.waiterPin || "1234"}</strong>
+            </div>
+          </div>
         </div>
       )}
 
