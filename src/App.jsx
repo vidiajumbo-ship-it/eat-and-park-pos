@@ -1186,22 +1186,28 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   }, [myOrderIds.join(",")]);
 
   const handleSetQty = useCallback((id, q) => {
-    setCart((prevCart) => {
-      const oldQ = prevCart[id] || 0;
-      if (q > oldQ && q === 1) {
-        const options = getSmartSuggestionPool(menu, prevCart);
-        if (options.length > 0) {
-          const randomSug = options[Math.floor(Math.random() * options.length)];
-          setAiSuggestion(randomSug);
-          setTimeout(() => setAiSuggestion(null), 6000);
-        }
+  setCart((prevCart) => {
+    const oldQty = getCartQty(prevCart[id]);
+    if (q > oldQty && q === 1) {
+      const options = getSmartSuggestionPool(menu, prevCart);
+      if (options.length > 0) {
+        const randomSug = options[Math.floor(Math.random() * options.length)];
+        setAiSuggestion(randomSug);
+        setTimeout(() => setAiSuggestion(null), 6000);
       }
-      const next = { ...prevCart, [id]: q };
-      if (q <= 0) delete next[id];
-      return next;
-    });
-  }, [menu]);
-
+    }
+    const next = { ...prevCart };
+    if (q <= 0) {
+      delete next[id];
+    } else {
+      const existingOverride = prevCart[id]?.priceOverride;
+      next[id] = existingOverride != null
+        ? { qty: q, priceOverride: existingOverride }
+        : { qty: q };
+    }
+    return next;
+  });
+}, [menu]);
   const toggleFavorite = useCallback((itemId) => {
     setFavorites(prev => {
       if (prev.includes(itemId)) { showToast('Removed from favorites', 'info'); return prev.filter(id => id !== itemId); }
