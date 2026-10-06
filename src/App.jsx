@@ -1494,9 +1494,21 @@ const handleWaiterPinSubmit = () => {
   };
 
   const addComboToCart = useCallback((combo) => {
-    combo.items.forEach(item => { setCart(prev => ({ ...prev, [item.id]: (prev[item.id] || 0) + item.quantity })); });
-    showToast(`🎉 ${combo.name} added!`, 'success');
-  }, [showToast]);
+  const totalMenuPrice = combo.items.reduce((s, it) => s + it.price * it.quantity, 0);
+  const ratio = combo.finalPrice / totalMenuPrice;
+
+  setCart(prev => {
+    const next = { ...prev };
+    combo.items.forEach(item => {
+      const existing = next[item.id];
+      const newQty = getCartQty(existing) + item.quantity;
+      const newOverride = Math.round(item.price * ratio);
+      next[item.id] = { qty: newQty, priceOverride: newOverride };
+    });
+    return next;
+  });
+  showToast(`🎉 ${combo.name} added!`, 'success');
+}, [showToast]);
 
   const addFlashSaleToCart = useCallback((item) => {
   setCart(prev => {
