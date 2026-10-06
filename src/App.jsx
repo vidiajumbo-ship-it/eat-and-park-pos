@@ -155,25 +155,31 @@ const EMPTY_STATES = {
 // 4. REUSABLE COMPONENTS
 // ============================================
 
-const ErrorBoundary = React.memo(({ children }) => {
-  const [hasError, setHasError] = useState(false);
-  useEffect(() => {
-    const handleError = (event) => { console.error('Uncaught error:', event.error); setHasError(true); };
-    window.addEventListener('error', handleError);
-    return () => window.removeEventListener('error', handleError);
-  }, []);
-  if (hasError) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
-        <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>😅</div>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: COLORS.ink, marginBottom: '0.5rem' }}>Something went wrong</h2>
-        <p style={{ color: COLORS.textLight, marginBottom: '1rem' }}>Please try refreshing the page</p>
-        <button onClick={() => window.location.reload()} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>Refresh Page</button>
-      </div>
-    );
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
   }
-  return children;
-});
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    console.error('ErrorBoundary caught:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>😅</div>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: COLORS.ink, marginBottom: '0.5rem' }}>Something went wrong</h2>
+          <p style={{ color: COLORS.textLight, marginBottom: '1rem' }}>Please try refreshing the page</p>
+          <button onClick={() => window.location.reload()} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>Refresh Page</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const VegDot = memo(({ veg }) => {
   const c = veg ? VEG : NONVEG;
@@ -1157,7 +1163,17 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     const savedCustomer = localStorage.getItem('eatpark_customer');
     if (savedCustomer) { try { const data = JSON.parse(savedCustomer); if (data.name) setCustName(data.name); if (data.phone) setCustPhone(data.phone); if (data.address) setCustAddress(data.address); if (data.isLoggedIn) setIsLoggedIn(true); } catch (e) { } }
     const savedCart = localStorage.getItem('eatpark_cart');
-    if (savedCart) { try { setCart(JSON.parse(savedCart)); } catch (e) { } }
+if (savedCart) {
+  try {
+    const parsed = JSON.parse(savedCart);
+    const migrated = {};
+    Object.entries(parsed).forEach(([id, val]) => {
+      if (typeof val === 'number') migrated[id] = { qty: val };
+      else migrated[id] = val;
+    });
+    setCart(migrated);
+  } catch (e) {}
+}
     const savedOrders = localStorage.getItem('eatpark_orders');
     if (savedOrders) { try { const ordersData = JSON.parse(savedOrders); setMyOrderIds(ordersData.map(o => o.id)); } catch (e) { } }
     if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
@@ -1376,7 +1392,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       }
 
       const orderId = uid("o");
-      const itemStrings = cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return `${qty}x ${m.name}`; }).join(", ");
+      const itemStrings = cartItems.map(([id, entry]) => {
+  const m = menu.find((mi) => mi.id === id);
+  return `${getCartQty(entry)}x ${m.name}`;
+}).join(", ");
       const claimedText = claimedReward ? `\n🎁 *Free Reward:* ${claimedReward.item}` : "";
       const scheduleText = isScheduled && scheduleDate && scheduleTime ? `\n📅 *Scheduled:* ${scheduleDate} at ${scheduleTime}` : "";
       const waText = `🚨 *NEW ORDER* (#${orderId.slice(1, 5).toUpperCase()})\n\n*Type:* ${orderType === 'parcel' ? '🛍️ Parcel' : `🍽️ Table ${table}`}\n*Customer:* ${custName} (${custPhone})\n` + (orderType === 'parcel' ? `*Address:* ${custAddress}\n\n` : `\n`) + `*Items:* ${itemStrings}${claimedText}\n` + (appliedDiscount > 0 ? `*Coupon:* ${appliedDiscount}%\n` : ``) + (loyaltyDiscount > 0 ? `*Loyalty:* ${loyaltyTier.name}\n` : ``) + `*Total:* ₹${finalTotal}\n*Payment:* ${paymentMethod}\n` + scheduleText + (notes ? `*Notes:* ${notes}` : ``);
@@ -1385,7 +1404,20 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       link.href = `https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`;
       link.target = '_blank'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
 
-      const initialItems = cartItems.map(([id, qty]) => { const m = menu.find((mi) => mi.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty, kotNumber: 1 }; });
+      const initialItems = cartItems.map(([id, entry]) => {
+  const m = menu.find((mi) => mi.id === id);
+  const qty = getCartQty(entry);
+  const finalPrice = entry.priceOverride ?? m.price;
+  return {
+    itemId: id,
+    name: m.name,
+    portion: m.portion || "",
+    price: finalPrice,
+    originalPrice: m.price,
+    qty,
+    kotNumber: 1
+  };
+});
 
       const order = {
         id: orderId, table, orderType,
@@ -1635,10 +1667,24 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
             {cartOpen && (
               <>
                 <ModalHeader title="Checkout" onClose={() => setCartOpen(false)} />
-                {cartItems.map(([id, q]) => {
-                  const item = menu.find((m) => m.id === id);
-                  return (<div key={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "12px", background: COLORS.paper, borderRadius: 12 }}><div style={{ fontSize: 15, fontWeight: 700 }}>{item.name}</div><Stepper qty={q} onChange={(nq) => handleSetQty(id, nq)} /></div>);
-                })}
+                {cartItems.map(([id, entry]) => {
+  const item = menu.find((m) => m.id === id);
+  const qty = getCartQty(entry);
+  const hasOverride = entry.priceOverride != null && entry.priceOverride !== item.price;
+  return (
+    <div key={id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "12px", background: COLORS.paper, borderRadius: 12 }}>
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{item.name}</div>
+        {hasOverride && (
+          <div style={{ fontSize: 11, color: COLORS.error, fontWeight: 700, marginTop: 2 }}>
+            ⚡ Deal: ₹{entry.priceOverride} <span style={{ textDecoration: 'line-through', color: COLORS.textLight }}>₹{item.price}</span>
+          </div>
+        )}
+      </div>
+      <Stepper qty={qty} onChange={(nq) => handleSetQty(id, nq)} />
+    </div>
+  );
+})}
 
                 <div style={{ display: "flex", gap: 12, marginTop: 20, marginBottom: 16 }}>
                   <button onClick={() => setOrderType("dine_in")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "dine_in" ? COLORS.copper : COLORS.line}`, background: orderType === "dine_in" ? COLORS.copper : "#fff", color: orderType === "dine_in" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer" }}>🍽️ Dine-in</button>
