@@ -2490,7 +2490,8 @@ export default function App() {
     fetchAllData();
 
     const qCalls = query(collection(db, "calls"), where("status", "==", "active"));
-    const unsubCalls = onSnapshot(qCalls, (snap) => { setCalls(snap.docs.map(d => ({ id: d.id, ...d.data() }))); });
+       const qCalls = query(collection(db, "calls"), where("status", "==", "active"));
+    const unsubCalls = onSnapshot(qCalls, (snap) => { setCalls(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
     const unsubOrders = onSnapshot(collection(db, "orders"), (snap) => { setOrdersState(snap.docs.map(d => ({ id: d.id, ...d.data() }))); });
     return () => { unsubCalls(); unsubOrders(); };
   }, []);
@@ -2499,10 +2500,21 @@ export default function App() {
   const addInventory = async (item) => { try { await setDoc(doc(db, "inventory", item.id), item); } catch (e) { } setInventory([...inventory, item]); };
   const updateStock = async (id, ns) => { try { await updateDoc(doc(db, "inventory", id), { stock: ns }); } catch (e) { } setInventory(inventory.map(i => i.id === id ? { ...i, stock: ns } : i)); };
 
-  const requestWaiter = async (tbl) => {
-    try { await setDoc(doc(db, "calls", uid("call")), { id: uid("call"), table: tbl, time: Date.now(), status: "active" }); } catch (e) { console.error(e); }
+   const requestWaiter = async (tbl) => {
+    try {
+      const callId = uid("call");
+      await setDoc(doc(db, "calls", callId), { id: callId, table: tbl, time: Date.now(), status: "active" });
+    } catch (e) { console.error(e); }
   };
-  const resolveCall = async (id) => { try { await updateDoc(doc(db, "calls", id), { status: "resolved" }); } catch (e) { } };
+   const resolveCall = async (id) => {
+    try {
+      await updateDoc(doc(db, "calls", id), { status: "resolved", resolvedAt: Date.now() });
+    } catch (e) {
+      console.error("Resolve call error:", e);
+      // Fallback: turant local state se hatao
+      setCalls(prev => prev.filter(c => c.id !== id));
+    }
+  };
 
   const addOffer = async (off) => { setOffersList([...offersList, off]); };
   const removeOffer = async (id) => { setOffersList(offersList.filter(o => o.id !== id)); };
