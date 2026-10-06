@@ -574,13 +574,15 @@ const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
 // 15. WAITER ORDER PANEL (V15 NEW)
 // ============================================
 
-const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose }) => {
+const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAddMoreItems }) => {
   const [cart, setCart] = useState({});
   const [search, setSearch] = useState("");
   const [waiterName, setWaiterName] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [placedOrder, setPlacedOrder] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filtered = menu.filter(m => m.available && (!search.trim() || m.name.toLowerCase().includes(search.toLowerCase())));
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
@@ -588,6 +590,114 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose }) => 
   const setQty = (id, q) => { setCart(prev => { const next = { ...prev, [id]: q }; if (q <= 0) delete next[id]; return next; }); };
   const inputStyle = { padding: 12, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "'Plus Jakarta Sans', sans-serif" };
 
+  const handleSubmit = async () => {
+    if (cartItems.length === 0) return;
+    setIsSubmitting(true);
+    try {
+      const items = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty }; });
+      const created = await onSubmit({ table, items, waiterName, customerName: customerName || "Walk-in", customerPhone: customerPhone || "", notes });
+      if (created) {
+        setPlacedOrder(created);
+        setCart({});
+        setNotes("");
+      }
+    } catch (e) { console.error(e); }
+    finally { setIsSubmitting(false); }
+  };
+
+  const handlePrintKOT = (order) => {
+    const w = window.open('', '_blank', 'width=300,height=600');
+    if (!w) return;
+    const totalAmount = order.items.reduce((s, it) => s + (it.price * it.qty), 0);
+    w.document.write(`<html><head><title>KOT</title>
+      <style>body{font-family:monospace;font-size:13px;padding:12px;width:280px}
+      h2,h4{text-align:center;margin:4px 0}
+      .row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed #000}</style></head><body>
+      <h2>${RESTAURANT.name}</h2>
+      <h4>WAITER ORDER — TABLE ${order.table}</h4>
+      <p>Order: #${order.id.toUpperCase()}<br/>Waiter: ${order.waiter || "-"}<br/>Customer: ${order.customer.name}</p>
+      <div style="margin-top:10px">
+        ${order.items.map(it => `<div class="row"><span>${it.qty}x ${it.name}</span><span>₹${it.price * it.qty}</span></div>`).join('')}
+      </div>
+      <div style="text-align:right;font-weight:bold;margin-top:12px;font-size:15px">Total: ₹${totalAmount}</div>
+      <p style="text-align:center;margin-top:12px;font-size:11px">— Thank You —</p>
+      <script>window.print();setTimeout(()=>window.close(),500)</script></body></html>`);
+    w.document.close();
+  };
+
+  // ✅ ORDER PLACED — Confirmation view
+  if (placedOrder) {
+    const total = placedOrder.items.reduce((s, it) => s + (it.price * it.qty), 0);
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", zIndex: 85, display: "flex", alignItems: "flex-end" }} onClick={onClose}>
+        <div onClick={e => e.stopPropagation()} className="slide-up" style={{ background: "#fff", width: "100%", maxWidth: 480, margin: "0 auto", borderRadius: "24px 24px 0 0", padding: "20px", maxHeight: "92vh", overflowY: "auto" }}>
+          <div style={{ textAlign: "center", marginBottom: 20 }}>
+            <div style={{ fontSize: 56, marginBottom: 8 }} className="scale-bounce">✅</div>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 800, color: COLORS.sage }}>Order Placed!</div>
+            <div style={{ fontSize: 13, color: COLORS.textLight, marginTop: 4 }}>KOT sent to kitchen successfully</div>
+          </div>
+
+          <div style={{ background: COLORS.paper, borderRadius: 16, padding: 16, marginBottom: 16, border: `1px solid ${COLORS.line}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, color: COLORS.textLight, textTransform: 'uppercase', fontWeight: 800, letterSpacing: 0.5 }}>Order</div>
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 800 }}>#{placedOrder.id.slice(1, 5).toUpperCase()}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 11, color: COLORS.textLight, textTransform: 'uppercase', fontWeight: 800, letterSpacing: 0.5 }}>Table</div>
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 800, color: COLORS.copper }}>{placedOrder.table}</div>
+              </div>
+            </div>
+            {placedOrder.waiter && (
+              <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 8 }}>
+                🧑‍🍳 Waiter: <strong style={{ color: COLORS.ink }}>{placedOrder.waiter}</strong>
+              </div>
+            )}
+            <div style={{ borderTop: `1px dashed ${COLORS.line}`, paddingTop: 12, marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 6, fontWeight: 700, textTransform: 'uppercase' }}>Items ({placedOrder.items.length})</div>
+              {placedOrder.items.map((it, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, padding: '4px 0', fontWeight: 600 }}>
+                  <span>{it.qty}× {it.name}</span>
+                  <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>₹{it.price * it.qty}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: `2px solid ${COLORS.line}`, marginTop: 12, paddingTop: 12, fontWeight: 800, fontSize: 18 }}>
+              <span>Total</span>
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", color: COLORS.copper }}>₹{total}</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <button onClick={() => handlePrintKOT(placedOrder)}
+              style={{ padding: 14, borderRadius: 12, border: `2px solid ${COLORS.ink}`, background: 'transparent', color: COLORS.ink, fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              🖨️ Print KOT
+            </button>
+            <button onClick={() => onAddMoreItems(placedOrder.id)}
+              style={{ padding: 14, borderRadius: 12, border: 'none', background: COLORS.info, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              ➕ Add More Items
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <button onClick={() => { setPlacedOrder(null); setWaiterName(""); setCustomerName(""); setCustomerPhone(""); }}
+              style={{ padding: 14, borderRadius: 12, border: `2px solid ${COLORS.sage}`, background: 'transparent', color: COLORS.sage, fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>
+              🆕 New Order
+            </button>
+            <button onClick={onClose}
+              style={{ padding: 14, borderRadius: 12, border: 'none', background: COLORS.sage, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>
+              ✓ Done
+            </button>
+          </div>
+
+          <div style={{ fontSize: 11, color: COLORS.textLight, textAlign: 'center', marginTop: 14, lineHeight: 1.5 }}>
+            💡 <strong>Add More Items</strong> opens same order and creates a new KOT for kitchen.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Default: Order form
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", zIndex: 85, display: "flex", alignItems: "flex-end" }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} className="slide-up" style={{ background: "#fff", width: "100%", maxWidth: 480, margin: "0 auto", borderRadius: "24px 24px 0 0", padding: "20px", maxHeight: "92vh", overflowY: "auto" }}>
@@ -629,14 +739,10 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose }) => 
             <span>{cartItems.length} items · Total</span>
             <span style={{ color: COLORS.copper, fontFamily: "'JetBrains Mono', monospace" }}>{inr(subtotal)}</span>
           </div>
-          <button disabled={cartItems.length === 0}
-            onClick={() => {
-              if (cartItems.length === 0) return;
-              const items = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty }; });
-              onSubmit({ table, items, waiterName, customerName: customerName || "Walk-in", customerPhone: customerPhone || "", notes });
-            }}
-            style={{ width: "100%", padding: 16, border: "none", borderRadius: 14, background: cartItems.length ? COLORS.sage : COLORS.paper2, color: cartItems.length ? "#fff" : COLORS.textLight, fontWeight: 800, fontSize: 16, cursor: cartItems.length ? "pointer" : "not-allowed" }}>
-            🍳 Send Order to Kitchen
+          <button disabled={cartItems.length === 0 || isSubmitting}
+            onClick={handleSubmit}
+            style={{ width: "100%", padding: 16, border: "none", borderRadius: 14, background: cartItems.length ? COLORS.sage : COLORS.paper2, color: cartItems.length ? "#fff" : COLORS.textLight, fontWeight: 800, fontSize: 16, cursor: cartItems.length && !isSubmitting ? "pointer" : "not-allowed" }}>
+            {isSubmitting ? "⏳ Sending..." : "🍳 Send Order to Kitchen"}
           </button>
         </div>
       </div>
