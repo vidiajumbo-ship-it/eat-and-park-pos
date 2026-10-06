@@ -952,8 +952,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
        return order;
   }, [placeOrder, showToast]);
 
-  const handleSendOtp = () => {
-          const handleWaiterPinSubmit = () => {
+    const handleWaiterPinSubmit = () => {
     const wPin = settings?.waiterPin || "1234";
     const sPin = settings?.staffPin || "5432";
     const aPin = settings?.adminPin || "9876";
@@ -969,13 +968,13 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     }
   };
 
+  const handleSendOtp = () => {
     if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid phone", 'error'); return; }
     const code = Math.floor(1000 + Math.random() * 9000).toString();
     setGeneratedOtp(code); setOtpStep("verify");
     showToast(`🔐 OTP: ${code}`, 'success');
     alert(`🔐 Demo OTP: ${code}`);
   };
-
   const handleVerifyOtp = () => {
     if (otpCode === generatedOtp || otpCode === "1234") {
       setIsLoggedIn(true); setOtpStep("phone");
