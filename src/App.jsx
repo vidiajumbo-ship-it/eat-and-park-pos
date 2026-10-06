@@ -98,7 +98,11 @@ function getLoyaltyTier(points) {
 // 3. UTILITY FUNCTIONS
 // ============================================
 
-function inr(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
+function inr(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "₹0";
+  return "₹" + num.toLocaleString("en-IN");
+}
 function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
 function timeAgo(ts) { const s = Math.floor((Date.now() - ts) / 1000); if (s < 60) return s + "s ago"; const m = Math.floor(s / 60); if (m < 60) return m + "m ago"; return Math.floor(m / 60) + "h ago"; }
 function toLocalISODate(timestamp) { const d = new Date(timestamp); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]; }
@@ -291,7 +295,13 @@ const FlashSaleItem = memo(({ item, onAdd }) => {
 // ============================================
 // 5. CUSTOM HOOKS
 // ============================================
-
+function useLiveNow(intervalMs = 30000) {
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => forceTick(x => x + 1), intervalMs);
+    return () => clearInterval(t);
+  }, [intervalMs]);
+}
 const useLocalStorage = (key, initialValue) => {
   const [storedValue, setStoredValue] = useState(() => {
     try { const item = window.localStorage.getItem(key); return item ? JSON.parse(item) : initialValue; } catch (error) { return initialValue; }
@@ -465,7 +475,7 @@ const KotBadge = memo(({ kots }) => {
 // 13. KITCHEN NOTIFICATION COLUMN (V15 NEW)
 // ============================================
 
-const KitchenNotificationColumn = memo(({ orders, selectedOrderId, onSelect }) => {
+const KitchenNotificationColumn = memo(({ orders, selectedOrderId, onSelect }) => { useLiveNow(30000);
   const [open, setOpen] = useState(true);
   const newOrders = orders.filter(o => o.status === "new");
   const preparingOrders = orders.filter(o => o.status === "preparing");
@@ -589,7 +599,7 @@ const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
 // 14.5 TABLE STATUS BOARD
 // ============================================
 
-const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = true, compact = false }) => {
+const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = true, compact = false }) => { useLiveNow(30000);
   const tableData = useMemo(() => {
     const activeOrders = (orders || []).filter(o =>
       o.orderType === "dine_in" &&
@@ -1151,13 +1161,21 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const cartQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${finalTotal}&cu=INR`)}`;
   const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
 
-  const showToast = useCallback((msg, type = 'info') => {
-    const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
-    if (type === 'reward' && navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    if (type === 'order') playNotificationSound();
-    setToast(msg); setToastType(type);
-    setTimeout(() => setToast(null), config.duration);
-  }, []);
+  const toastTimerRef = useRef(null);
+
+const showToast = useCallback((msg, type = 'info') => {
+  const config = TOAST_CONFIG[type] || TOAST_CONFIG.info;
+  if (type === 'reward' && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+  if (type === 'order') playNotificationSound();
+  setToast(msg);
+  setToastType(type);
+  clearTimeout(toastTimerRef.current);
+  toastTimerRef.current = setTimeout(() => setToast(null), config.duration);
+}, []);
+
+useEffect(() => {
+  return () => clearTimeout(toastTimerRef.current);
+}, []);
 
   useEffect(() => {
     const savedCustomer = localStorage.getItem('eatpark_customer');
@@ -1293,10 +1311,10 @@ if (savedCart) {
        return order;
   }, [placeOrder, showToast]);
 
-    const handleWaiterPinSubmit = () => {
-    const wPin = settings?.waiterPin || "1234";
-    const sPin = settings?.staffPin || "5432";
-    const aPin = settings?.adminPin || "9876";
+const handleWaiterPinSubmit = () => {
+  const wPin = (settings?.waiterPin ?? "1234").toString().trim();
+  const sPin = (settings?.staffPin ?? "5432").toString().trim();
+  const aPin = (settings?.adminPin ?? "9876").toString().trim();
     if (waiterPinInput === wPin || waiterPinInput === sPin || waiterPinInput === aPin) {
       setWaiterUnlocked(true);
       setShowWaiterPinModal(false);
@@ -2762,13 +2780,21 @@ export default function App() {
   const requestPinPrompt = (target) => { setTargetRole(target); setShowPinModal(true); setPinInput(""); };
 
   const handlePinSubmit = () => {
-    const aPin = settings?.adminPin || "9876";
-    const sPin = settings?.staffPin || "5432";
-    if (targetRole === "admin" && pinInput === aPin) { setRole("admin"); setShowPinModal(false); setPinInput(""); }
-    else if (targetRole === "staff" && (pinInput === sPin || pinInput === aPin)) { setRole("staff"); setShowPinModal(false); setPinInput(""); }
-    else if (targetRole === "customer") { setRole("customer"); setShowPinModal(false); setPinInput(""); }
-    else { alert("❌ Incorrect PIN!"); setPinInput(""); }
-  };
+  const aPin = (settings?.adminPin ?? "9876").toString().trim();
+  const sPin = (settings?.staffPin ?? "5432").toString().trim();
+  if (!pinInput) { alert("❌ PIN daalo"); return; }
+
+  if (targetRole === "admin" && pinInput === aPin) {
+    setRole("admin"); setShowPinModal(false); setPinInput("");
+  } else if (targetRole === "staff" && (pinInput === sPin || pinInput === aPin)) {
+    setRole("staff"); setShowPinModal(false); setPinInput("");
+  } else if (targetRole === "customer") {
+    setRole("customer"); setShowPinModal(false); setPinInput("");
+  } else {
+    alert("❌ Incorrect PIN!");
+    setPinInput("");
+  }
+};
 
   const updateCategories = async (newCategories) => {
     setCategories(newCategories);
