@@ -1552,9 +1552,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
         </div>
       )}
 
-      {showWaiterMode && (
+            {showWaiterMode && (
         <WaiterOrderPanel
           menu={menu}
+          orders={orders}
           table={table}
           setTable={setTable}
           onSubmit={handleWaiterOrder}
@@ -1565,7 +1566,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
           }}
         />
       )}
-
       {showWaiterPinModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowWaiterPinModal(false)}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center" }} className="slide-up">
