@@ -574,8 +574,7 @@ const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
 // 15. WAITER ORDER PANEL (V15 NEW)
 // ============================================
 
-const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAddMoreItems }) => {
-  const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAddMoreItems, orders }) => {
+const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAddMoreItems, orders }) => {
   const [cart, setCart] = useState({});
   const [search, setSearch] = useState("");
   const [waiterName, setWaiterName] = useState("");
