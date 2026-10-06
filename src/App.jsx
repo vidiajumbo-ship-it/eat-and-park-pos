@@ -1605,7 +1605,161 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
                   <div style={{ textAlign: 'center', padding: "40px 0", color: COLORS.textLight, fontWeight: 600 }}>No active offers currently.</div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {offersList.map(offer
+                    {offersList.map(offer => (
+                      <div
+                        key={offer.id}
+                        onClick={() => {
+                          setSearchQuery(offer.title);
+                          setActiveModal(null);
+                        }}
+                        style={{
+                          background: 'linear-gradient(135deg, #FF9A9E 0%, #FECFEF 100%)',
+                          padding: 20,
+                          borderRadius: 16,
+                          boxShadow: '0 8px 20px rgba(255,154,158,0.3)',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                        className="hover-lift"
+                      >
+                        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 800, color: COLORS.ink, marginBottom: 8 }}>
+                          {offer.title}
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: 'rgba(0,0,0,0.7)', lineHeight: 1.5 }}>
+                          {offer.desc}
+                        </div>
+                        <div style={{ marginTop: 10, fontSize: 12, color: COLORS.copper, fontWeight: 700 }}>
+                          👆 Tap to search in menu
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeModal === 'loyalty' && (
+              <>
+                <ModalHeader title="VIP Loyalty Partner 👑" onClose={() => setActiveModal(null)} />
+                <div style={{ background: "linear-gradient(135deg, #1A1A1A 0%, #3C3C3C 100%)", borderRadius: 20, padding: 28, color: "#fff", textAlign: "center", marginBottom: 24, boxShadow: "0 16px 32px rgba(0,0,0,0.25)" }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>💎</div>
+                  <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 26, fontWeight: 800, marginBottom: 10, color: COLORS.gold }}>Eat & Park Elite</div>
+                  <div style={{ fontSize: 15, opacity: 0.9, marginBottom: 24, lineHeight: 1.6, fontWeight: 500 }}>Become a premium partner for just <strong style={{ fontSize: 20, color: COLORS.gold }}>₹999/month</strong>. Get exclusive 20% off on all dine-in orders!</div>
+                  <div style={{ background: "#fff", padding: 20, borderRadius: 16 }}>
+                    <div style={{ color: COLORS.ink, fontWeight: 800, marginBottom: 10, fontSize: 15 }}>Scan to Join</div>
+                    <img src={loyaltyQrSrc} alt="Pay 999" loading="lazy" className="keep-color" style={{ width: 160, height: 160 }} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeModal === 'booking' && (
+              <>
+                <ModalHeader title={bookType === "party" ? "Party Booking 🎉" : "Table Booking 🍽️"} onClose={() => { setActiveModal(null); setConfirmedBooking(null); }} />
+                {confirmedBooking ? (
+                  <div style={{ textAlign: "center", padding: "30px 0" }}>
+                    <div style={{ fontSize: 56, marginBottom: 16, animation: 'scaleInBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>✅</div>
+                    <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 28, fontWeight: 800, color: COLORS.ink, marginBottom: 10 }}>Request Sent!</h3>
+                    <p style={{ fontSize: 15, color: COLORS.textLight, marginBottom: 28, fontWeight: 500 }}>Your booking has been sent successfully.</p>
+                    <button onClick={() => { setActiveModal(null); setConfirmedBooking(null); }} style={{ background: COLORS.paper2, color: COLORS.ink, border: 'none', padding: '12px', borderRadius: 12, width: '100%', fontWeight: 800, cursor: 'pointer' }}>Close</button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
+                    <input type="text" placeholder="Your Name" value={bookData.name} onChange={(e) => setBookData({ ...bookData, name: e.target.value })} style={inputStyle} />
+                    <input type="tel" placeholder="Phone Number" value={bookData.phone} onChange={(e) => setBookData({ ...bookData, phone: e.target.value })} style={inputStyle} />
+                    <div style={{ display: "flex", gap: 14 }}><input type="date" value={bookData.date} onChange={(e) => setBookData({ ...bookData, date: e.target.value })} style={inputStyle} /><input type="time" value={bookData.time} onChange={(e) => setBookData({ ...bookData, time: e.target.value })} style={inputStyle} /></div>
+                    <input type="number" placeholder="Number of Guests" value={bookData.guests} onChange={(e) => setBookData({ ...bookData, guests: e.target.value })} style={inputStyle} />
+                    <button onClick={handleBooking} style={{ background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 14, padding: '13px 20px', fontWeight: 800, width: "100%", marginTop: 10, cursor: 'pointer' }}>Send Request</button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeModal === 'track' && (
+              <>
+                <ModalHeader title="Your Active Orders" onClose={() => setActiveModal(null)} />
+                {myActiveOrders.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: "50px 0", color: COLORS.textLight, fontWeight: 600 }}>
+                    <div style={{ fontSize: 48, marginBottom: 12 }}>📦</div>
+                    No active orders right now.
+                    <div style={{ fontSize: 13, marginTop: 8 }}>Place a new order! 🍽️</div>
+                  </div>
+                ) : myActiveOrders.map(o => {
+                  const estimatedTime = getEstimatedTime(o.items);
+                  const isCancellable = o.status === "new" || o.status === "preparing";
+                  return (
+                    <div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, marginBottom: 16, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 700, color: COLORS.ink }}>
+                          Order #{o.id.slice(1, 5).toUpperCase()}
+                        </div>
+                        {o.isScheduled && (
+                          <span style={{ fontSize: 11, color: COLORS.info, fontWeight: 600 }}>📅 Scheduled</span>
+                        )}
+                        {o.kots?.length > 1 && <KotBadge kots={o.kots} />}
+                      </div>
+                      <OrderTimer createdAt={o.createdAt} estimatedTime={estimatedTime} />
+                      <div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}>
+                        <ProgressRing progress={getOrderProgress(o.status)} size={80} />
+                      </div>
+
+                      <div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 12 }}>
+                        {o.items.map(i => `${i.qty}x ${i.name}`).join(", ")}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        <button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back to Menu</button>
+                        <button onClick={() => setRunningOrderId(o.id)} style={{ padding: "13px 20px", background: COLORS.info, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer' }} title="Add to running order">➕ Running Items</button>
+                        <button onClick={() => { setActiveModal(null); setCartOpen(true); }} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.sage, border: `2px solid ${COLORS.sage}`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }} title="Start new order">🆕 New Order</button>
+                        {isCancellable && (
+                          <button onClick={() => cancelOrder(o.id)} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.error, border: `2px solid ${COLORS.error}`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>❌ Cancel</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {activeModal === 'chat' && (
+              <>
+                <ModalHeader title="💬 Chat with Restaurant" onClose={() => setActiveModal(null)} />
+                <ChatBox orderId={activeOrderIdForChat || 'general'} customerId={custPhone || 'customer'} />
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* V15 NEW: Waiter Mode Modal */}
+      {showWaiterMode && (
+        <WaiterOrderPanel
+          menu={menu}
+          table={table}
+          setTable={setTable}
+          onSubmit={handleWaiterOrder}
+          onClose={() => setShowWaiterMode(false)}
+          showToast={showToast}
+        />
+      )}
+
+      {/* V15 NEW: Running Order Modal */}
+      {runningOrderId && orders.find(o => o.id === runningOrderId) && (
+        <RunningOrderModal
+          order={orders.find(o => o.id === runningOrderId)}
+          menu={menu}
+          onConfirm={(items) => addRunningItems(runningOrderId, items)}
+          onClose={() => setRunningOrderId(null)}
+          showToast={showToast}
+        />
+      )}
+    </div>
+  );
+}
+
                                     // ============================================
 // 13. STAFF VIEW — V15 (Touch to proceed · Live notifications)
 // ============================================
