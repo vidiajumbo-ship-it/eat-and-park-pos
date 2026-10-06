@@ -2490,7 +2490,6 @@ export default function App() {
     fetchAllData();
 
     const qCalls = query(collection(db, "calls"), where("status", "==", "active"));
-       const qCalls = query(collection(db, "calls"), where("status", "==", "active"));
     const unsubCalls = onSnapshot(qCalls, (snap) => { setCalls(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
     const unsubOrders = onSnapshot(collection(db, "orders"), (snap) => { setOrdersState(snap.docs.map(d => ({ id: d.id, ...d.data() }))); });
     return () => { unsubCalls(); unsubOrders(); };
