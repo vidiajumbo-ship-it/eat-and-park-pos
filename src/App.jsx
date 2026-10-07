@@ -157,8 +157,30 @@ function getSmartSuggestionPool(menu, cart) {
   return pool.filter(m => m.available && !cart[m.id]);
 }
 
-const PREP_TIME_ESTIMATES = { "Drinks": 3, "Fun Food": 10, "Chinese Starter": 12, "Tandoori": 20, "Biryani & Thali": 25 };
-const STATUS_FLOW = ["new", "preparing", "ready", "served"];
+const PREP_TIME_ESTIMATES = {
+  "Thali": 20,
+  "Mutton, Fish & Egg": 30,
+  "Chicken Curries": 25,
+  "Tandoor": 20,
+  "Biryani & Rice": 25,
+  "Paneer & Mushroom": 20,
+  "Dal, Roti & Chole": 12,
+  "Soya Chaap": 18,
+  "Chinese": 15,
+  "Momos & Rolls": 12,
+  "Pizza, Burgers & More": 15,
+  "Maggi, Corn & Fries": 8,
+  "Soups": 8,
+  "Shakes & Drinks": 5,
+  "Desserts": 5,
+  "Combos": 15,
+  // Fallback for old categories
+  "Drinks": 3,
+  "Fun Food": 10,
+  "Chinese Starter": 12,
+  "Tandoori": 20,
+  "Biryani & Thali": 25
+};const STATUS_FLOW = ["new", "preparing", "ready", "served"];
 const STATUS_LABEL = { new: "New", preparing: "Preparing", ready: "Ready", served: "Served" };
 const STATUS_COLOR = { new: COLORS.rust, preparing: COLORS.copper, ready: COLORS.sage, served: "#8A8375" };
 
@@ -1397,8 +1419,8 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
 // 16. CUSTOMER VIEW
 // ============================================
 
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState }) {  const [category, setCategory] = useState(categories[0] || "Drinks");
-  const [cart, setCart] = useState({});
+function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState }) {
+  const [category, setCategory] = useState(categories[0] || "Drinks");  const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
@@ -3603,22 +3625,37 @@ export default function App() {
 
   const requestPinPrompt = (target) => { setTargetRole(target); setShowPinModal(true); setPinInput(""); };
 
-  const handlePinSubmit = () => {   const aPin = (settings?.adminPin ?? "9876").toString().trim();   const sPin = (settings?.staffPin ?? "5432").toString().trim();      console.log("🔐 PIN Submit:", { targetRole, pinInput, sPin, aPin });      if (!pinInput) {      alert("❌ PIN daalo");      return;    }    if (targetRole === "admin" && pinInput === aPin) {     console.log("✅ Role → admin");     setRole("admin");      setShowPinModal(false);      setPinInput("");   } else if (targetRole === "staff" && (pinInput === sPin || pinInput === aPin)) {     console.log("✅ Role → staff");     setRole("staff");      setShowPinModal(false);      setPinInput("");   } else if (targetRole === "customer") {     setRole("customer");      setShowPinModal(false);      setPinInput("");   } else {     console.log("❌ Wrong PIN");     alert("❌ Incorrect PIN!");     setPinInput("");   } };
-  const aPin = (settings?.adminPin ?? "9876").toString().trim();
-  const sPin = (settings?.staffPin ?? "5432").toString().trim();
-  if (!pinInput) { alert("❌ PIN daalo"); return; }
-
-  if (targetRole === "admin" && pinInput === aPin) {
-    setRole("admin"); setShowPinModal(false); setPinInput("");
-  } else if (targetRole === "staff" && (pinInput === sPin || pinInput === aPin)) {
-    setRole("staff"); setShowPinModal(false); setPinInput("");
-  } else if (targetRole === "customer") {
-    setRole("customer"); setShowPinModal(false); setPinInput("");
-  } else {
-    alert("❌ Incorrect PIN!");
-    setPinInput("");
-  }
-};
+   const handlePinSubmit = () => {
+    const aPin = (settings?.adminPin ?? "9876").toString().trim();
+    const sPin = (settings?.staffPin ?? "5432").toString().trim();
+    
+    console.log("🔐 PIN Submit:", { targetRole, pinInput, sPin, aPin });
+    
+    if (!pinInput) {
+      alert("❌ PIN daalo");
+      return;
+    }
+    
+    if (targetRole === "admin" && pinInput === aPin) {
+      console.log("✅ Role → admin");
+      setRole("admin");
+      setShowPinModal(false);
+      setPinInput("");
+    } else if (targetRole === "staff" && (pinInput === sPin || pinInput === aPin)) {
+      console.log("✅ Role → staff");
+      setRole("staff");
+      setShowPinModal(false);
+      setPinInput("");
+    } else if (targetRole === "customer") {
+      setRole("customer");
+      setShowPinModal(false);
+      setPinInput("");
+    } else {
+      console.log("❌ Wrong PIN");
+      alert("❌ Incorrect PIN!");
+      setPinInput("");
+    }
+  };
 
   const updateCategories = async (newCategories) => {
     setCategories(newCategories);
@@ -3903,4 +3940,4 @@ export default function App() {
       </div>
     </ErrorBoundary>
   );
-
+}
