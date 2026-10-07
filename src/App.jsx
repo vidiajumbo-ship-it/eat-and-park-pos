@@ -70,10 +70,22 @@ const RAZORPAY_KEY = process.env.REACT_APP_RAZORPAY_KEY || "YOUR_RAZORPAY_KEY_ID
 const PHONEPE_MERCHANT_ID = process.env.REACT_APP_PHONEPE_MERCHANT_ID || "YOUR_MERCHANT_ID";
 
 const CATEGORIES = [
-  "Drinks", "Fun Food", "Chinese Starter", "Mughlai", "Tandoori",
-  "Soup", "Indian Bread", "Snacks", "Chinese Mains", "Pulao",
-  "Paneer & Mushroom", "Chicken, Mutton, Fish & Egg", "Biryani & Thali",
-  "Aloo, Dal & Sides", "Momo", "Tea & Coffee"
+  "Thali",
+  "Mutton, Fish & Egg",
+  "Chicken Curries",
+  "Tandoor",
+  "Biryani & Rice",
+  "Paneer & Mushroom",
+  "Dal, Roti & Chole",
+  "Soya Chaap",
+  "Chinese",
+  "Momos & Rolls",
+  "Pizza, Burgers & More",
+  "Maggi, Corn & Fries",
+  "Soups",
+  "Shakes & Drinks",
+  "Desserts",
+  "Combos"
 ];
 
 const VEG = COLORS.sage; const NONVEG = COLORS.rust;
@@ -108,10 +120,13 @@ function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
 function timeAgo(ts) { const s = Math.floor((Date.now() - ts) / 1000); if (s < 60) return s + "s ago"; const m = Math.floor(s / 60); if (m < 60) return m + "m ago"; return Math.floor(m / 60) + "h ago"; }
 function toLocalISODate(timestamp) { const d = new Date(timestamp); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]; }
 
-function getEstimatedTime(items) {
+function getEstimatedTime(items, menu = []) {
   if (!items || items.length === 0) return 5;
-  const maxTime = Math.max(...items.map(it => { const item = DEFAULT_MENU.find(m => m.id === it.itemId); return PREP_TIME_ESTIMATES[item?.category || "Fun Food"] || 15; }));
-  return maxTime + 2;
+  const maxTime = Math.max(...items.map(it => { 
+    const item = menu.find(m => m.id === it.itemId); 
+    return PREP_TIME_ESTIMATES[item?.category || "Fun Food"] || 15; 
+  }));
+  return (Number.isFinite(maxTime) ? maxTime : 15) + 2;
 }
 
 function getOrderProgress(status) {
@@ -352,16 +367,22 @@ const playNotificationSound = () => {
 function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true, customImg = "") {
   let img = customImg || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80";
   if (!customImg) {
-    if (category.includes("Drinks") || category.includes("Tea")) img = "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Fun Food") || category.includes("Snacks")) img = "https://images.unsplash.com/photo-1626082895617-2c6ad36f568a?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Indian Bread")) img = "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Paneer")) img = "https://images.unsplash.com/photo-1631452180519-c014fe946bc0?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Mushroom") || category.includes("Soup") || category.includes("Dal") || category.includes("Aloo")) img = "https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Biryani") || category.includes("Pulao")) img = "https://images.unsplash.com/photo-1589302168068-964664d93cb0?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Chinese") || category.includes("Momo")) img = "https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Tandoori") || category.includes("Mughlai")) img = "https://images.unsplash.com/photo-1599487405702-3e28c42b9370?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Chicken") || category.includes("Mutton") || category.includes("Egg") || category.includes("Fish")) img = "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Thali")) img = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=400&q=80";
+    if (category.includes("Thali")) img = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Mutton") || category.includes("Fish") || category.includes("Egg")) img = "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Chicken")) img = "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Tandoor")) img = "https://images.unsplash.com/photo-1599487405702-3e28c42b9370?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Biryani") || category.includes("Rice")) img = "https://images.unsplash.com/photo-1589302168068-964664d93cb0?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Paneer") || category.includes("Mushroom")) img = "https://images.unsplash.com/photo-1631452180519-c014fe946bc0?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Dal") || category.includes("Roti") || category.includes("Chole")) img = "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Soya")) img = "https://images.unsplash.com/photo-1626082895617-2c6ad36f568a?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Chinese")) img = "https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Momos") || category.includes("Rolls")) img = "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Pizza") || category.includes("Burgers")) img = "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Maggi") || category.includes("Corn") || category.includes("Fries")) img = "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Soups")) img = "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Shakes") || category.includes("Drinks")) img = "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Desserts")) img = "https://images.unsplash.com/photo-1551024506-0bccd828d307?auto=format&fit=crop&w=400&q=80";
+    else if (category.includes("Combos")) img = "https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=400&q=80";
   }
   return { id, name, desc: desc || "Freshly prepared with premium ingredients.", price, category, veg, available, image: img, portion: portion || "", isBestseller };
 }
@@ -2141,7 +2162,7 @@ const handleWaiterPinSubmit = () => {
 
             {activeModal === 'booking' && (<><ModalHeader title={bookType === "party" ? "Party Booking 🎉" : "Table Booking 🍽️"} onClose={() => { setActiveModal(null); setConfirmedBooking(null); }} />{confirmedBooking ? (<div style={{ textAlign: "center", padding: "30px 0" }}><div style={{ fontSize: 56, marginBottom: 16 }}>✅</div><h3 style={{ fontSize: 28, fontWeight: 800, marginBottom: 10 }}>Request Sent!</h3><button onClick={() => { setActiveModal(null); setConfirmedBooking(null); }} style={{ background: COLORS.paper2, border: 'none', padding: '12px', borderRadius: 12, width: '100%', fontWeight: 800, cursor: 'pointer' }}>Close</button></div>) : (<div style={{ display: "flex", flexDirection: "column", gap: 14 }}><input type="text" placeholder="Name" value={bookData.name} onChange={(e) => setBookData({ ...bookData, name: e.target.value })} style={inputStyle} /><input type="tel" placeholder="Phone" value={bookData.phone} onChange={(e) => setBookData({ ...bookData, phone: e.target.value })} style={inputStyle} /><div style={{ display: "flex", gap: 14 }}><input type="date" value={bookData.date} onChange={(e) => setBookData({ ...bookData, date: e.target.value })} style={inputStyle} /><input type="time" value={bookData.time} onChange={(e) => setBookData({ ...bookData, time: e.target.value })} style={inputStyle} /></div><input type="number" placeholder="Guests" value={bookData.guests} onChange={(e) => setBookData({ ...bookData, guests: e.target.value })} style={inputStyle} /><button onClick={handleBooking} style={{ background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 14, padding: '13px 20px', fontWeight: 800, cursor: 'pointer' }}>Send Request</button></div>)}</>)}
 
-            {activeModal === 'track' && (<><ModalHeader title="Active Orders" onClose={() => setActiveModal(null)} />{myActiveOrders.length === 0 ? (<div style={{ textAlign: 'center', padding: 50, color: COLORS.textLight }}>No active orders</div>) : myActiveOrders.map(o => { const estimatedTime = getEstimatedTime(o.items); const isCancellable = o.status === "new" || o.status === "preparing"; return (<div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, marginBottom: 16 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><div style={{ fontSize: 20, fontWeight: 700 }}>Order #{o.id.slice(1, 5).toUpperCase()}</div>{o.kots?.length > 1 && <KotBadge kots={o.kots} />}</div><OrderTimer createdAt={o.createdAt} estimatedTime={estimatedTime} /><div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}><ProgressRing progress={getOrderProgress(o.status)} size={80} /></div><div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 12 }}>{o.items.map(i => `${i.qty}x ${i.name}`).join(", ")}</div><div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}><button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back</button><button onClick={() => setRunningOrderId(o.id)} style={{ padding: "13px 20px", background: COLORS.info, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>➕ Running</button>{isCancellable && (<button onClick={() => cancelOrder(o.id)} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.error, border: `2px solid ${COLORS.error}`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>❌ Cancel</button>)}</div></div>); })}</>)}
+            {activeModal === 'track' && (<><ModalHeader title="Active Orders" onClose={() => setActiveModal(null)} />{myActiveOrders.length === 0 ? (<div style={{ textAlign: 'center', padding: 50, color: COLORS.textLight }}>No active orders</div>) : myActiveOrders.map(o => { const estimatedTime = getEstimatedTime(o.items, menu); const isCancellable = o.status === "new" || o.status === "preparing"; return (<div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, marginBottom: 16 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><div style={{ fontSize: 20, fontWeight: 700 }}>Order #{o.id.slice(1, 5).toUpperCase()}</div>{o.kots?.length > 1 && <KotBadge kots={o.kots} />}</div><OrderTimer createdAt={o.createdAt} estimatedTime={estimatedTime} /><div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}><ProgressRing progress={getOrderProgress(o.status)} size={80} /></div><div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 12 }}>{o.items.map(i => `${i.qty}x ${i.name}`).join(", ")}</div><div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}><button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back</button><button onClick={() => setRunningOrderId(o.id)} style={{ padding: "13px 20px", background: COLORS.info, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>➕ Running</button>{isCancellable && (<button onClick={() => cancelOrder(o.id)} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.error, border: `2px solid ${COLORS.error}`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>❌ Cancel</button>)}</div></div>); })}</>)}
 
             {activeModal === 'chat' && (<><ModalHeader title="💬 Chat" onClose={() => setActiveModal(null)} /><ChatBox orderId={activeOrderIdForChat || 'general'} customerId={custPhone || 'customer'} /></>)}
           </div>
@@ -3155,8 +3176,88 @@ const DEFAULT_MENU = [
   mi("pb1114", "White Sauce Pasta", 200, "Pizza, Burgers & More", true, "Creamy white sauce pasta."),
   mi("pb1115", "Mix Sauce Pasta", 220, "Pizza, Burgers & More", true, "Mix sauce pasta."),
   mi("pb1116", "Veg Sandwich", 120, "Pizza, Burgers & More", true, "Grilled veg sandwich."),
-  mi
+  mi("pb1117", "Veg Cheese Sandwich", 150, "Pizza, Burgers & More", true, "Grilled veg cheese sandwich."),
+  mi("pb1118", "Club Sandwich (3 layer)", 180, "Pizza, Burgers & More", true, "3-layer club sandwich."),
+  mi("pb1119", "Chicken Sandwich", 160, "Pizza, Burgers & More", false, "Chicken sandwich."),
+  mi("pb1120", "Chicken Cheese Sandwich", 190, "Pizza, Burgers & More", false, "Chicken cheese sandwich."),
+  mi("pb1121", "Chicken Club Sandwich", 220, "Pizza, Burgers & More", false, "3-layer chicken club sandwich."),
 
+  // ═══════════════════════════════════════════════
+  // 🍜 MAGGI, CORN & FRIES
+  // ═══════════════════════════════════════════════
+  mi("mc1201", "Plain Maggi", 60, "Maggi, Corn & Fries", true, "Plain Maggi noodles."),
+  mi("mc1202", "Masala Maggi", 80, "Maggi, Corn & Fries", true, "Spicy masala Maggi."),
+  mi("mc1203", "Cheese Corn Maggi", 120, "Maggi, Corn & Fries", true, "Cheese corn Maggi."),
+  mi("mc1204", "Schezwan Maggi", 100, "Maggi, Corn & Fries", true, "Schezwan Maggi."),
+  mi("mc1205", "Hot Garlic Maggi", 100, "Maggi, Corn & Fries", true, "Hot garlic Maggi."),
+  mi("mc1206", "E&P Special Maggi", 130, "Maggi, Corn & Fries", true, "Chef's special Maggi.", "", true),
+  mi("mc1207", "Corn Salt & Pepper", 100, "Maggi, Corn & Fries", true, "Salt & pepper corn."),
+  mi("mc1208", "Corn Lemon & Butter", 110, "Maggi, Corn & Fries", true, "Lemon butter corn."),
+  mi("mc1209", "Corn Garlic & Butter", 110, "Maggi, Corn & Fries", true, "Garlic butter corn."),
+  mi("mc1210", "Masala Corn", 100, "Maggi, Corn & Fries", true, "Spicy masala corn."),
+  mi("mc1211", "French Fries", 100, "Maggi, Corn & Fries", true, "Crispy french fries.", "", true),
+  mi("mc1212", "Masala Fries", 120, "Maggi, Corn & Fries", true, "Masala fries."),
+  mi("mc1213", "Crispy Chilly Potato", 140, "Maggi, Corn & Fries", true, "Crispy chili potato."),
+  mi("mc1214", "Honey Chilli Potato", 150, "Maggi, Corn & Fries", true, "Honey chili potato."),
+
+  // ═══════════════════════════════════════════════
+  // 🍲 SOUPS
+  // ═══════════════════════════════════════════════
+  mi("sp1301", "Veg Hot & Sour", 100, "Soups", true, "Veg hot & sour soup."),
+  mi("sp1302", "Veg Manchow", 100, "Soups", true, "Veg manchow soup."),
+  mi("sp1303", "Sweet Corn", 110, "Soups", true, "Sweet corn soup."),
+  mi("sp1304", "Tomato Soup", 100, "Soups", true, "Tomato soup."),
+  mi("sp1305", "Chicken Hot & Sour", 130, "Soups", false, "Chicken hot & sour soup."),
+  mi("sp1306", "Chicken Manchow", 130, "Soups", false, "Chicken manchow soup."),
+
+  // ═══════════════════════════════════════════════
+  // 🥤 SHAKES & DRINKS
+  // ═══════════════════════════════════════════════
+  mi("sd1401", "Mojito (Mint)", 90, "Shakes & Drinks", true, "Mint mojito.", "", true),
+  mi("sd1402", "Mojito (Blue Lagoon)", 90, "Shakes & Drinks", true, "Blue lagoon mojito."),
+  mi("sd1403", "Mojito (Green Apple)", 90, "Shakes & Drinks", true, "Green apple mojito."),
+  mi("sd1404", "Mojito (Blueberry)", 90, "Shakes & Drinks", true, "Blueberry mojito."),
+  mi("sd1405", "Mojito (Spicy Lemonade)", 90, "Shakes & Drinks", true, "Spicy lemonade mojito."),
+  mi("sd1406", "Mojito (Watermelon)", 90, "Shakes & Drinks", true, "Watermelon mojito."),
+  mi("sd1407", "Vanilla Shake", 120, "Shakes & Drinks", true, "Vanilla milkshake."),
+  mi("sd1408", "Chocolate Shake", 130, "Shakes & Drinks", true, "Chocolate milkshake."),
+  mi("sd1409", "Butterscotch Shake", 130, "Shakes & Drinks", true, "Butterscotch shake."),
+  mi("sd1410", "Strawberry Shake", 130, "Shakes & Drinks", true, "Strawberry shake."),
+  mi("sd1411", "KitKat Shake", 150, "Shakes & Drinks", true, "KitKat shake."),
+  mi("sd1412", "Oreo Shake", 140, "Shakes & Drinks", true, "Oreo shake."),
+  mi("sd1413", "KitKat Oreo Shake", 160, "Shakes & Drinks", true, "KitKat + Oreo shake.", "", true),
+  mi("sd1414", "Cold Coffee", 120, "Shakes & Drinks", true, "Chilled cold coffee.", "", true),
+  mi("sd1415", "Hot Chocolate", 100, "Shakes & Drinks", true, "Hot chocolate."),
+  mi("sd1416", "Dark Hot Chocolate", 120, "Shakes & Drinks", true, "Dark hot chocolate."),
+  mi("sd1417", "Hot Coffee", 60, "Shakes & Drinks", true, "Hot coffee."),
+  mi("sd1418", "Hot Tea", 30, "Shakes & Drinks", true, "Hot tea."),
+  mi("sd1419", "Hot Milk", 50, "Shakes & Drinks", true, "Hot milk."),
+  mi("sd1420", "Lime Water (Nimbu)", 40, "Shakes & Drinks", true, "Fresh lime water."),
+  mi("sd1421", "Cold Drinks", 50, "Shakes & Drinks", true, "Chilled cold drink."),
+  mi("sd1422", "Mineral Water (MRP)", 20, "Shakes & Drinks", true, "Mineral water."),
+
+  // ═══════════════════════════════════════════════
+  // 🍮 DESSERTS
+  // ═══════════════════════════════════════════════
+  mi("ds1501", "Rasgulla", 60, "Desserts", true, "Sweet rasgulla."),
+  mi("ds1502", "Gulab Jamun", 60, "Desserts", true, "Sweet gulab jamun."),
+  mi("ds1503", "Rajbhog", 80, "Desserts", true, "Royal rajbhog."),
+  mi("ds1504", "Rasmalai", 90, "Desserts", true, "Creamy rasmalai."),
+  mi("ds1505", "Special Fried Ice Cream", 150, "Desserts", true, "Crispy fried ice cream.", "", true),
+  mi("ds1506", "Fruit Cream", 100, "Desserts", true, "Fresh fruit cream."),
+
+  // ═══════════════════════════════════════════════
+  // 🥗 COMBOS
+  // ═══════════════════════════════════════════════
+  mi("cb1601", "Veg Burger + Coke", 120, "Combos", true, "Veg burger with Coke."),
+  mi("cb1602", "Veg Noodles + Manchurian + Coke", 220, "Combos", true, "Veg noodles + manchurian + Coke."),
+  mi("cb1603", "Soya Malai Chaap + Rumali Roti + Coke", 250, "Combos", true, "Soya malai chaap combo."),
+  mi("cb1604", "Paneer Tikka + Coke", 320, "Combos", true, "Paneer tikka with Coke."),
+  mi("cb1605", "Veg Fried Rice + Manchurian + Coke", 220, "Combos", true, "Fried rice + manchurian + Coke."),
+  mi("cb1606", "Veg Fried Rice + Paneer Chilly + Coke", 250, "Combos", true, "Fried rice + paneer chilly + Coke."),
+  mi("cb1607", "Pizza + Coke", 240, "Combos", true, "Pizza with Coke."),
+  mi("cb1608", "Chicken Roll + Coke", 180, "Combos", false, "Chicken roll with Coke.")
+];
 // ============================================
 // 20. ProgressRing & OrderTimer
 // ============================================
