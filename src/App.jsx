@@ -1604,13 +1604,39 @@ const handleWaiterPinSubmit = () => {
           </div>
         </div>
       )}
-
-      {!searchQuery.trim() && (
-        <div style={{ display: "flex", gap: 10, overflowX: "auto", padding: "8px 16px", borderBottom: `1px solid ${COLORS.line}` }}>
-          {categories.map((c) => (<button key={c} onClick={() => setCategory(c)} style={{ whiteSpace: "nowrap", padding: "8px 16px", borderRadius: 12, border: `1.5px solid ${category === c ? COLORS.copper : COLORS.line}`, background: category === c ? COLORS.copper : "transparent", color: category === c ? "#fff" : COLORS.ink, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>{c}</button>))}
-        </div>
-      )}
-
+{!searchQuery.trim() && (
+  <div style={{ 
+    position: 'sticky', top: 0, zIndex: 10,
+    display: "flex", gap: 24, overflowX: "auto", 
+    padding: "12px 16px", background: "#fff",
+    borderBottom: `1px solid ${COLORS.line}`,
+    scrollbarWidth: 'none'
+  }}>
+    {categories.map((c) => {
+      const isActive = category === c;
+      return (
+        <button 
+          key={c} 
+          onClick={() => setCategory(c)} 
+          style={{ 
+            whiteSpace: "nowrap", 
+            padding: "8px 0", 
+            border: "none",
+            borderBottom: isActive ? `3px solid ${COLORS.copper}` : '3px solid transparent',
+            background: "transparent", 
+            color: isActive ? COLORS.copper : COLORS.textLight, 
+            fontSize: 14, 
+            fontWeight: isActive ? 800 : 600, 
+            cursor: "pointer",
+            transition: 'all 0.2s ease',
+            fontFamily: "'Outfit', sans-serif"
+          }}>
+          {c}
+        </button>
+      );
+    })}
+  </div>
+)}
       <div style={{ padding: "16px" }}>
         <div style={{ display: "flex", gap: 10, marginBottom: 8, alignItems: "center" }}>
           <SearchBar value={searchQuery} onChange={setSearchQuery} />
@@ -1618,43 +1644,269 @@ const handleWaiterPinSubmit = () => {
             <VegDot veg={true} /><span style={{ fontSize: 13 }}>{vegOnly ? "Veg" : "All"}</span>
           </button>
         </div>
+        {!searchQuery.trim() && filteredItems.length > 0 && (
+    <div style={{ marginBottom: 16, marginTop: 8 }}>
+      <h2 style={{ 
+        fontFamily: "'Outfit', sans-serif", 
+        fontSize: 22, 
+        fontWeight: 800, 
+        color: COLORS.ink, 
+        margin: 0,
+        letterSpacing: '-0.01em'
+      }}>
+        {category}
+      </h2>
+      <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 4, fontWeight: 600 }}>
+        {filteredItems.length} items
+      </div>
+    </div>
+  )}
 
-        {filteredItems.length === 0 && (
-          <div style={{ textAlign: "center", padding: "40px 20px", color: COLORS.textLight }}>
-            <div style={{ fontSize: 40, marginBottom: 10 }}>{EMPTY_STATES[emptyReason].icon}</div>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>{EMPTY_STATES[emptyReason].title}</div>
-            <div style={{ fontSize: 13 }}>{EMPTY_STATES[emptyReason].subtitle}</div>
+       {filteredItems.length === 0 && (
+  <div style={{ 
+    textAlign: "center", 
+    padding: "60px 20px", 
+    color: COLORS.textLight 
+  }}>
+    <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }}>
+      {EMPTY_STATES[emptyReason].icon}
+    </div>
+    <div style={{ 
+      fontFamily: "'Outfit', sans-serif",
+      fontWeight: 800, 
+      fontSize: 18,
+      color: COLORS.ink,
+      marginBottom: 6
+    }}>
+      {EMPTY_STATES[emptyReason].title}
+    </div>
+    <div style={{ fontSize: 14, lineHeight: 1.5 }}>
+      {EMPTY_STATES[emptyReason].subtitle}
+    </div>
+  </div>
+)}
+       {filteredItems.map((item) => {
+  const isFavorite = favorites.includes(item.id);
+  const qty = getCartQty(cart[item.id]);
+  return (
+    <div 
+      key={item.id} 
+      className="smooth-slide-up"
+      style={{ 
+        display: "flex", 
+        gap: 16,
+        padding: "18px 0", 
+        borderBottom: `1px solid ${COLORS.line}`,
+        opacity: item.available ? 1 : 0.5,
+        alignItems: 'flex-start'
+      }}>
+      
+      {/* LEFT — TEXT */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        
+        {/* Veg dot + Bestseller inline */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <VegDot veg={item.veg} />
+          {item.isBestseller && (
+            <span style={{ 
+              fontSize: 10, 
+              color: COLORS.copper, 
+              fontWeight: 800,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase'
+            }}>
+              ★ Bestseller
+            </span>
+          )}
+        </div>
+
+        {/* Item Name */}
+        <div style={{ 
+          fontFamily: "'Outfit', sans-serif", 
+          fontSize: 16, 
+          fontWeight: 700, 
+          color: COLORS.ink,
+          marginBottom: 4,
+          lineHeight: 1.3
+        }}>
+          {item.name}
+        </div>
+
+        {/* Portion badge */}
+        {item.portion && (
+          <div style={{ 
+            fontSize: 11, 
+            color: COLORS.textLight, 
+            fontWeight: 600,
+            marginBottom: 6,
+            fontStyle: 'italic'
+          }}>
+            {item.portion}
           </div>
         )}
 
-        {filteredItems.map((item) => {
-          const isFavorite = favorites.includes(item.id);
-          return (
-            <div key={item.id} style={{ display: "flex", justifyContent: "space-between", padding: "16px 0", borderBottom: `1px solid ${COLORS.line}`, gap: 12, opacity: item.available ? 1 : 0.6 }} className="smooth-slide-up">
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                  <VegDot veg={item.veg} />
-                  {item.portion && <span style={{ fontSize: 11, background: COLORS.paper2, padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>{item.portion}</span>}
-                  {item.isBestseller && <span style={{ fontSize: 11, background: COLORS.copperLight, color: COLORS.copperDark, padding: "2px 6px", borderRadius: 4, fontWeight: 800 }}>🔥 Bestseller</span>}
-                </div>
-                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 16, fontWeight: 700, marginBottom: 2 }}>{item.name}</div>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, color: COLORS.copper, fontWeight: 800, marginBottom: 4 }}>{inr(item.price)}</div>
-                {item.desc && <div style={{ fontSize: 12, color: COLORS.textLight, lineHeight: 1.4 }}>{item.desc}</div>}
-              </div>
-              <div style={{ position: "relative", width: 90, height: 90, flexShrink: 0 }}>
-                <img src={item.image} alt={item.name} loading="lazy" className="keep-color" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 14 }} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; }} />
-                <div style={{ position: "absolute", top: -4, right: -4 }}>
-                  <button onClick={() => toggleFavorite(item.id)} style={{ background: 'white', border: 'none', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', cursor: 'pointer' }}>
-                    <span style={{ fontSize: 16, color: isFavorite ? '#FFD700' : '#CCC' }}>{isFavorite ? '⭐' : '☆'}</span>
-                  </button>
-                </div>
-                <div style={{ position: "absolute", bottom: -12, left: "50%", transform: "translateX(-50%)", zIndex: 2 }}>
-                  <AddBtnStepper qty={getCartQty(cart[item.id])} onChange={(q) => handleSetQty(item.id, q)} available={item.available} />
-                </div>
-              </div>
+        {/* Price */}
+        <div style={{ 
+          fontFamily: "'Outfit', sans-serif", 
+          fontSize: 15, 
+          fontWeight: 800, 
+          color: COLORS.ink,
+          marginBottom: 6
+        }}>
+          {inr(item.price)}
+        </div>
+
+        {/* Description */}
+        {item.desc && (
+          <div style={{ 
+            fontSize: 12, 
+            color: COLORS.textLight, 
+            lineHeight: 1.5,
+            marginBottom: 10,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden'
+          }}>
+            {item.desc}
+          </div>
+        )}
+
+        {/* ADD Button — website style, left-aligned below text */}
+        <div style={{ marginTop: 8 }}>
+          {!item.available ? (
+            <div style={{
+              display: 'inline-block',
+              color: COLORS.rust,
+              background: COLORS.paper2,
+              borderRadius: 8,
+              fontWeight: 700,
+              fontSize: 12,
+              padding: "8px 18px",
+              fontFamily: "'Outfit', sans-serif"
+            }}>
+              Out of stock
             </div>
-          );
-        })}
+          ) : qty === 0 ? (
+            <button 
+              onClick={() => handleSetQty(item.id, 1)}
+              style={{
+                color: COLORS.sage,
+                background: "#fff",
+                border: `1.5px solid ${COLORS.sage}`,
+                borderRadius: 8,
+                fontWeight: 800,
+                fontSize: 13,
+                padding: "8px 28px",
+                cursor: "pointer",
+                fontFamily: "'Outfit', sans-serif",
+                letterSpacing: '0.02em',
+                transition: 'all 0.2s ease'
+              }}
+              className="hover-lift">
+              ADD
+            </button>
+          ) : (
+            <div style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "4px",
+              background: "#fff",
+              border: `1.5px solid ${COLORS.sage}`,
+              borderRadius: 8,
+              minWidth: 110
+            }}>
+              <button 
+                onClick={() => handleSetQty(item.id, qty - 1)}
+                style={{ 
+                  width: 32, height: 32, 
+                  border: "none", 
+                  color: COLORS.sage, 
+                  background: "transparent", 
+                  fontSize: 20, 
+                  fontWeight: 800,
+                  cursor: "pointer" 
+                }}>
+                −
+              </button>
+              <span style={{ 
+                fontWeight: 800, 
+                fontSize: 15, 
+                color: COLORS.sage,
+                fontFamily: "'Outfit', sans-serif"
+              }}>
+                {qty}
+              </span>
+              <button 
+                onClick={() => handleSetQty(item.id, qty + 1)}
+                style={{ 
+                  width: 32, height: 32, 
+                  border: "none", 
+                  color: COLORS.sage, 
+                  background: "transparent", 
+                  fontSize: 20, 
+                  fontWeight: 800,
+                  cursor: "pointer" 
+                }}>
+                +
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* RIGHT — IMAGE + FAVORITE */}
+      <div style={{ 
+        position: "relative", 
+        width: 120, 
+        height: 120, 
+        flexShrink: 0 
+      }}>
+        <img 
+          src={item.image} 
+          alt={item.name} 
+          loading="lazy" 
+          className="keep-color" 
+          style={{ 
+            width: "100%", 
+            height: "100%", 
+            objectFit: "cover", 
+            borderRadius: 12,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+          }} 
+          onError={(e) => { 
+            e.target.onerror = null; 
+            e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; 
+          }} 
+        />
+        
+        {/* Favorite star — top right of image */}
+        <button 
+          onClick={() => toggleFavorite(item.id)} 
+          style={{ 
+            position: 'absolute',
+            top: 6, 
+            right: 6,
+            background: 'rgba(255,255,255,0.95)', 
+            border: 'none', 
+            borderRadius: '50%', 
+            width: 30, 
+            height: 30, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            boxShadow: '0 2px 6px rgba(0,0,0,0.15)', 
+            cursor: 'pointer'
+          }}>
+          <span style={{ fontSize: 15, color: isFavorite ? '#FFB800' : '#CCC' }}>
+            {isFavorite ? '★' : '☆'}
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+})}
       </div>
 
       <div style={{ textAlign: "center", padding: "20px 20px 60px", fontSize: 13, color: COLORS.textLight, lineHeight: 1.6 }}>
