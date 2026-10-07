@@ -1080,7 +1080,7 @@ const subtotal = cartItems.reduce((s, [id, e]) => {
         <SearchBar value={search} onChange={setSearch} placeholder="Search items..." />
         <div style={{ marginTop: 16, maxHeight: "32vh", overflowY: "auto" }}>
           {filtered.map(item => {
-            const qty = cart[item.id] || 0;
+            const qty = getCartQty(cart[item.id]);
             return (
               <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${COLORS.line}` }}>
                 <div style={{ flex: 1 }}>
@@ -1166,9 +1166,12 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   if (vegOnly) emptyReason = 'veg_filtered';
   else if (searchQuery && searchQuery.trim() !== '') emptyReason = 'search_no_results';
 
-  const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
-  const cartCount = cartItems.reduce((s, [, q]) => s + q, 0);
-  const subtotal = cartItems.reduce((s, [id, q]) => { const item = menu.find((m) => m.id === id); return s + (item ? item.price * q : 0); }, 0);
+  const cartItems = Object.entries(cart).filter(([, entry]) => getCartQty(entry) > 0);
+const cartCount = cartItems.reduce((s, [, entry]) => s + getCartQty(entry), 0);
+const subtotal = cartItems.reduce((s, [id, entry]) => {
+  const item = menu.find((m) => m.id === id);
+  return s + getCartLineTotal(entry, item);
+}, 0);
   const deliveryFee = orderType === "parcel" ? 40 : 0;
   const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
   const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
@@ -1646,7 +1649,7 @@ const handleWaiterPinSubmit = () => {
                   </button>
                 </div>
                 <div style={{ position: "absolute", bottom: -12, left: "50%", transform: "translateX(-50%)", zIndex: 2 }}>
-                  <AddBtnStepper qty={cart[item.id] || 0} onChange={(q) => handleSetQty(item.id, q)} available={item.available} />
+                  <AddBtnStepper qty={getCartQty(cart[item.id])} onChange={(q) => handleSetQty(item.id, q)} available={item.available} />
                 </div>
               </div>
             </div>
