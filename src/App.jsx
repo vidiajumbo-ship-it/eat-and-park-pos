@@ -3855,10 +3855,37 @@ export default function App() {
     <ErrorBoundary>
       <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <style>{FONTS}</style>
-        <div className="app-content">   {console.log("🎭 RENDER: role =", role) || null}      {role === "customer" && <CustomerView menu={menu} orders={orders} ... />}   {role === "staff" && <StaffView orders={orders} ... />}   {role === "admin" && <AdminView menu={menu} ... />}      {/* 🆕 FALLBACK — agar role match nahi hua toh */}   {!["customer", "staff", "admin"].includes(role) && (     <div style={{ padding: 40, textAlign: "center", minHeight: "100vh" }}>       <div style={{ fontSize: 64, marginBottom: 20 }}>⚠️</div>       <h2 style={{ fontSize: 24, marginBottom: 12 }}>Role Error</h2>       <p style={{ fontSize: 14, color: "#8A8375", marginBottom: 20 }}>         Current role: <strong style={{ color: "#E25938" }}>{String(role)}</strong>       </p>       <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>         <button onClick={() => setRole("customer")} style={{ padding: "12px 24px", borderRadius: 12, background: "#E25938", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>           Customer View         </button>         <button onClick={() => setRole("staff")} style={{ padding: "12px 24px", borderRadius: 12, background: "#4A7C59", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>           Staff View         </button>         <button onClick={() => setRole("admin")} style={{ padding: "12px 24px", borderRadius: 12, background: "#1A1A1A", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>           Admin View         </button>       </div>     </div>   )} </div>
-{role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={flashSaleItems} comboOffers={comboOffers} setMenuState={setMenuState} />}          {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} />}
-        </div>
-
+        <div className="app-content">
+  {console.log("🎭 RENDER: role =", role) || null}
+  
+  {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={flashSaleItems} comboOffers={comboOffers} setMenuState={setMenuState} />}
+  
+  {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} />}
+  
+  {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} />}
+  
+  {/* 🆕 FALLBACK — agar role match nahi hua toh */}
+  {!["customer", "staff", "admin"].includes(role) && (
+    <div style={{ padding: 40, textAlign: "center", minHeight: "100vh" }}>
+      <div style={{ fontSize: 64, marginBottom: 20 }}>⚠️</div>
+      <h2 style={{ fontSize: 24, marginBottom: 12 }}>Role Error</h2>
+      <p style={{ fontSize: 14, color: "#8A8375", marginBottom: 20 }}>
+        Current role: <strong style={{ color: "#E25938" }}>{String(role)}</strong>
+      </p>
+      <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+        <button onClick={() => setRole("customer")} style={{ padding: "12px 24px", borderRadius: 12, background: "#E25938", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>
+          Customer View
+        </button>
+        <button onClick={() => setRole("staff")} style={{ padding: "12px 24px", borderRadius: 12, background: "#4A7C59", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>
+          Staff View
+        </button>
+        <button onClick={() => setRole("admin")} style={{ padding: "12px 24px", borderRadius: 12, background: "#1A1A1A", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>
+          Admin View
+        </button>
+      </div>
+    </div>
+  )}
+</div>
         {showPinModal && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowPinModal(false)}>
             <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center" }} className="slide-up">
