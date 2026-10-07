@@ -184,22 +184,28 @@ const EMPTY_STATES = {
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
   }
   componentDidCatch(error, info) {
-    console.error('ErrorBoundary caught:', error, info);
+    console.error('🔴 ErrorBoundary caught:', error);
+    console.error('🔴 Component Stack:', info.componentStack);
+    this.setState({ error, errorInfo: info });
   }
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', padding: 20 }}>
           <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>😅</div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: COLORS.ink, marginBottom: '0.5rem' }}>Something went wrong</h2>
-          <p style={{ color: COLORS.textLight, marginBottom: '1rem' }}>Please try refreshing the page</p>
-          <button onClick={() => window.location.reload()} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>Refresh Page</button>
+          <pre style={{ background: '#f5f5f5', padding: 16, borderRadius: 8, maxWidth: 600, overflow: 'auto', fontSize: 12, color: '#c00', marginBottom: 16, whiteSpace: 'pre-wrap' }}>
+            {this.state.error?.toString()}
+            {'\n\n'}
+            {this.state.errorInfo?.componentStack}
+          </pre>
+          <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>Clear Cache & Refresh</button>
         </div>
       );
     }
@@ -3365,43 +3371,104 @@ export default function App() {
   };
 
   useEffect(() => {
-    const fetchAllData = async () => {
-      try {
-        const lq = await getDocs(collection(db, "loyaltyUsers"));
-        const users = lq.docs.map(d => d.data());
-        if (users.length > 0) setLoyaltyUsers(users);
-        const hq = await getDocs(collection(db, "coinHistory"));
-        const hist = hq.docs.map(d => d.data());
-        if (hist.length > 0) setCoinHistory(hist);
-        const ms = await getDocs(collection(db, "settings"));
-        ms.forEach(ds => {
-          const data = ds.data();
-          if (ds.id === "menu" && data.items) setMenuState(data.items);
-          if (ds.id === "gallery" && data.images) setGallery(data.images);
-          if (ds.id === "appSettings") setSettings(prev => ({ ...prev, ...data }));
-          if (ds.id === "categories" && data.categories) setCategories(data.categories);
-          if (ds.id === "promotions") {
-            if (data.flashSale) setFlashSaleItems(data.flashSale);
-            if (data.comboOffers) setComboOffers(data.comboOffers);
+  const fetchAllData = async () => {
+    try {
+      const lq = await getDocs(collection(db, "loyaltyUsers"));
+      const users = lq.docs.map(d => d.data());
+      if (users.length > 0) setLoyaltyUsers(users);
+      const hq = await getDocs(collection(db, "coinHistory"));
+      const hist = hq.docs.map(d => d.data());
+      if (hist.length > 0) setCoinHistory(hist);
+      
+      const ms = await getDocs(collection(db, "settings"));
+      
+      // 🆕 menuFound flag — track karo ki Firestore mein menu hai ya nahi
+      let menuFound = false;
+      
+      ms.forEach(ds => {
+        const data = ds.data();
+        
+        // ✅ MENU — Force new menu if old
+        if (ds.id === "menu") {
+          menuFound = true;  // 🆕 Mark karo ki menu exists
+          if (data.items && Array.isArray(data.items) && data.items.length >= 200) {
+            console.log("📦 Using Firestore menu:", data.items.length, "items");
+            setMenuState(data.items);
+          } else {
+            console.log("📦 Firestore menu old/empty. Using DEFAULT_MENU:", DEFAULT_MENU.length, "items");
+            setMenuState(DEFAULT_MENU);
+            setDoc(doc(db, "settings", "menu"), { items: DEFAULT_MENU }).catch(console.error);
           }
-        });
-      } catch (e) { console.error("Fetch error:", e); } finally { setLoading(false); }
-    };
-    fetchAllData();
+        }
+        
+        // ✅ CATEGORIES — Force new categories if old
+        if (ds.id === "categories") {
+          const firestoreCats = data.categories || [];
+          const OLD_CATS = ["Chinese Starter", "Drinks", "Chef's Special", "Fun Food", "Mughlai", 
+                            "Tandoori", "Soup", "Snacks", "Chinese Mains", "Chicken, Mutton, Fish & Egg",
+                            "Paneer & Mushroom", "Indian Bread", "Pulao", "Aloo, Dal & Sides", 
+                            "Biryani & Thali", "Momo", "Tea & Coffee"];
+          const hasOldCats = firestoreCats.some(c => OLD_CATS.includes(c));
+          
+          if (hasOldCats || firestoreCats.length === 0) {
+            console.log("📂 Firestore has OLD categories. Using new CATEGORIES.");
+            setCategories(CATEGORIES);
+            setDoc(doc(db, "settings", "categories"), { categories: CATEGORIES }).catch(console.error);
+          } else {
+            console.log("📂 Using Firestore categories");
+            setCategories(firestoreCats);
+          }
+        }
+        
+        // ✅ GALLERY
+        if (ds.id === "gallery" && data.images) setGallery(data.images);
+        
+        // ✅ APP SETTINGS
+        if (ds.id === "appSettings") setSettings(prev => ({ ...prev, ...data }));
+        
+        // ✅ PROMOTIONS
+        if (ds.id === "promotions") {
+          if (data.flashSale) setFlashSaleItems(data.flashSale);
+          if (data.comboOffers) setComboOffers(data.comboOffers);
+        }
+      });
+      
+      // 🆕 Agar menu Firestore mein exist nahi karta
+      if (!menuFound) {
+        console.log("📦 No menu in Firestore. Saving DEFAULT_MENU:", DEFAULT_MENU.length, "items");
+        setDoc(doc(db, "settings", "menu"), { items: DEFAULT_MENU }).catch(console.error);
+      }
+      
+    } catch (e) { 
+      console.error("Fetch error:", e); 
+    } finally { 
+      setLoading(false); 
+    }
+  };
+  
+  fetchAllData();
 
-    const qCalls = query(collection(db, "calls"), where("status", "==", "active"));
-    const unsubCalls = onSnapshot(qCalls, (snap) => { setCalls(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
-    const startOfToday = new Date();
-startOfToday.setHours(0, 0, 0, 0);
-const ordersQuery = query(
-  collection(db, "orders"),
-  where("createdAt", ">=", startOfToday.getTime())
-);
-const unsubOrders = onSnapshot(ordersQuery, (snap) => {
-  setOrdersState(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-});
-    return () => { unsubCalls(); unsubOrders(); };
-  }, []);
+  // ⚠️ Ye code MAT HATANA
+  const qCalls = query(collection(db, "calls"), where("status", "==", "active"));
+  const unsubCalls = onSnapshot(qCalls, (snap) => { 
+    setCalls(snap.docs.map(d => ({ ...d.data(), id: d.id }))); 
+  });
+  
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const ordersQuery = query(
+    collection(db, "orders"),
+    where("createdAt", ">=", startOfToday.getTime())
+  );
+  const unsubOrders = onSnapshot(ordersQuery, (snap) => {
+    setOrdersState(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  });
+  
+  return () => { 
+    unsubCalls(); 
+    unsubOrders(); 
+  };
+}, []);
 
   const deleteBooking = async (id) => { if (window.confirm("Delete?")) { try { await deleteDoc(doc(db, "bookings", id)); } catch (e) { } setBookings(bookings.filter(b => b.id !== id)); } };
   const addInventory = async (item) => { try { await setDoc(doc(db, "inventory", item.id), item); } catch (e) { } setInventory([...inventory, item]); };
