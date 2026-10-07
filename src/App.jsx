@@ -3258,6 +3258,16 @@ const DEFAULT_MENU = [
   mi("cb1607", "Pizza + Coke", 240, "Combos", true, "Pizza with Coke."),
   mi("cb1608", "Chicken Roll + Coke", 180, "Combos", false, "Chicken roll with Coke.")
 ];
+const DEFAULT_OFFERS = [
+  { id: "off1", title: "Flat 20% OFF 🍜", desc: "Enjoy 20% off on all Chinese today!" },
+  { id: "off2", title: "Free Cold Drink 🥤", desc: "Free cold drink on orders above ₹499." }
+];
+
+const DEFAULT_GALLERY = [
+  "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80",
+  "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80",
+  "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=400&q=80"
+];
 // ============================================
 // 20. ProgressRing & OrderTimer
 // ============================================
