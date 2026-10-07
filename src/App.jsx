@@ -113,15 +113,21 @@ function getEstimatedTime(items) {
   return maxTime + 2;
 }
 
-function getOrderProgress(status) { const map = { new: 15, preparing: 50, ready: 85, served: 100 }; return map[status] || // Cart helpers — Flash sale / Combo price override handle karte hain
+function getOrderProgress(status) {
+  const map = { new: 15, preparing: 50, ready: 85, served: 100 };
+  return map[status] || 0;
+}
+
+// Cart helpers — Flash sale / Combo price override handle karte hain
 function getCartQty(cartEntry) {
   if (!cartEntry) return 0;
   if (typeof cartEntry === 'number') return cartEntry;
   return cartEntry.qty || 0;
 }
+
 function getCartLineTotal(cartEntry, menuItem) {
   if (!cartEntry || !menuItem) return 0;
-  const price = cartEntry.priceOverride ?? menuItem.price;
+  const price = cartEntry.priceOverride ?? menuItem.price ?? 0;
   return price * getCartQty(cartEntry);
 }
 
