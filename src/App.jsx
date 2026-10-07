@@ -864,7 +864,7 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = 
 // 15. WAITER ORDER PANEL (V15 NEW)
 // ============================================
 
-const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAddMoreItems, orders }) => {
+const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAddMoreItems, orders, setMenuState, categories }) => {
   const [cart, setCart] = useState({});
   const [search, setSearch] = useState("");
   const [waiterName, setWaiterName] = useState("");
@@ -874,32 +874,117 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   const [placedOrder, setPlacedOrder] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 🆕 Add Menu Item State
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [newItem, setNewItem] = useState({
+    name: "",
+    price: "",
+    category: categories[0] || "Thali",
+    veg: true,
+    portion: "",
+    desc: "",
+    image: "",
+    isBestseller: false
+  });
+  const [isSavingItem, setIsSavingItem] = useState(false);
+
   const filtered = menu.filter(m => m.available && (!search.trim() || m.name.toLowerCase().includes(search.toLowerCase())));
   const cartItems = Object.entries(cart).filter(([, e]) => getCartQty(e) > 0);
-const cartCount = cartItems.reduce((s, [, e]) => s + getCartQty(e), 0);
-const subtotal = cartItems.reduce((s, [id, e]) => {
-  const item = menu.find((m) => m.id === id);
-  return s + getCartLineTotal(e, item);
-}, 0);
-  const setQty = (id, q) => { setCart(prev => { const next = { ...prev, [id]: q }; if (q <= 0) delete next[id]; return next; }); };
+  const cartCount = cartItems.reduce((s, [, e]) => s + getCartQty(e), 0);
+  const subtotal = cartItems.reduce((s, [id, e]) => {
+    const item = menu.find((m) => m.id === id);
+    return s + getCartLineTotal(e, item);
+  }, 0);
+  const setQty = (id, q) => {
+    setCart(prev => {
+      const next = { ...prev };
+      if (q <= 0) delete next[id];
+      else next[id] = { qty: q };
+      return next;
+    });
+  };
   const inputStyle = { padding: 12, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "'Plus Jakarta Sans', sans-serif" };
 
-  // 🔥 Running tables — saare active dine-in orders
-         
+  // 🔥 Running tables
   const runningTables = useMemo(() => {
     return (orders || [])
       .filter(o => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled")
       .sort((a, b) => b.createdAt - a.createdAt);
   }, [orders]);
 
-  // Current table pe running order hai kya?
   const currentTableRunning = runningTables.find(o => Number(o.table) === Number(table));
+
+  // 🆕 SAVE NEW MENU ITEM TO FIREBASE
+  const handleSaveNewItem = async () => {
+    if (!newItem.name.trim()) { alert("⚠️ Item name required"); return; }
+    if (!newItem.price || Number(newItem.price) <= 0) { alert("⚠️ Valid price required"); return; }
+
+    setIsSavingItem(true);
+    try {
+      // Naya item banao
+      const newDish = mi(
+        uid("m"),
+        newItem.name.trim(),
+        Number(newItem.price),
+        newItem.category,
+        newItem.veg,
+        newItem.desc.trim(),
+        newItem.portion.trim(),
+        newItem.isBestseller,
+        true,
+        newItem.image.trim()
+      );
+
+      // Menu mein sabse upar add karo
+      const updatedMenu = [newDish, ...menu];
+
+      // Firestore mein save karo
+      await setDoc(doc(db, "settings", "menu"), { items: updatedMenu });
+
+      // Local state update karo
+      if (setMenuState) setMenuState(updatedMenu);
+
+      // Success message
+      alert(`✅ "${newDish.name}" added to menu!\n\nAb ise cart mein add kar sakte ho.`);
+
+      // Form reset karo
+      setNewItem({
+        name: "",
+        price: "",
+        category: categories[0] || "Thali",
+        veg: true,
+        portion: "",
+        desc: "",
+        image: "",
+        isBestseller: false
+      });
+      setShowAddItem(false);
+
+      // Search mein naya item dikhane ke liye
+      setSearch(newDish.name);
+
+    } catch (error) {
+      console.error("Save new item error:", error);
+      alert("❌ Failed to save item. Check internet and try again.");
+    } finally {
+      setIsSavingItem(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (cartItems.length === 0) return;
     setIsSubmitting(true);
     try {
-      const items = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty }; });
+      const items = cartItems.map(([id, entry]) => {
+        const m = menu.find(x => x.id === id);
+        return {
+          itemId: id,
+          name: m.name,
+          portion: m.portion || "",
+          price: entry.priceOverride ?? m.price,
+          qty: getCartQty(entry)
+        };
+      });
       const created = await onSubmit({ table, items, waiterName, customerName: customerName || "Walk-in", customerPhone: customerPhone || "", notes });
       if (created) {
         setPlacedOrder(created);
@@ -930,7 +1015,7 @@ const subtotal = cartItems.reduce((s, [id, e]) => {
     w.document.close();
   };
 
-  // 🔥 Running Tables List Component (reusable)
+  // Running Tables List Component
   const RunningTablesList = () => {
     if (runningTables.length === 0) return null;
     return (
@@ -985,6 +1070,159 @@ const subtotal = cartItems.reduce((s, [id, e]) => {
       </div>
     );
   };
+
+  // ═══════════════════════════════════════════
+  // 🆕 ADD NEW ITEM SCREEN
+  // ═══════════════════════════════════════════
+  if (showAddItem) {
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", zIndex: 85, display: "flex", alignItems: "flex-end" }} onClick={() => setShowAddItem(false)}>
+        <div onClick={e => e.stopPropagation()} className="slide-up" style={{ background: "#fff", width: "100%", maxWidth: 480, margin: "0 auto", borderRadius: "24px 24px 0 0", padding: "20px", maxHeight: "92vh", overflowY: "auto" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+            <div>
+              <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 800 }}>➕ Add New Menu Item</div>
+              <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>Ye item direct Firebase mein save hoga</div>
+            </div>
+            <button onClick={() => setShowAddItem(false)} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, fontSize: 18, cursor: "pointer" }}>✕</button>
+          </div>
+
+          {/* Item Name */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', marginBottom: 6, display: 'block' }}>Item Name *</label>
+            <input
+              type="text"
+              placeholder="e.g. Paneer Tikka"
+              value={newItem.name}
+              onChange={e => setNewItem({ ...newItem, name: e.target.value })}
+              style={inputStyle}
+              autoFocus
+            />
+          </div>
+
+          {/* Price + Category */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', marginBottom: 6, display: 'block' }}>Price (₹) *</label>
+              <input
+                type="number"
+                placeholder="250"
+                value={newItem.price}
+                onChange={e => setNewItem({ ...newItem, price: e.target.value })}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', marginBottom: 6, display: 'block' }}>Category</label>
+              <select
+                value={newItem.category}
+                onChange={e => setNewItem({ ...newItem, category: e.target.value })}
+                style={{ ...inputStyle, background: '#fff' }}>
+                {(categories || []).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Veg + Portion */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', marginBottom: 6, display: 'block' }}>Type</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setNewItem({ ...newItem, veg: true })}
+                  style={{
+                    flex: 1, padding: 10, borderRadius: 10,
+                    border: `2px solid ${newItem.veg ? COLORS.sage : COLORS.line}`,
+                    background: newItem.veg ? COLORS.sageLight : '#fff',
+                    color: newItem.veg ? COLORS.sageDark : COLORS.textLight,
+                    fontWeight: 800, fontSize: 13, cursor: 'pointer'
+                  }}>
+                  🟢 Veg
+                </button>
+                <button
+                  onClick={() => setNewItem({ ...newItem, veg: false })}
+                  style={{
+                    flex: 1, padding: 10, borderRadius: 10,
+                    border: `2px solid ${!newItem.veg ? COLORS.rust : COLORS.line}`,
+                    background: !newItem.veg ? '#FFEBEE' : '#fff',
+                    color: !newItem.veg ? COLORS.rust : COLORS.textLight,
+                    fontWeight: 800, fontSize: 13, cursor: 'pointer'
+                  }}>
+                  🔴 Non-Veg
+                </button>
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', marginBottom: 6, display: 'block' }}>Portion</label>
+              <input
+                type="text"
+                placeholder="Half / Full"
+                value={newItem.portion}
+                onChange={e => setNewItem({ ...newItem, portion: e.target.value })}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', marginBottom: 6, display: 'block' }}>Description</label>
+            <textarea
+              placeholder="Short description (optional)"
+              value={newItem.desc}
+              onChange={e => setNewItem({ ...newItem, desc: e.target.value })}
+              style={{ ...inputStyle, resize: 'none' }}
+              rows={2}
+            />
+          </div>
+
+          {/* Image URL */}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 12, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', marginBottom: 6, display: 'block' }}>Image URL (optional)</label>
+            <input
+              type="url"
+              placeholder="https://..."
+              value={newItem.image}
+              onChange={e => setNewItem({ ...newItem, image: e.target.value })}
+              style={inputStyle}
+            />
+          </div>
+
+          {/* Bestseller toggle */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 20, padding: 12, background: COLORS.paper, borderRadius: 10 }}>
+            <input
+              type="checkbox"
+              checked={newItem.isBestseller}
+              onChange={e => setNewItem({ ...newItem, isBestseller: e.target.checked })}
+              style={{ width: 20, height: 20 }}
+            />
+            <span style={{ fontWeight: 700, fontSize: 14 }}>⭐ Mark as Bestseller</span>
+          </label>
+
+          {/* Save button */}
+          <button
+            onClick={handleSaveNewItem}
+            disabled={isSavingItem || !newItem.name.trim() || !newItem.price}
+            style={{
+              width: "100%",
+              padding: 16,
+              border: "none",
+              borderRadius: 14,
+              background: (isSavingItem || !newItem.name.trim() || !newItem.price) ? COLORS.paper2 : COLORS.sage,
+              color: (isSavingItem || !newItem.name.trim() || !newItem.price) ? COLORS.textLight : "#fff",
+              fontWeight: 800,
+              fontSize: 16,
+              cursor: (isSavingItem || !newItem.name.trim() || !newItem.price) ? "not-allowed" : "pointer"
+            }}>
+            {isSavingItem ? "⏳ Saving to Firebase..." : "💾 Save Item to Menu"}
+          </button>
+
+          <div style={{ fontSize: 11, color: COLORS.textLight, textAlign: 'center', marginTop: 12, lineHeight: 1.5 }}>
+            💡 Ye item turant menu mein add ho jayega aur baaki sab waiters ko bhi dikhega.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ✅ ORDER PLACED — Confirmation view
   if (placedOrder) {
@@ -1050,7 +1288,6 @@ const subtotal = cartItems.reduce((s, [id, e]) => {
             </button>
           </div>
 
-          {/* 🔥 Running Tables list bhi dikhao confirmation pe */}
           <RunningTablesList />
 
           <div style={{ fontSize: 11, color: COLORS.textLight, textAlign: 'center', lineHeight: 1.5 }}>
@@ -1073,10 +1310,31 @@ const subtotal = cartItems.reduce((s, [id, e]) => {
           <button onClick={onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, fontSize: 18, cursor: "pointer" }}>✕</button>
         </div>
 
-        {/* 🔥 Running Tables list */}
+        {/* 🆕 ADD NEW ITEM BUTTON */}
+        <button
+          onClick={() => setShowAddItem(true)}
+          style={{
+            width: '100%',
+            padding: 14,
+            marginBottom: 16,
+            background: 'linear-gradient(135deg, #4A7C59 0%, #2F5C3F 100%)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 14,
+            fontWeight: 800,
+            fontSize: 15,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            boxShadow: '0 4px 12px rgba(74,124,89,0.3)'
+          }}>
+          ➕ Add New Menu Item
+        </button>
+
         <RunningTablesList />
 
-        {/* Warn if current table already has a running order */}
         {currentTableRunning && (
           <div style={{ background: '#FFF3E0', border: `1.5px solid ${COLORS.warning}`, borderRadius: 12, padding: 12, marginBottom: 12 }}>
             <div style={{ fontSize: 13, color: '#E65100', fontWeight: 700, marginBottom: 8 }}>
@@ -1139,8 +1397,7 @@ const subtotal = cartItems.reduce((s, [id, e]) => {
 // 16. CUSTOMER VIEW
 // ============================================
 
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers }) {
-  const [category, setCategory] = useState(categories[0] || "Drinks");
+function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState }) {  const [category, setCategory] = useState(categories[0] || "Drinks");
   const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -2176,19 +2433,21 @@ const handleWaiterPinSubmit = () => {
       )}
 
             {showWaiterMode && (
-        <WaiterOrderPanel
-          menu={menu}
-          orders={orders}
-          table={table}
-          setTable={setTable}
-          onSubmit={handleWaiterOrder}
-          onClose={() => setShowWaiterMode(false)}
-          onAddMoreItems={(orderId) => {
-            setShowWaiterMode(false);
-            setRunningOrderId(orderId);
-          }}
-        />
-      )}
+  <WaiterOrderPanel
+    menu={menu}
+    orders={orders}
+    table={table}
+    setTable={setTable}
+    onSubmit={handleWaiterOrder}
+    onClose={() => setShowWaiterMode(false)}
+    onAddMoreItems={(orderId) => {
+      setShowWaiterMode(false);
+      setRunningOrderId(orderId);
+    }}
+    setMenuState={setMenuState}
+    categories={categories}
+  />
+)}
       {showWaiterPinModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowWaiterPinModal(false)}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center" }} className="slide-up">
@@ -3597,9 +3856,7 @@ export default function App() {
       <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <style>{FONTS}</style>
         <div className="app-content">
-          {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={flashSaleItems} comboOffers={comboOffers} />}
-          {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} />}
-          {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} />}
+{role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={flashSaleItems} comboOffers={comboOffers} setMenuState={setMenuState} />}          {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} />}
         </div>
 
         {showPinModal && (
