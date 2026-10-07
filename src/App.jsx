@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "
 import { db } from "./firebase";
 import {
   collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc,
-  getDocs, getDoc, addDoc, query, orderBy, serverTimestamp, where
+  getDocs, getDoc, addDoc, query, orderBy, serverTimestamp, where,
+  runTransaction  // 👈 ADD THIS
 } from "firebase/firestore";
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -2913,32 +2914,82 @@ const unsubOrders = onSnapshot(ordersQuery, (snap) => {
     setOrdersState(orders.map(o => o.id === orderId ? { ...o, ...updateData } : o));
   };
 
-  const markPaid = async (orderId, paid) => {
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-    if (paid && !order.coinsClaimed) {
-      const earned = order.earnedCoins || 0;
-      const used = order.rewardUsedCoins || 0;
-      const phone = order.customer?.phone;
-      if (phone && phone.length >= 10) {
-        try {
+ const markPaid = async (orderId, paid) => {
+  try {
+    await runTransaction(db, async (tx) => {
+      const orderRef = doc(db, "orders", orderId);
+      const orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists()) throw new Error("Order not found");
+
+      const order = orderSnap.data();
+
+      // Agar already paid mark ho chuka hai toh skip
+      if (paid && order.coinsClaimed) {
+        tx.update(orderRef, { paid: true });
+        return;
+      }
+
+      if (paid) {
+        const earned = order.earnedCoins || 0;
+        const used = order.rewardUsedCoins || 0;
+        const phone = order.customer?.phone;
+
+        if (phone && phone.length >= 10) {
           const userRef = doc(db, "loyaltyUsers", phone);
-          const userSnap = await getDoc(userRef);
+          const userSnap = await tx.get(userRef);
           const curCoins = userSnap.exists() ? (userSnap.data().coins || 0) : 0;
           const newCoins = Math.max(0, curCoins + earned - used);
-          if (userSnap.exists()) await updateDoc(userRef, { coins: newCoins });
-          else await setDoc(userRef, { phone, name: order.customer.name || "Guest", coins: newCoins });
-          if (earned > 0) await addDoc(collection(db, "coinHistory"), { phone, coins: earned, reason: `Order #${order.id.slice(1, 5).toUpperCase()}`, timestamp: Date.now() });
-          if (used > 0) await addDoc(collection(db, "coinHistory"), { phone, coins: -used, reason: `Redeemed #${order.id.slice(1, 5).toUpperCase()}`, timestamp: Date.now() });
-          setLoyaltyUsers(prev => { const ex = prev.find(u => u.phone === phone); if (ex) return prev.map(u => u.phone === phone ? { ...u, coins: newCoins } : u); return [...prev, { phone, name: order.customer?.name || "Guest", coins: newCoins }]; });
-        } catch (e) { console.error(e); }
+
+          if (userSnap.exists()) {
+            tx.update(userRef, { coins: newCoins });
+          } else {
+            tx.set(userRef, { phone, name: order.customer?.name || "Guest", coins: newCoins });
+          }
+        }
+        tx.update(orderRef, { paid: true, coinsClaimed: true });
+      } else {
+        tx.update(orderRef, { paid: false });
       }
-      await updateDoc(doc(db, "orders", orderId), { paid: true, coinsClaimed: true });
-    } else {
-      await updateDoc(doc(db, "orders", orderId), { paid });
+    });
+
+    // Transaction ke baad history alag se likho (idempotent check)
+    const order = orders.find(o => o.id === orderId);
+    if (paid && order && !order.coinsClaimed) {
+      const phone = order.customer?.phone;
+      const earned = order.earnedCoins || 0;
+      const used = order.rewardUsedCoins || 0;
+      if (phone && phone.length >= 10) {
+        if (earned > 0) {
+          await addDoc(collection(db, "coinHistory"), {
+            phone, coins: earned,
+            reason: `Order #${order.id.slice(1, 5).toUpperCase()}`,
+            timestamp: Date.now()
+          });
+        }
+        if (used > 0) {
+          await addDoc(collection(db, "coinHistory"), {
+            phone, coins: -used,
+            reason: `Redeemed #${order.id.slice(1, 5).toUpperCase()}`,
+            timestamp: Date.now()
+          });
+        }
+        setLoyaltyUsers(prev => {
+          const ex = prev.find(u => u.phone === phone);
+          const newCoins = Math.max(0, (ex?.coins || 0) + earned - used);
+          if (ex) return prev.map(u => u.phone === phone ? { ...u, coins: newCoins } : u);
+          return [...prev, { phone, name: order.customer?.name || "Guest", coins: newCoins }];
+        });
+      }
     }
-    setOrdersState(prev => prev.map(o => o.id === orderId ? { ...o, paid, coinsClaimed: paid ? true : o.coinsClaimed } : o));
-  };
+
+    setOrdersState(prev => prev.map(o =>
+      o.id === orderId ? { ...o, paid, coinsClaimed: paid ? true : o.coinsClaimed } : o
+    ));
+  } catch (e) {
+    console.error("markPaid error:", e);
+    alert("⚠️ Payment update failed. Try again.");
+  }
+};
 
   const bookEvent = async (booking) => { try { await setDoc(doc(db, "bookings", booking.id), booking); } catch (e) { } setBookings([...bookings, booking]); };
 
