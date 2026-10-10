@@ -1796,7 +1796,6 @@ if (savedCart) {
       return next;
     });
   }, [menu]);
-  const handleSetQtyOld2 = useCallback((id, q) => { ... }); = useCallback((id, q) => {
     const prevCart = cartRef.current;
     const oldQty = getCartQty(prevCart[id]);
     if (q > oldQty && q === 1) {
