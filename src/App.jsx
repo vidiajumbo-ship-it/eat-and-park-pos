@@ -4273,11 +4273,17 @@ export default function App() {
   const [loyaltyRules, setLoyaltyRules] = useState({ rate: 10, rewards: [{ id: "r1", cost: 300, item: "Free French Fry" }] });
   const [loyaltyUsers, setLoyaltyUsers] = useState([]);
   const [coinHistory, setCoinHistory] = useState([]);
-  const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); return params.has("table") ? Number(params.get("table")) : 1; });
+  const [table, setTable] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has("table") ? Number(params.get("table")) : 1;
+  });
   const [menu, setMenuState] = useState(DEFAULT_MENU);
   const [orders, setOrdersState] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80", adminPin: "9876", staffPin: "5432", waiterPin: "1234" });
+  const [settings, setSettings] = useState({
+    heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80",
+    adminPin: "9876", staffPin: "5432", waiterPin: "1234"
+  });
   const [loading, setLoading] = useState(true);
   const [showPinModal, setShowPinModal] = useState(false);
   const [targetRole, setTargetRole] = useState("staff");
@@ -4285,9 +4291,6 @@ export default function App() {
   const [categories, setCategories] = useState(CATEGORIES);
   const [flashSaleItems, setFlashSaleItems] = useState([
     { id: 'mf207', name: 'Fish Curry (4 pc)', price: 220, discountPrice: 179, stock: 10, active: true }
-  ]);
-  const [_oldFlash, _setOldFlash] = useState([
-    { id: 'nv19', name: 'Fish Curry', price: 449, discountPrice: 299, stock: 10, active: true }
   ]);
   const [comboOffers, setComboOffers] = useState([
     { id: 'combo1', name: 'Family Combo', items: [
@@ -4300,10 +4303,6 @@ export default function App() {
         { id: 'dr711', name: 'Garlic Naan', price: 70, quantity: 2 },
         { id: 'sd1421', name: 'Cold Drinks', price: 50, quantity: 2 }],
       totalPrice: 590, discount: 25, finalPrice: 443, image: '🍗', active: true }
-  ]);
-  const [_oldCombos, _setOldCombos] = useState([
-    { id: 'combo1', name: 'Family Combo', items: [{ id: 'f2', name: 'Special Pizza', price: 280, quantity: 1 }, { id: 'br5', name: 'Chicken Biryani', price: 210, quantity: 1 }, { id: 'pn1', name: 'Paneer Masala', price: 250, quantity: 1 }], totalPrice: 740, discount: 20, finalPrice: 592, image: '🍕', active: true },
-    { id: 'combo2', name: 'Weekend Special', items: [{ id: 'nv8', name: 'Butter Chicken', price: 350, quantity: 1 }, { id: 'b8', name: 'Garlic Naan', price: 70, quantity: 2 }, { id: 'd10', name: 'Cold Drink', price: 50, quantity: 2 }], totalPrice: 590, discount: 25, finalPrice: 442, image: '🍗', active: true }
   ]);
 
   const pinLock = usePinLockout();
@@ -4318,7 +4317,7 @@ export default function App() {
 
   const requestPinPrompt = (target) => { setTargetRole(target); setShowPinModal(true); setPinInput(""); };
 
-   const handlePinSubmit = () => {
+  const handlePinSubmit = () => {
     if (pinLock.isLocked()) {
       alert(`⏳ Bahut galat attempts. ${pinLock.secondsLeft()}s baad try karo.`);
       setPinInput("");
@@ -4340,197 +4339,179 @@ export default function App() {
       setPinInput("");
     }
   };
-  const handlePinSubmitOld = () => {
-    const aPin = (settings?.adminPin ?? "9876").toString().trim();
-    const sPin = (settings?.staffPin ?? "5432").toString().trim();
-    
-    console.log("🔐 PIN Submit:", { targetRole, pinInput, sPin, aPin });
-    
-    if (!pinInput) {
-      alert("❌ PIN daalo");
-      return;
-    }
-    
-    if (targetRole === "admin" && pinInput === aPin) {
-      console.log("✅ Role → admin");
-      setRole("admin");
-      setShowPinModal(false);
-      setPinInput("");
-    } else if (targetRole === "staff" && (pinInput === sPin || pinInput === aPin)) {
-      console.log("✅ Role → staff");
-      setRole("staff");
-      setShowPinModal(false);
-      setPinInput("");
-    } else if (targetRole === "customer") {
-      setRole("customer");
-      setShowPinModal(false);
-      setPinInput("");
-    } else {
-      console.log("❌ Wrong PIN");
-      alert("❌ Incorrect PIN!");
-      setPinInput("");
-    }
-  };
 
   const updateCategories = async (newCategories) => {
     setCategories(newCategories);
-    try { await setDoc(doc(db, "settings", "categories"), { categories: newCategories }); } catch (e) { console.error(e); }
+    try { await setDoc(doc(db, "settings", "categories"), { categories: newCategories }); }
+    catch (e) { console.error(e); }
   };
 
   const savePromotions = async () => {
-    try { await setDoc(doc(db, "settings", "promotions"), { flashSale: flashSaleItems, comboOffers }); alert("✅ Saved!"); } catch (e) { alert("❌ Failed: " + e.message); }
+    try {
+      await setDoc(doc(db, "settings", "promotions"), { flashSale: flashSaleItems, comboOffers });
+      alert("✅ Saved!");
+    } catch (e) { alert("❌ Failed: " + e.message); }
   };
 
   useEffect(() => {
-      // 🔔 Notification permission maango
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-
-  const fetchAllData = async () => {
-    try {
-      const lq = await getDocs(collection(db, "loyaltyUsers"));
-      const users = lq.docs.map(d => d.data());
-      if (users.length > 0) setLoyaltyUsers(users);
-      const hq = await getDocs(collection(db, "coinHistory"));
-      const hist = hq.docs.map(d => d.data());
-      if (hist.length > 0) setCoinHistory(hist);
-      
-      const ms = await getDocs(collection(db, "settings"));
-      
-      // 🆕 menuFound flag — track karo ki Firestore mein menu hai ya nahi
-      let menuFound = false;
-      
-      ms.forEach(ds => {
-        const data = ds.data();
-        
-        // ✅ MENU — Force new menu if old
-        if (ds.id === "menu") {
-          menuFound = true;  // 🆕 Mark karo ki menu exists
-          if (data.items && Array.isArray(data.items) && data.items.length >= 200) {
-            console.log("📦 Using Firestore menu:", data.items.length, "items");
-            setMenuState(data.items);
-          } else {
-            console.log("📦 Firestore menu old/empty. Using DEFAULT_MENU:", DEFAULT_MENU.length, "items");
-            setMenuState(DEFAULT_MENU);
-            setDoc(doc(db, "settings", "menu"), { items: DEFAULT_MENU }).catch(console.error);
-          }
-        }
-        
-        // ✅ CATEGORIES — Force new categories if old
-        if (ds.id === "categories") {
-          const firestoreCats = data.categories || [];
-          const OLD_CATS = ["Chinese Starter", "Drinks", "Chef's Special", "Fun Food", "Mughlai", 
-                            "Tandoori", "Soup", "Snacks", "Chinese Mains", "Chicken, Mutton, Fish & Egg",
-                            "Paneer & Mushroom", "Indian Bread", "Pulao", "Aloo, Dal & Sides", 
-                            "Biryani & Thali", "Momo", "Tea & Coffee"];
-          const hasOldCats = firestoreCats.some(c => OLD_CATS.includes(c));
-          
-          if (hasOldCats || firestoreCats.length === 0) {
-            console.log("📂 Firestore has OLD categories. Using new CATEGORIES.");
-            setCategories(CATEGORIES);
-            setDoc(doc(db, "settings", "categories"), { categories: CATEGORIES }).catch(console.error);
-          } else {
-            console.log("📂 Using Firestore categories");
-            setCategories(firestoreCats);
-          }
-        }
-        
-        // ✅ GALLERY
-        if (ds.id === "gallery" && data.images) setGallery(data.images);
-        
-        // ✅ APP SETTINGS
-        if (ds.id === "appSettings") setSettings(prev => ({ ...prev, ...data }));
-        
-        // ✅ PROMOTIONS
-        if (ds.id === "promotions") {
-          if (data.flashSale) setFlashSaleItems(data.flashSale);
-          if (data.comboOffers) setComboOffers(data.comboOffers);
-        }
-      });
-      
-      // 🆕 Agar menu Firestore mein exist nahi karta
-      if (!menuFound) {
-        console.log("📦 No menu in Firestore. Saving DEFAULT_MENU:", DEFAULT_MENU.length, "items");
-        setDoc(doc(db, "settings", "menu"), { items: DEFAULT_MENU }).catch(console.error);
-      }
-      
-    } catch (e) { 
-      console.error("Fetch error:", e); 
-    } finally { 
-      setLoading(false); 
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
     }
-  };
-  
-  fetchAllData();
 
-  // ⚠️ Ye code MAT HATANA
-  const qCalls = query(collection(db, "calls"), where("status", "==", "active"));
-  const unsubCalls = onSnapshot(qCalls, (snap) => { 
-    setCalls(snap.docs.map(d => ({ ...d.data(), id: d.id }))); 
-  });
-   // 📅 Bookings live listener
-const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
-  setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-});
-  
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const ordersQuery = query(
-    collection(db, "orders"),
-    where("createdAt", ">=", startOfToday.getTime())
-  );
-  let todayList = [];
-  let openList = [];
-  const mergeOrders = () => {
-    const map = new Map();
-    openList.forEach(o => map.set(o.id, o));
-    todayList.forEach(o => map.set(o.id, o));
-    setOrdersState(Array.from(map.values()));
-  };
-  const unsubOpen = onSnapshot(
-    query(collection(db, "orders"), where("status", "in", ["new", "preparing", "ready"])),
-    (snap) => { openList = snap.docs.map(d => ({ id: d.id, ...d.data() })); mergeOrders(); },
-    (err) => console.error("Open orders listener:", err)
-  );
-  const unsubOrders = onSnapshot(ordersQuery, (snap) => {
-    todayList = snap.docs.map(d => ({ id: d.id, ...d.data() })); mergeOrders();
-  });
-  
-  return () => { 
-    unsubCalls(); 
-    unsubOrders(); 
-    unsubOrders(); 
-    unsubBookings();
- 
-  };
-}, []);
+    const fetchAllData = async () => {
+      try {
+        const lq = await getDocs(collection(db, "loyaltyUsers"));
+        const users = lq.docs.map(d => d.data());
+        if (users.length > 0) setLoyaltyUsers(users);
 
-  const deleteBooking = async (id) => { if (window.confirm("Delete?")) { try { await deleteDoc(doc(db, "bookings", id)); } catch (e) { } setBookings(bookings.filter(b => b.id !== id)); } };
-  const addInventory = async (item) => { try { await setDoc(doc(db, "inventory", item.id), item); } catch (e) { } setInventory([...inventory, item]); };
-  const updateStock = async (id, ns) => { try { await updateDoc(doc(db, "inventory", id), { stock: ns }); } catch (e) { } setInventory(inventory.map(i => i.id === id ? { ...i, stock: ns } : i)); };
+        const hq = await getDocs(collection(db, "coinHistory"));
+        const hist = hq.docs.map(d => d.data());
+        if (hist.length > 0) setCoinHistory(hist);
 
-   const requestWaiter = async (tbl) => {
+        // ✅ FIX #6: Inventory load karo
+        const iq = await getDocs(collection(db, "inventory"));
+        setInventory(iq.docs.map(d => ({ id: d.id, ...d.data() })));
+
+        const ms = await getDocs(collection(db, "settings"));
+        let menuFound = false;
+
+        ms.forEach(ds => {
+          const data = ds.data();
+
+          if (ds.id === "menu") {
+            menuFound = true;
+            if (data.items && Array.isArray(data.items) && data.items.length >= 200) {
+              console.log("📦 Using Firestore menu:", data.items.length, "items");
+              setMenuState(data.items);
+            } else {
+              console.log("📦 Firestore menu old/empty. Using DEFAULT_MENU:", DEFAULT_MENU.length);
+              setMenuState(DEFAULT_MENU);
+              setDoc(doc(db, "settings", "menu"), { items: DEFAULT_MENU }).catch(console.error);
+            }
+          }
+
+          if (ds.id === "categories") {
+            const firestoreCats = data.categories || [];
+            const OLD_CATS = ["Chinese Starter", "Drinks", "Chef's Special", "Fun Food", "Mughlai",
+                              "Tandoori", "Soup", "Snacks", "Chinese Mains", "Chicken, Mutton, Fish & Egg",
+                              "Paneer & Mushroom", "Indian Bread", "Pulao", "Aloo, Dal & Sides",
+                              "Biryani & Thali", "Momo", "Tea & Coffee"];
+            const hasOldCats = firestoreCats.some(c => OLD_CATS.includes(c));
+            if (hasOldCats || firestoreCats.length === 0) {
+              setCategories(CATEGORIES);
+              setDoc(doc(db, "settings", "categories"), { categories: CATEGORIES }).catch(console.error);
+            } else {
+              setCategories(firestoreCats);
+            }
+          }
+
+          if (ds.id === "gallery" && data.images) setGallery(data.images);
+          if (ds.id === "appSettings") setSettings(prev => ({ ...prev, ...data }));
+
+          if (ds.id === "promotions") {
+            if (data.flashSale) setFlashSaleItems(data.flashSale);
+            if (data.comboOffers) setComboOffers(data.comboOffers);
+          }
+        });
+
+        if (!menuFound) {
+          setDoc(doc(db, "settings", "menu"), { items: DEFAULT_MENU }).catch(console.error);
+        }
+      } catch (e) {
+        console.error("Fetch error:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAllData();
+
+    const qCalls = query(collection(db, "calls"), where("status", "==", "active"));
+    const unsubCalls = onSnapshot(qCalls, (snap) => {
+      setCalls(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+    });
+
+    const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
+      setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const ordersQuery = query(
+      collection(db, "orders"),
+      where("createdAt", ">=", startOfToday.getTime())
+    );
+
+    let todayList = [];
+    let openList = [];
+    const mergeOrders = () => {
+      const map = new Map();
+      openList.forEach(o => map.set(o.id, o));
+      todayList.forEach(o => map.set(o.id, o));
+      setOrdersState(Array.from(map.values()));
+    };
+
+    const unsubOpen = onSnapshot(
+      query(collection(db, "orders"), where("status", "in", ["new", "preparing", "ready"])),
+      (snap) => { openList = snap.docs.map(d => ({ id: d.id, ...d.data() })); mergeOrders(); },
+      (err) => console.error("Open orders listener:", err)
+    );
+
+    const unsubOrders = onSnapshot(ordersQuery, (snap) => {
+      todayList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      mergeOrders();
+    });
+
+    // ✅ FIX #1: unsubOpen bhi cleanup karo (pehle duplicate unsubOrders tha)
+    return () => {
+      unsubCalls();
+      unsubOpen();
+      unsubOrders();
+      unsubBookings();
+    };
+  }, []);
+
+  // ✅ FIX #5: Functional updates (stale closure fix)
+  const deleteBooking = async (id) => {
+    if (!window.confirm("Delete?")) return;
+    setBookings(prev => prev.filter(b => b.id !== id));
+    try { await deleteDoc(doc(db, "bookings", id)); }
+    catch (e) { console.error(e); }
+  };
+
+  const addInventory = async (item) => {
+    setInventory(prev => prev.some(i => i.id === item.id) ? prev : [...prev, item]);
+    try { await setDoc(doc(db, "inventory", item.id), item); }
+    catch (e) { console.error(e); }
+  };
+
+  const updateStock = async (id, ns) => {
+    setInventory(prev => prev.map(i => i.id === id ? { ...i, stock: ns } : i));
+    try { await updateDoc(doc(db, "inventory", id), { stock: ns }); }
+    catch (e) { console.error(e); }
+  };
+
+  const requestWaiter = async (tbl) => {
     try {
       const callId = uid("call");
       await setDoc(doc(db, "calls", callId), { id: callId, table: tbl, time: Date.now(), status: "active" });
     } catch (e) { console.error(e); }
   };
-   const resolveCall = async (id) => {
-    try {
-      await updateDoc(doc(db, "calls", id), { status: "resolved", resolvedAt: Date.now() });
-    } catch (e) {
-      console.error("Resolve call error:", e);
-      // Fallback: turant local state se hatao
-      setCalls(prev => prev.filter(c => c.id !== id));
-    }
+
+  const resolveCall = async (id) => {
+    setCalls(prev => prev.filter(c => c.id !== id));
+    try { await updateDoc(doc(db, "calls", id), { status: "resolved", resolvedAt: Date.now() }); }
+    catch (e) { console.error("Resolve call error:", e); }
   };
 
-  const addOffer = async (off) => { setOffersList([...offersList, off]); };
-  const removeOffer = async (id) => { setOffersList(offersList.filter(o => o.id !== id)); };
+  const addOffer = async (off) => { setOffersList(prev => [...prev, off]); };
+  const removeOffer = async (id) => { setOffersList(prev => prev.filter(o => o.id !== id)); };
 
   const placeOrder = async (order) => {
-    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; await setDoc(doc(db, "orders", order.id), order); } catch (e) { console.error("placeOrder failed:", e); throw e; }
+    try {
+      if (order.coinsClaimed === undefined) order.coinsClaimed = false;
+      await setDoc(doc(db, "orders", order.id), order);
+    } catch (e) { console.error("placeOrder failed:", e); throw e; }
   };
 
   const advanceStatus = async (orderId, currentStatus) => {
@@ -4546,99 +4527,87 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
     try { await updateDoc(doc(db, "orders", orderId), updateData); }
     catch (e) { console.error(e); alert("⚠️ Status update fail hua. Dobara try karo."); }
   };
-  const advanceStatusOld = async (orderId, currentStatus) => {
-    const idx = STATUS_FLOW.indexOf(currentStatus);
-    const nextStatus = STATUS_FLOW[Math.min(idx + 1, STATUS_FLOW.length - 1)];
-    const updateData = { status: nextStatus, ...(nextStatus === "served" ? { servedAt: Date.now() } : {}) };
-    try { await updateDoc(doc(db, "orders", orderId), updateData); } catch (e) { }
-    setOrdersState(orders.map(o => o.id === orderId ? { ...o, ...updateData } : o));
-  };
 
- const markPaid = async (orderId, paid) => {
-  try {
-    await runTransaction(db, async (tx) => {
-      const orderRef = doc(db, "orders", orderId);
-      const orderSnap = await tx.get(orderRef);
-      if (!orderSnap.exists()) throw new Error("Order not found");
+  const markPaid = async (orderId, paid) => {
+    try {
+      await runTransaction(db, async (tx) => {
+        const orderRef = doc(db, "orders", orderId);
+        const orderSnap = await tx.get(orderRef);
+        if (!orderSnap.exists()) throw new Error("Order not found");
 
-      const order = orderSnap.data();
+        const order = orderSnap.data();
 
-      // Agar already paid mark ho chuka hai toh skip
-      if (paid && order.coinsClaimed) {
-        tx.update(orderRef, { paid: true });
-        return;
-      }
+        if (paid && order.coinsClaimed) {
+          tx.update(orderRef, { paid: true });
+          return;
+        }
 
-      if (paid) {
+        if (paid) {
+          const earned = order.earnedCoins || 0;
+          const used = order.rewardUsedCoins || 0;
+          const phone = order.customer?.phone;
+
+          if (phone && phone.length >= 10) {
+            const userRef = doc(db, "loyaltyUsers", phone);
+            const userSnap = await tx.get(userRef);
+            const curCoins = userSnap.exists() ? (userSnap.data().coins || 0) : 0;
+            const newCoins = Math.max(0, curCoins + earned - used);
+            if (userSnap.exists()) tx.update(userRef, { coins: newCoins });
+            else tx.set(userRef, { phone, name: order.customer?.name || "Guest", coins: newCoins });
+          }
+          tx.update(orderRef, { paid: true, coinsClaimed: true });
+        } else {
+          tx.update(orderRef, { paid: false });
+        }
+      });
+
+      const order = orders.find(o => o.id === orderId);
+      if (paid && order && !order.coinsClaimed) {
+        const phone = order.customer?.phone;
         const earned = order.earnedCoins || 0;
         const used = order.rewardUsedCoins || 0;
-        const phone = order.customer?.phone;
-
         if (phone && phone.length >= 10) {
-          const userRef = doc(db, "loyaltyUsers", phone);
-          const userSnap = await tx.get(userRef);
-          const curCoins = userSnap.exists() ? (userSnap.data().coins || 0) : 0;
-          const newCoins = Math.max(0, curCoins + earned - used);
-
-          if (userSnap.exists()) {
-            tx.update(userRef, { coins: newCoins });
-          } else {
-            tx.set(userRef, { phone, name: order.customer?.name || "Guest", coins: newCoins });
-          }
-        }
-        tx.update(orderRef, { paid: true, coinsClaimed: true });
-      } else {
-        tx.update(orderRef, { paid: false });
-      }
-    });
-
-    // Transaction ke baad history alag se likho (idempotent check)
-    const order = orders.find(o => o.id === orderId);
-    if (paid && order && !order.coinsClaimed) {
-      const phone = order.customer?.phone;
-      const earned = order.earnedCoins || 0;
-      const used = order.rewardUsedCoins || 0;
-      if (phone && phone.length >= 10) {
-        if (earned > 0) {
-          await addDoc(collection(db, "coinHistory"), {
-            phone, coins: earned,
-            reason: `Order #${order.id.slice(1, 5).toUpperCase()}`,
-            timestamp: Date.now()
+          if (earned > 0) await addDoc(collection(db, "coinHistory"), {
+            phone, coins: earned, reason: `Order #${order.id.slice(1, 5).toUpperCase()}`, timestamp: Date.now()
+          });
+          if (used > 0) await addDoc(collection(db, "coinHistory"), {
+            phone, coins: -used, reason: `Redeemed #${order.id.slice(1, 5).toUpperCase()}`, timestamp: Date.now()
+          });
+          setLoyaltyUsers(prev => {
+            const ex = prev.find(u => u.phone === phone);
+            const newCoins = Math.max(0, (ex?.coins || 0) + earned - used);
+            if (ex) return prev.map(u => u.phone === phone ? { ...u, coins: newCoins } : u);
+            return [...prev, { phone, name: order.customer?.name || "Guest", coins: newCoins }];
           });
         }
-        if (used > 0) {
-          await addDoc(collection(db, "coinHistory"), {
-            phone, coins: -used,
-            reason: `Redeemed #${order.id.slice(1, 5).toUpperCase()}`,
-            timestamp: Date.now()
-          });
-        }
-        setLoyaltyUsers(prev => {
-          const ex = prev.find(u => u.phone === phone);
-          const newCoins = Math.max(0, (ex?.coins || 0) + earned - used);
-          if (ex) return prev.map(u => u.phone === phone ? { ...u, coins: newCoins } : u);
-          return [...prev, { phone, name: order.customer?.name || "Guest", coins: newCoins }];
-        });
       }
+
+      setOrdersState(prev => prev.map(o =>
+        o.id === orderId ? { ...o, paid, coinsClaimed: paid ? true : o.coinsClaimed } : o
+      ));
+    } catch (e) {
+      console.error("markPaid error:", e);
+      alert("⚠️ Payment update failed. Try again.");
     }
+  };
 
-    setOrdersState(prev => prev.map(o =>
-      o.id === orderId ? { ...o, paid, coinsClaimed: paid ? true : o.coinsClaimed } : o
-    ));
-  } catch (e) {
-    console.error("markPaid error:", e);
-    alert("⚠️ Payment update failed. Try again.");
-  }
-};
-
-  const bookEvent = async (booking) => { try { await setDoc(doc(db, "bookings", booking.id), booking); } catch (e) { } setBookings([...bookings, booking]); };
+  const bookEvent = async (booking) => {
+    setBookings(prev => prev.some(b => b.id === booking.id) ? prev : [...prev, booking]);
+    try { await setDoc(doc(db, "bookings", booking.id), booking); }
+    catch (e) { console.error(e); }
+  };
 
   const cancelOrderByStaff = async (orderId) => {
-    try { await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); } catch (e) { console.error(e); }
+    try { await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); }
+    catch (e) { console.error(e); }
   };
 
   if (loading) {
-    return (<div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: COLORS.paper, fontWeight: 700, fontSize: 18, color: COLORS.copper }}>🍽️ Loading Eat & Park POS...</div>);
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: COLORS.paper, fontWeight: 700, fontSize: 18, color: COLORS.copper }}>
+        🍽️ Loading Eat & Park POS...
+      </div>
+    );
   }
 
   return (
@@ -4646,47 +4615,71 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
       <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <style>{FONTS}</style>
         <div className="app-content">
-  
-  
-  {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} />}
-  
-  {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} />}
-  
-  {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} />}
-  
-  {/* 🆕 FALLBACK — agar role match nahi hua toh */}
-  {!["customer", "staff", "admin"].includes(role) && (
-    <div style={{ padding: 40, textAlign: "center", minHeight: "100vh" }}>
-      <div style={{ fontSize: 64, marginBottom: 20 }}>⚠️</div>
-      <h2 style={{ fontSize: 24, marginBottom: 12 }}>Role Error</h2>
-      <p style={{ fontSize: 14, color: "#8A8375", marginBottom: 20 }}>
-        Current role: <strong style={{ color: "#E25938" }}>{String(role)}</strong>
-      </p>
-      <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-        <button onClick={() => setRole("customer")} style={{ padding: "12px 24px", borderRadius: 12, background: "#E25938", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>
-          Customer View
-        </button>
-        <button onClick={() => setRole("staff")} style={{ padding: "12px 24px", borderRadius: 12, background: "#4A7C59", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>
-          Staff View
-        </button>
-        <button onClick={() => setRole("admin")} style={{ padding: "12px 24px", borderRadius: 12, background: "#1A1A1A", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>
-          Admin View
-        </button>
-      </div>
-    </div>
-  )}
-</div>
+          {role === "customer" && (
+            <CustomerView
+              menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent}
+              gallery={gallery} offersList={offersList} table={table} setTable={setTable}
+              requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark}
+              setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules}
+              loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState}
+              categories={categories} flashSaleItems={validFlashSaleItems}
+              comboOffers={validComboOffers} setMenuState={setMenuState}
+            />
+          )}
+
+          {role === "staff" && (
+            <StaffView
+              orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt}
+              calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff}
+            />
+          )}
+
+          {role === "admin" && (
+            <AdminView
+              menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders}
+              markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory}
+              addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking}
+              offersList={offersList} addOffer={addOffer} removeOffer={removeOffer}
+              loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules}
+              loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings}
+              gallery={gallery} setGallery={setGallery} categories={categories}
+              updateCategories={updateCategories} flashSaleItems={flashSaleItems}
+              setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers}
+              setComboOffers={setComboOffers} savePromotions={savePromotions}
+            />
+          )}
+
+          {!["customer", "staff", "admin"].includes(role) && (
+            <div style={{ padding: 40, textAlign: "center", minHeight: "100vh" }}>
+              <div style={{ fontSize: 64, marginBottom: 20 }}>⚠️</div>
+              <h2 style={{ fontSize: 24, marginBottom: 12 }}>Role Error</h2>
+              <p style={{ fontSize: 14, color: "#8A8375", marginBottom: 20 }}>
+                Current role: <strong style={{ color: "#E25938" }}>{String(role)}</strong>
+              </p>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                <button onClick={() => setRole("customer")} style={{ padding: "12px 24px", borderRadius: 12, background: "#E25938", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Customer View</button>
+                <button onClick={() => setRole("staff")} style={{ padding: "12px 24px", borderRadius: 12, background: "#4A7C59", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Staff View</button>
+                <button onClick={() => setRole("admin")} style={{ padding: "12px 24px", borderRadius: 12, background: "#1A1A1A", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Admin View</button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {showPinModal && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowPinModal(false)}>
             <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center" }} className="slide-up">
               <div style={{ fontSize: 36, marginBottom: 16 }}>🔒</div>
               <h3 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 700 }}>PIN ({targetRole.toUpperCase()})</h3>
-              <input type="password" placeholder="••••" autoFocus value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }} style={{ padding: "16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 32, width: "100%", boxSizing: "border-box", textAlign: "center", letterSpacing: 12, marginBottom: 24, fontWeight: 800 }} />
+              <input
+                type="password" placeholder="••••" autoFocus value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }}
+                style={{ padding: "16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 32, width: "100%", boxSizing: "border-box", textAlign: "center", letterSpacing: 12, marginBottom: 24, fontWeight: 800 }}
+              />
               <div style={{ display: "flex", gap: 12 }}>
                 <button onClick={() => { setShowPinModal(false); setPinInput(""); }} style={{ flex: 1, padding: "14px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
                 <button onClick={handlePinSubmit} style={{ flex: 1, padding: "14px", borderRadius: 12, background: COLORS.ink, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Login</button>
               </div>
-              <div style={{ fontSize: 11, color: COLORS.textLight, marginTop: 16 }}></div>
             </div>
           </div>
         )}
