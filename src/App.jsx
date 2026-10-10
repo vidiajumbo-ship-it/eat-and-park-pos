@@ -4261,7 +4261,7 @@ const OrderTimer = memo(({ createdAt, estimatedTime }) => {
 
 // ==
 // 21. MAIN APP
-// ==
+
 
 export default function App() {
   const [role, setRole] = useState("customer");
