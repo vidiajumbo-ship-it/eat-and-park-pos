@@ -3295,7 +3295,46 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
             {tab === "settings" && (
         <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16 }}>
           <h3 style={{ marginTop: 0, marginBottom: 16 }}>🖼️ Hero Image</h3>
+                {tab === "settings" && (
+        <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16 }}>
+          <h3 style={{ marginTop: 0, marginBottom: 16 }}>🖼️ Hero Image / Wallpaper</h3>
+          
+          {/* 📸 Upload from device */}
+          <div style={{ marginBottom: 16 }}>
+            <ImageUploadButton
+              currentImage={heroImgInput}
+              onUploaded={async (url) => {
+                setHeroImgInput(url);
+                // Auto-save
+                const newSettings = { ...settings, heroImage: url };
+                setSettings(newSettings);
+                try {
+                  await setDoc(doc(db, "settings", "appSettings"), newSettings);
+                  alert("✅ Wallpaper update ho gaya!");
+                } catch (e) {
+                  alert("⚠️ Save fail: " + e.message);
+                }
+              }}
+              label="🖼️ Upload New Wallpaper (Phone / Camera)"
+            />
+          </div>
+
+          <div style={{ fontSize: 12, color: COLORS.textLight, textAlign: 'center', marginBottom: 12 }}>
+            ─── ya URL se change karo ───
+          </div>
+
+          {/* URL fallback */}
           <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+<div style={{ marginBottom: 12 }}>
+  <ImageUploadButton 
+    currentImage={addMenuImage} 
+    onUploaded={setAddMenuImage}
+    label="📸 Upload Dish Photo (Phone / Camera)"
+  />
+</div>            <button onClick={handleSaveHeroImage} style={{ ...primaryBtn, flex: 1 }}>Save</button>
+          </div>
+          
+          {heroImgInput && (<img src={heroImgInput} alt="" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12 }} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80"; }} />)}
             <input type="url" placeholder="Image URL..." value={heroImgInput} onChange={e => setHeroImgInput(e.target.value)} style={{ ...inputStyle, flex: 2 }} />
             <button onClick={handleSaveHeroImage} style={{ ...primaryBtn, flex: 1 }}>Save</button>
           </div>
@@ -3449,7 +3488,40 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
         <>
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30 }}>
             <h3 style={{ marginTop: 0, marginBottom: 16 }}>📸 Add Photo</h3>
+                  {tab === "gallery" && (
+        <>
+          <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 16 }}>📸 Add Photo</h3>
+            
+            {/* 📸 Upload from device */}
+            <div style={{ marginBottom: 16 }}>
+              <ImageUploadButton
+                currentImage={newGalleryImg}
+                onUploaded={(url) => {
+                  setNewGalleryImg(url);
+                  // Auto-add to gallery
+                  setTimeout(() => {
+                    const u = [...gallery, url];
+                    setGallery(u);
+                    setDoc(doc(db, "settings", "gallery"), { images: u }).catch(console.error);
+                    setNewGalleryImg("");
+                    alert("✅ Photo gallery mein add ho gayi!");
+                  }, 100);
+                }}
+                label="📸 Upload Photo (Phone / Camera / Gallery)"
+              />
+            </div>
+
+            <div style={{ fontSize: 12, color: COLORS.textLight, textAlign: 'center', marginBottom: 12 }}>
+              ─── ya URL se add karo ───
+            </div>
+
+            {/* URL fallback */}
             <div style={{ display: "flex", gap: 12 }}>
+              <input type="url" placeholder="Image URL..." value={newGalleryImg} onChange={e => setNewGalleryImg(e.target.value)} style={{ ...inputStyle, flex: 2 }} />
+              <button onClick={handleAddGalleryPhoto} style={{ ...primaryBtn, flex: 1 }}>+ Add</button>
+            </div>
+          </div>
               <input type="url" placeholder="Image URL..." value={newGalleryImg} onChange={e => setNewGalleryImg(e.target.value)} style={{ ...inputStyle, flex: 2 }} />
               <button onClick={handleAddGalleryPhoto} style={{ ...primaryBtn, flex: 1 }}>+ Add</button>
             </div>
@@ -3517,8 +3589,13 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
                 <input type="text" value={newItemName} onChange={e => setNewItemName(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
                 <input type="number" value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }} />
                 <select value={newItemCat} onChange={e => setNewItemCat(e.target.value)} style={{ ...inputStyle, marginBottom: 12 }}>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                <input type="url" value={newItemImage} onChange={e => setNewItemImage(e.target.value)} placeholder="Image URL" style={{ ...inputStyle, marginBottom: 20 }} />
-                <div style={{ display: 'flex', gap: 12 }}>
+<div style={{ marginBottom: 20 }}>
+  <ImageUploadButton 
+    currentImage={newItemImage} 
+    onUploaded={setNewItemImage}
+    label="📸 Upload New Photo"
+  />
+</div>                <div style={{ display: 'flex', gap: 12 }}>
                   <button onClick={() => setEditingItem(null)} style={{ flex: 1, padding: 12, border: `1px solid ${COLORS.line}`, background: 'transparent', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
                   <button onClick={handleSaveMenuItem} style={{ flex: 1, padding: 12, background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>Save</button>
                 </div>
