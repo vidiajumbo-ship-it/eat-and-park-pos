@@ -1,7 +1,7 @@
 
 /* eslint-disable */
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
- c59ac2fe05533bcd14d01af2ee227a4555f0119c
+ 05533bcd14d01af2ee227a4555f0119c
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db } from "./firebase";
 import {
@@ -1647,7 +1647,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   cartRef.current = cart;
   useEffect(() => () => clearTimeout(aiTimerRef.current), []);
 
-  const handleEmailLogin = async (email, password, expectedRole) => {
+  const  = async (email, password, expectedRole) => {
     try {
       const auth = getAuth();
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -1670,7 +1670,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   };
   cartRef.current = cart;
   useEffect(() => () => clearTimeout(aiTimerRef.current), []);
- c59ac2fe05533bcd14d01af2ee227a4555f0119c
+ 05533bcd14d01af2ee227a4555f0119c
   const [showWaiterMode, setShowWaiterMode] = useState(false);
     const [showWaiterPinModal, setShowWaiterPinModal] = useState(false);
   const [waiterPinInput, setWaiterPinInput] = useState("");
@@ -1825,7 +1825,7 @@ if (savedCart) {
     } else {
       setFavorites([...favorites, itemId]);
       showToast('Added to favorites!', 'success');
- c59ac2fe05533bcd14d01af2ee227a4555f0119c
+ 05533bcd14d01af2ee227a4555f0119c
     }
   }, [favorites, setFavorites, showToast]);
   const toggleFavoriteOld = useCallback((itemId) => {
@@ -4528,7 +4528,7 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
 
     unsubOrders(); unsubOpen(); 
     unsubBookings();
- c59ac2fe05533bcd14d01af2ee227a4555f0119c
+ 05533bcd14d01af2ee227a4555f0119c
   };
 }, []);
 
