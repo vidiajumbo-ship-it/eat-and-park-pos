@@ -3173,14 +3173,16 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
       )
       .join("");
 
-    const w = window.open("", "_blank", "width=380,height=700");
-    if (!w) {
-      alert("⚠️ Popup blocked. Browser settings se allow karo.");
-      return;
-    }
-
     const billNoLine = billShowBillNo ? `<div><b>Bill #:</b> ${billNo}</div>` : `<div>&nbsp;</div>`;
 
+    // Hidden iframe (popup block nahi hota)
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+    document.body.appendChild(iframe);
+    const w = iframe.contentWindow;
+    setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 60000);
+
+    w.document.open();
     w.document.write(`<!doctype html>
 <html><head><title>Bill ${billNo}</title>
 <style>
@@ -3243,9 +3245,12 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
   <div style="margin-top:6px">⭐ Rate us on Google</div>
 </div>
 
-<script>window.print();setTimeout(()=>window.close(),600)</script>
 </body></html>`);
     w.document.close();
+
+    setTimeout(() => {
+      try { w.focus(); w.print(); } catch (e) { alert("⚠️ Print nahi ho paya: " + e.message); }
+    }, 400);
   };
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1200, margin: "0 auto" }}>
