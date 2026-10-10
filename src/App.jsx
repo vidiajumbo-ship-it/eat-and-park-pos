@@ -3288,21 +3288,27 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
             <StatCard label="Avg Order" value={inr(avgOrderValue)} icon="📈" color={COLORS.gold} />
           </div>
           <KitchenMetrics filteredOrders={filteredOrders} />
-          <div id="report-content" style={{ display: 'none' }}><div style={{ padding: 20 }}><h2>{RESTAURANT.name} - Report</h2><p>Date: {filterDate}</p><p>Orders: {filteredOrders.length}</p><p>Revenue: {inr(revenue)}</p></div></div>
+                   <div id="report-content" style={{ display: 'none' }}>
+            <div style={{ padding: 20 }}>
+              <h2>{RESTAURANT.name} - Report</h2>
+              <p>Date: {filterDate}</p>
+              <p>Orders: {filteredOrders.length}</p>
+              <p>Revenue: {inr(revenue)}</p>
+            </div>
+          </div>
         </>
       )}
-{tab === "settings" &&
-                {tab === "settings" && (
+
+      {tab === "settings" && (
         <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16 }}>
           <h3 style={{ marginTop: 0, marginBottom: 16 }}>🖼️ Hero Image / Wallpaper</h3>
-          
+
           {/* 📸 Upload from device */}
           <div style={{ marginBottom: 16 }}>
             <ImageUploadButton
               currentImage={heroImgInput}
               onUploaded={async (url) => {
                 setHeroImgInput(url);
-                // Auto-save
                 const newSettings = { ...settings, heroImage: url };
                 setSettings(newSettings);
                 try {
@@ -3322,24 +3328,35 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
 
           {/* URL fallback */}
           <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-<div style={{ marginBottom: 12 }}>
-  <ImageUploadButton 
-    currentImage={addMenuImage} 
-    onUploaded={setAddMenuImage}
-    label="📸 Upload Dish Photo (Phone / Camera)"
-  />
-</div>            <button onClick={handleSaveHeroImage} style={{ ...primaryBtn, flex: 1 }}>Save</button>
+            <input
+              type="url"
+              placeholder="Image URL..."
+              value={heroImgInput}
+              onChange={(e) => setHeroImgInput(e.target.value)}
+              style={{ ...inputStyle, flex: 2 }}
+            />
+            <button
+              onClick={handleSaveHeroImage}
+              style={{ ...primaryBtn, flex: 1 }}
+            >
+              Save
+            </button>
           </div>
-          
-          {heroImgInput && (<img src={heroImgInput} alt="" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12 }} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80"; }} />)}
-            <input type="url" placeholder="Image URL..." value={heroImgInput} onChange={e => setHeroImgInput(e.target.value)} style={{ ...inputStyle, flex: 2 }} />
-            <button onClick={handleSaveHeroImage} style={{ ...primaryBtn, flex: 1 }}>Save</button>
-          </div>
-          {heroImgInput && (<img src={heroImgInput} alt="" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12 }} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80"; }} />)}
 
-          {/* ═══════════════════════════════════════════════
-              🔐 SECURITY PINs — Manage All
-             ═══════════════════════════════════════════════ */}
+          {/* Preview */}
+          {heroImgInput && (
+            <img
+              src={heroImgInput}
+              alt=""
+              style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 12 }}
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80";
+              }}
+            />
+          )}
+
+          {/* 🔐 SECURITY PINs */}
           <div style={{ borderTop: `1px solid ${COLORS.line}`, marginTop: 28, paddingTop: 24 }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>🔐 Security PINs</h3>
             <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 18 }}>
@@ -3430,56 +3447,86 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
               </div>
             </div>
 
-            {/* 🔄 Reset All PINs */}
+            {/* Reset All PINs */}
             <div style={{ background: 'rgba(239, 68, 68, 0.06)', border: `1.5px dashed ${COLORS.error}`, borderRadius: 12, padding: 16 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
                 <span style={{ fontSize: 26 }}>⚠️</span>
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 15, color: COLORS.error }}>Reset All PINs</div>
                   <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2, lineHeight: 1.5 }}>
-                    Restores all PINs to factory defaults. Use if you forgot any PIN.
+                    Restores all PINs to factory defaults.
                   </div>
-                </div>
-              </div>
-              <div style={{ background: '#fff', borderRadius: 10, padding: 12, marginBottom: 12, fontSize: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                  <span style={{ color: COLORS.textLight, fontWeight: 600 }}>🧑‍🍳 Waiter</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800 }}>1234</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                  <span style={{ color: COLORS.textLight, fontWeight: 600 }}>🍳 Staff</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800 }}>5432</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                  <span style={{ color: COLORS.textLight, fontWeight: 600 }}>⚙️ Admin</span>
-                  <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800 }}>9876</span>
                 </div>
               </div>
               <button
                 onClick={async () => {
-                  if (!window.confirm("⚠️ Reset ALL PINs to defaults?\n\nWaiter: 1234\nStaff: 5432\nAdmin: 9876\n\nThis will overwrite your current PINs.")) return;
+                  if (!window.confirm("⚠️ Reset ALL PINs to defaults?\n\nWaiter: 1234\nStaff: 5432\nAdmin: 9876")) return;
                   const resetSettings = { ...settings, waiterPin: "1234", staffPin: "5432", adminPin: "9876" };
                   setSettings(resetSettings);
                   try {
                     await setDoc(doc(db, "settings", "appSettings"), resetSettings);
-                    alert("✅ All PINs reset to defaults!\n\nWaiter: 1234\nStaff: 5432\nAdmin: 9876");
+                    alert("✅ All PINs reset!");
                   } catch (e) {
-                    alert("⚠️ Failed to reset. Check your internet.");
+                    alert("⚠️ Failed to reset.");
                   }
                 }}
                 style={{
                   width: '100%', padding: 14, border: 'none', borderRadius: 12,
                   background: COLORS.error, color: '#fff', fontWeight: 800,
-                  fontSize: 14, cursor: 'pointer', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', gap: 8
+                  fontSize: 14, cursor: 'pointer'
                 }}>
-                🔄 Reset All PINs to Default
+                🔄 Reset All PINs
               </button>
             </div>
           </div>
-          {/* ═══════════════════════════════════════════════ */}
         </div>
       )}
+
+      {tab === "gallery" && (
+        <>
+          <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 16 }}>📸 Add Photo</h3>
+
+            {/* 📸 Upload from device */}
+            <div style={{ marginBottom: 16 }}>
+              <ImageUploadButton
+                currentImage={newGalleryImg}
+                onUploaded={(url) => {
+                  setNewGalleryImg(url);
+                  setTimeout(() => {
+                    const u = [...gallery, url];
+                    setGallery(u);
+                    setDoc(doc(db, "settings", "gallery"), { images: u }).catch(console.error);
+                    setNewGalleryImg("");
+                    alert("✅ Photo gallery mein add ho gayi!");
+                  }, 100);
+                }}
+                label="📸 Upload Photo (Phone / Camera / Gallery)"
+              />
+            </div>
+
+            <div style={{ fontSize: 12, color: COLORS.textLight, textAlign: 'center', marginBottom: 12 }}>
+              ─── ya URL se add karo ───
+            </div>
+
+            {/* URL fallback */}
+            <div style={{ display: "flex", gap: 12 }}>
+              <input type="url" placeholder="Image URL..." value={newGalleryImg} onChange={e => setNewGalleryImg(e.target.value)} style={{ ...inputStyle, flex: 2 }} />
+              <button onClick={handleAddGalleryPhoto} style={{ ...primaryBtn, flex: 1 }}>+ Add</button>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
+            {gallery.map((imgUrl, idx) => (
+              <div key={idx} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 14, padding: 10 }}>
+                <img src={imgUrl} alt="" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 10, marginBottom: 10 }} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; }} />
+                <button onClick={() => handleDeleteGalleryPhoto(idx)} style={{ width: "100%", background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 0', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
 
       {tab === "gallery" && (
         <>
