@@ -3509,7 +3509,9 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
               ─── ya URL se add karo ───
             </div>
 
-            {/* URL fallback */}
+                         ─── ya URL se add karo ───
+            </div>
+
             <div style={{ display: "flex", gap: 12 }}>
               <input type="url" placeholder="Image URL..." value={newGalleryImg} onChange={e => setNewGalleryImg(e.target.value)} style={{ ...inputStyle, flex: 2 }} />
               <button onClick={handleAddGalleryPhoto} style={{ ...primaryBtn, flex: 1 }}>+ Add</button>
