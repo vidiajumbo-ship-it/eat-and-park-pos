@@ -4264,6 +4264,10 @@ export default function App() {
   const unsubCalls = onSnapshot(qCalls, (snap) => { 
     setCalls(snap.docs.map(d => ({ ...d.data(), id: d.id }))); 
   });
+   // 📅 Bookings live listener
+const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
+  setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+});
   
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
@@ -4291,6 +4295,7 @@ export default function App() {
   return () => { 
     unsubCalls(); 
     unsubOrders(); unsubOpen(); 
+    unsubBookings();
   };
 }, []);
 
