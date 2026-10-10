@@ -1,5 +1,9 @@
+
+/* eslint-disable */
+
 /* eslint-disable */
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
+ c59ac2fe05533bcd14d01af2ee227a4555f0119c
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db } from "./firebase";
 import {
@@ -71,9 +75,9 @@ function ImageUploadButton({ currentImage, onUploaded, label }) {
    Waiter Mode · Running Items · KOT · Touch Kitchen · Live Notifications
    ═══════════════════════════════════════════════════════════════════════ */
 
-// ============================================
+// ==
 // 1. CONSTANTS
-// ============================================
+// ==
 
 const FONTS = `
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
@@ -149,9 +153,9 @@ const CATEGORIES = [
 
 const VEG = COLORS.sage; const NONVEG = COLORS.rust;
 
-// ============================================
+// ==
 // 2. LOYALTY SYSTEM
-// ============================================
+// ==
 
 const LOYALTY_TIERS = [
   { name: 'Bronze', points: 0, discount: 0.05, emoji: '🥉', color: '#CD7F32' },
@@ -166,9 +170,9 @@ function getLoyaltyTier(points) {
   return tier;
 }
 
-// ============================================
+// ==
 // 3. UTILITY FUNCTIONS
-// ============================================
+// ==
 
 function inr(n) {
   const num = Number(n);
@@ -285,9 +289,9 @@ const EMPTY_STATES = {
   category_empty: { icon: "📂", title: "This category is empty", subtitle: "Check out our bestsellers in Fun Food or Tandoori!" }
 };
 
-// ============================================
+// ==
 // 4. REUSABLE COMPONENTS
-// ============================================
+// ==
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -430,9 +434,9 @@ const FlashSaleItem = memo(({ item, onAdd }) => {
   );
 });
 
-// ============================================
+// ==
 // 5. CUSTOM HOOKS
-// ============================================
+// ==
 function useLiveNow(intervalMs = 30000) {
   const [, forceTick] = useState(0);
   useEffect(() => {
@@ -495,9 +499,9 @@ const useLocalStorageOld = (key, initialValue) => {
   return [storedValue, setValue];
 };
 
-// ============================================
+// ==
 // 6. NOTIFICATION SOUND
-// ============================================
+// ==
 
 const notificationAudio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
 notificationAudio.volume = 0.5;
@@ -518,9 +522,9 @@ if (typeof window !== 'undefined') {
   document.addEventListener('touchstart', unlockAudio);
 }
 
-// ============================================
+// ==
 // 7. MENU ITEM HELPER
-// ============================================
+// ==
 
 function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true, customImg = "") {
   let img = customImg || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80";
@@ -545,9 +549,9 @@ function mi(id, name, price, category, veg, desc, portion, isBestseller = false,
   return { id, name, desc: desc || "Freshly prepared with premium ingredients.", price, category, veg, available, image: img, portion: portion || "", isBestseller };
 }
 
-// ============================================
+// ==
 // 8. LOYALTY PROGRESS
-// ============================================
+// ==
 
 const LoyaltyProgress = memo(({ currentPoints, nextTier, loyaltyRules }) => {
   if (!nextTier) return null;
@@ -569,9 +573,9 @@ const LoyaltyProgress = memo(({ currentPoints, nextTier, loyaltyRules }) => {
   );
 });
 
-// ============================================
+// ==
 // 9. CHAT BOX
-// ============================================
+// ==
 
 const ChatBox = memo(({ orderId, customerId }) => {
   const [messages, setMessages] = useState([]);
@@ -610,9 +614,9 @@ const ChatBox = memo(({ orderId, customerId }) => {
   );
 });
 
-// ============================================
+// ==
 // 10. GOOGLE REVIEW BUTTON
-// ============================================
+// ==
 
 const GoogleReviewButton = memo(({ variant = 'primary', size = 'md', showText = true }) => {
   const variants = {
@@ -632,9 +636,9 @@ const GoogleReviewButton = memo(({ variant = 'primary', size = 'md', showText = 
   );
 });
 
-// ============================================
+// ==
 // 11. PAYMENT PROCESSING
-// ============================================
+// ==
 
 const loadRazorpayScript = () => new Promise((resolve) => {
   if (window.Razorpay) { resolve(true); return; }
@@ -689,9 +693,9 @@ const processRazorpayPaymentOld = async (amount, orderId, customerName, customer
   return true;
 };
 
-// ============================================
+// ==
 // 12. KOT BADGE (V15 NEW)
-// ============================================
+// ==
 
 const KotBadge = memo(({ kots }) => {
   const count = kots?.length || 1;
@@ -703,9 +707,9 @@ const KotBadge = memo(({ kots }) => {
   );
 });
 
-// ============================================
+// ==
 // 13. KITCHEN NOTIFICATION COLUMN (V15 NEW)
-// ============================================
+// ==
 
 const KitchenNotificationColumn = memo(({ orders, selectedOrderId, onSelect }) => { useLiveNow(30000);
   const [open, setOpen] = useState(true);
@@ -771,9 +775,9 @@ const KitchenNotificationColumn = memo(({ orders, selectedOrderId, onSelect }) =
   );
 });
 
-// ============================================
+// ==
 // 14. RUNNING ORDER MODAL (V15 NEW)
-// ============================================
+// ==
 
 const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
   const [additions, setAdditions] = useState({});
@@ -827,9 +831,9 @@ const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
     </div>
   );
 });
-// ============================================
+// ==
 // 14.5 TABLE STATUS BOARD
-// ============================================
+// ==
 
 const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = true, compact = false }) => { useLiveNow(30000);
   const tableData = useMemo(() => {
@@ -1042,9 +1046,9 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = 
   );
 });
 
-// ============================================)
+// ==)
 // 15. WAITER ORDER PANEL (V15 NEW)
-// ============================================
+// ==
 
 const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAddMoreItems, orders, setMenuState, categories }) => {
   const [cart, setCart] = useState({});
@@ -1600,9 +1604,9 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
     </div>
   );
 });
-// ============================================
+// ==
 // 16. CUSTOMER VIEW
-// ============================================
+// ==
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState }) {
   const [category, setCategory] = useState(categories[0] || "Thali");
@@ -1641,10 +1645,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
   const [runningOrderId, setRunningOrderId] = useState(null);
-<<<<<<< HEAD
+
   cartRef.current = cart;
   useEffect(() => () => clearTimeout(aiTimerRef.current), []);
-=======
+
   const handleEmailLogin = async (email, password, expectedRole) => {
     try {
       const auth = getAuth();
@@ -1668,7 +1672,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   };
   cartRef.current = cart;
   useEffect(() => () => clearTimeout(aiTimerRef.current), []);
->>>>>>> c59ac2fe05533bcd14d01af2ee227a4555f0119c
+ c59ac2fe05533bcd14d01af2ee227a4555f0119c
   const [showWaiterMode, setShowWaiterMode] = useState(false);
     const [showWaiterPinModal, setShowWaiterPinModal] = useState(false);
   const [waiterPinInput, setWaiterPinInput] = useState("");
@@ -1783,8 +1787,8 @@ if (savedCart) {
         aiTimerRef.current = setTimeout(() => setAiSuggestion(null), 6000);
       }
     }
-<<<<<<< HEAD
-        setCart((prev) => {
+
+    setCart((prev) => {
       const next = { ...prev };
       if (q <= 0) delete next[id];
       else {
@@ -1794,7 +1798,29 @@ if (savedCart) {
       return next;
     });
   }, [menu]);
-  
+  const handleSetQtyOld2 = useCallback((id, q) => { ... }); = useCallback((id, q) => {
+    const prevCart = cartRef.current;
+    const oldQty = getCartQty(prevCart[id]);
+    if (q > oldQty && q === 1) {
+      const options = getSmartSuggestionPool(menu, prevCart);
+      if (options.length > 0) {
+        setAiSuggestion(options[Math.floor(Math.random() * options.length)]);
+        clearTimeout(aiTimerRef.current);
+        aiTimerRef.current = setTimeout(() => setAiSuggestion(null), 6000);
+      }
+
+    setCart((prev) => {
+      const next = { ...prev };
+      if (q <= 0) delete next[id];
+      else {
+        const existingOverride = prev[id]?.priceOverride;
+        next[id] = existingOverride != null ? { qty: q, priceOverride: existingOverride } : { qty: q };
+      }
+      return next;
+    });
+  }, [menu]);
+ 
+   
   const toggleFavorite = useCallback((itemId) => {
     if (favorites.includes(itemId)) {
       setFavorites(favorites.filter(id => id !== itemId));
@@ -1802,8 +1828,16 @@ if (savedCart) {
     } else {
       setFavorites([...favorites, itemId]);
       showToast('Added to favorites!', 'success');
+ c59ac2fe05533bcd14d01af2ee227a4555f0119c
     }
   }, [favorites, setFavorites, showToast]);
+  const toggleFavoriteOld = useCallback((itemId) => {
+    setFavorites(prev => {
+      if (prev.includes(itemId)) { showToast('Removed from favorites', 'info'); return prev.filter(id => id !== itemId); }
+      showToast('Added to favorites!', 'success');
+      return [...prev, itemId];
+    });
+  }, [setFavorites, showToast]);
 
   const sendPushNotification = useCallback((title, message) => {
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -2986,9 +3020,9 @@ const handleWaiterPinSubmitOld = () => {
   );
 }
 
-// ============================================
+// ==
 // 17. STAFF VIEW (V15 — TOUCH TO PROCEED)
-// ============================================
+// ==
 
 const STAFF_SHORTCUTS = {
   'Ctrl+K': 'Focus first order',
@@ -3187,9 +3221,9 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
   );
 }
 
-// ============================================
+// ==
 // 18. ADMIN VIEW
-// ============================================
+// ==
 
 function KitchenMetrics({ filteredOrders }) {
   const servedOrders = filteredOrders.filter(o => o.status === "served");
@@ -3876,9 +3910,9 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   );
 }
 
-// ============================================
+// ==
 // 19. DEFAULT DATA
-// ============================================
+// ==
 
 const DEFAULT_MENU = [
   // ═══════════════════════════════════════════════
@@ -4216,9 +4250,9 @@ const DEFAULT_GALLERY = [
   "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80",
   "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=400&q=80"
 ];
-// ============================================
+// ==
 // 20. ProgressRing & OrderTimer
-// ============================================
+// ==
 const ProgressRing = memo(({ progress, size = 60, strokeWidth = 3 }) => {
   const circumference = 2 * Math.PI * ((size - strokeWidth) / 2);
   const offset = circumference - (progress / 100) * circumference;
@@ -4252,9 +4286,9 @@ const OrderTimer = memo(({ createdAt, estimatedTime }) => {
   );
 });
 
-// ============================================
+// ==
 // 21. MAIN APP
-// ============================================
+// ==
 
 export default function App() {
   const [role, setRole] = useState("customer");
@@ -4492,12 +4526,12 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   
   return () => { 
     unsubCalls(); 
-<<<<<<< HEAD
+
     unsubOrders(); unsubOpen(); 
-=======
+
     unsubOrders(); unsubOpen(); 
     unsubBookings();
->>>>>>> c59ac2fe05533bcd14d01af2ee227a4555f0119c
+ c59ac2fe05533bcd14d01af2ee227a4555f0119c
   };
 }, []);
 
