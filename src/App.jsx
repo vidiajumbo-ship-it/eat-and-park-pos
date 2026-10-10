@@ -1,5 +1,9 @@
+<<<<<<< HEAD
+/* eslint-disable */
+=======
 /* eslint-disable */
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
+>>>>>>> c59ac2fe05533bcd14d01af2ee227a4555f0119c
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db } from "./firebase";
 import {
@@ -9,63 +13,61 @@ import {
 } from "firebase/firestore";
 import { QRCodeSVG } from 'qrcode.react';
 function ImageUploadButton({ currentImage, onUploaded, label }) {
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef(null);
+  const widgetRef = useRef(null);
+  const [ready, setReady] = useState(false);
 
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  useEffect(() => {
+    const tryInit = () => {
+      if (window.cloudinary) {
+        widgetRef.current = window.cloudinary.createUploadWidget(
+          {
+            cloudName: "5dfc389197bbc293b64579d25342c4",
+            uploadPreset: "eatpark_uploads",
+            sources: ["local", "camera", "url"],
+            multiple: false,
+            maxFileSize: 5000000,
+            clientAllowedFormats: ["jpg", "jpeg", "png", "webp"],
+          },
+          (error, result) => {
+            if (error) {
+              alert("Upload fail: " + (error.message || "Error"));
+              return;
+            }
+            if (result && result.event === "success") {
+              onUploaded(result.info.secure_url);
+            }
+          }
+        );
+        setReady(true);
+      } else {
+        setTimeout(tryInit, 300);
+      }
+    };
+    tryInit();
+  }, []);
 
-    // File size check (5 MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert("⚠️ File 5MB se badi hai. Chhoti image use karo.");
-      return;
-    }
-
-    setUploading(true);
-    try {
-      // 🔥 Firebase Storage use kar rahe hain
-      const storage = getStorage();
-      const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-      onUploaded(downloadURL);
-    } catch (err) {
-      console.error("Upload error:", err);
-      alert("⚠️ Upload fail: " + err.message);
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+  const openWidget = () => {
+    if (widgetRef.current) widgetRef.current.open();
   };
 
   return (
-    <div>
-      <input
-        type="file"
-        accept="image/*"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        style={{ display: "none" }}
-      />
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        disabled={uploading}
-        style={{
-          width: "100%",
-          padding: 14,
-          border: "none",
-          borderRadius: 12,
-          background: uploading ? "#999" : "#D97706",
-          color: "#fff",
-          fontWeight: 800,
-          fontSize: 14,
-          cursor: uploading ? "wait" : "pointer",
-        }}
-      >
-        {uploading ? "⏳ Uploading..." : label || "📸 Upload Image"}
-      </button>
-    </div>
+    <button
+      onClick={openWidget}
+      disabled={!ready}
+      style={{
+        width: "100%",
+        padding: 14,
+        border: "none",
+        borderRadius: 12,
+        background: ready ? "#D97706" : "#999",
+        color: "#fff",
+        fontWeight: 800,
+        fontSize: 14,
+        cursor: ready ? "pointer" : "wait",
+      }}
+    >
+      {ready ? (label || "📸 Upload Image") : "⏳ Loading..."}
+    </button>
   );
 }
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1643,6 +1645,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
   const [runningOrderId, setRunningOrderId] = useState(null);
+<<<<<<< HEAD
+  cartRef.current = cart;
+  useEffect(() => () => clearTimeout(aiTimerRef.current), []);
+=======
   const handleEmailLogin = async (email, password, expectedRole) => {
     try {
       const auth = getAuth();
@@ -1666,6 +1672,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   };
   cartRef.current = cart;
   useEffect(() => () => clearTimeout(aiTimerRef.current), []);
+>>>>>>> c59ac2fe05533bcd14d01af2ee227a4555f0119c
   const [showWaiterMode, setShowWaiterMode] = useState(false);
     const [showWaiterPinModal, setShowWaiterPinModal] = useState(false);
   const [waiterPinInput, setWaiterPinInput] = useState("");
@@ -1780,6 +1787,28 @@ if (savedCart) {
         aiTimerRef.current = setTimeout(() => setAiSuggestion(null), 6000);
       }
     }
+<<<<<<< HEAD
+    setCart((prev) => {
+      const next = { ...prev };
+      if (q <= 0) delete next[id];
+      else {
+        const existingOverride = prev[id]?.priceOverride;
+        next[id] = existingOverride != null ? { qty: q, priceOverride: existingOverride } : { qty: q };
+      }
+      return next;
+    });
+  }, [menu]);
+  const handleSetQtyOld2 = useCallback((id, q) => { ... }); = useCallback((id, q) => {
+    const prevCart = cartRef.current;
+    const oldQty = getCartQty(prevCart[id]);
+    if (q > oldQty && q === 1) {
+      const options = getSmartSuggestionPool(menu, prevCart);
+      if (options.length > 0) {
+        setAiSuggestion(options[Math.floor(Math.random() * options.length)]);
+        clearTimeout(aiTimerRef.current);
+        aiTimerRef.current = setTimeout(() => setAiSuggestion(null), 6000);
+      }
+=======
     setCart((prev) => {
       const next = { ...prev };
       if (q <= 0) delete next[id];
@@ -1799,6 +1828,7 @@ if (savedCart) {
     } else {
       setFavorites([...favorites, itemId]);
       showToast('Added to favorites!', 'success');
+>>>>>>> c59ac2fe05533bcd14d01af2ee227a4555f0119c
     }
   }, [favorites, setFavorites, showToast]);
   const toggleFavoriteOld = useCallback((itemId) => {
@@ -4496,8 +4526,12 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   
   return () => { 
     unsubCalls(); 
+<<<<<<< HEAD
+    unsubOrders(); unsubOpen(); 
+=======
     unsubOrders(); unsubOpen(); 
     unsubBookings();
+>>>>>>> c59ac2fe05533bcd14d01af2ee227a4555f0119c
   };
 }, []);
 
