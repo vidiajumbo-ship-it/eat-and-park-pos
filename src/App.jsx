@@ -1,4 +1,5 @@
 /* eslint-disable */
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db } from "./firebase";
 import {
