@@ -62,7 +62,7 @@ const COLORS = {
 const RESTAURANT = {
   name: "Eat & Park", full: "Eat & Park Restaurant", tagline: "A Premium Family Restaurant",
   address: "Girja More, Ara – Buxar Main Road, Pakri, Ara",
-  phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "apnanumber@upi"
+  phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "heckeyhr@ybl"
 };
 
 const GOOGLE_PLACE_ID = "ChIJc8jv-j9fjTkRYFQLM7KK1aA";
@@ -447,6 +447,19 @@ notificationAudio.volume = 0.5;
 const playNotificationSound = () => {
   try { notificationAudio.currentTime = 0; notificationAudio.play().catch(e => console.log("Sound play error:", e)); } catch (e) { console.log("Sound error:", e); }
 };
+// 🔓 Audio unlock on first user interaction (browser autoplay fix)
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    notificationAudio.play().then(() => {
+      notificationAudio.pause();
+      notificationAudio.currentTime = 0;
+    }).catch(() => {});
+    document.removeEventListener('click', unlockAudio);
+    document.removeEventListener('touchstart', unlockAudio);
+  };
+  document.addEventListener('click', unlockAudio);
+  document.addEventListener('touchstart', unlockAudio);
+}
 
 // ============================================
 // 7. MENU ITEM HELPER
@@ -2185,15 +2198,43 @@ const handleWaiterPinSubmitOld = () => {
     } finally { setIsProcessingPayment(false); }
   }, [cartItems, custName, custPhone, custAddress, orderType, table, paymentMethod, finalTotal, claimedReward, isScheduled, scheduleDate, scheduleTime, appliedDiscount, loyaltyDiscount, loyaltyTier, notes, menu, placeOrder, sendPushNotification, myOrderIds, showToast]);
 
-  const handleBooking = async () => {
-    if (!bookData.name || !bookData.phone || !bookData.date || !bookData.time || !bookData.guests) { showToast("⚠️ Fill all fields", 'error'); return; }
-    const newBooking = { ...bookData, type: bookType, id: uid("b"), status: "pending", createdAt: Date.now() };
-    await bookEvent(newBooking);
-    setConfirmedBooking(newBooking);
-    setBookData({ name: "", phone: "", date: "", time: "", guests: "" });
-    showToast("✅ Booking Sent!", 'success');
+ const handleBooking = async () => {
+  if (!bookData.name || !bookData.phone || !bookData.date || !bookData.time || !bookData.guests) { 
+    showToast("⚠️ Fill all fields", 'error'); 
+    return; 
+  }
+
+  const newBooking = { 
+    ...bookData, 
+    type: bookType, 
+    id: uid("b"), 
+    status: "pending", 
+    createdAt: Date.now() 
   };
 
+  await bookEvent(newBooking);
+
+  // 📲 WhatsApp notification to restaurant
+  const bookingType = bookType === "party" ? "🎉 PARTY BOOKING" : "🍽️ TABLE BOOKING";
+  const waText = 
+    `*${bookingType} REQUEST*%0A%0A` +
+    `*Name:* ${bookData.name}%0A` +
+    `*Phone:* ${bookData.phone}%0A` +
+    `*Date:* ${bookData.date}%0A` +
+    `*Time:* ${bookData.time}%0A` +
+    `*Guests:* ${bookData.guests}%0A` +
+    `*Booking ID:* #${newBooking.id.slice(1, 6).toUpperCase()}%0A%0A` +
+    `_Sent from Eat & Park App_`;
+
+  window.open(
+    `https://wa.me/${RESTAURANT.whatsapp}?text=${waText}`,
+    "_blank"
+  );
+
+  setConfirmedBooking(newBooking);
+  setBookData({ name: "", phone: "", date: "", time: "", guests: "" });
+  showToast("✅ Booking Sent! WhatsApp kholo aur Send dabao.", 'success');
+};
   const addComboToCart = useCallback((combo) => {
     const lines = combo.items.map(it => ({ ...it, menuItem: menu.find(m => m.id === it.id) }));
     if (lines.some(l => !l.menuItem || !l.menuItem.available)) { showToast("⚠️ Combo ka koi item available nahi", 'warning'); return; }
@@ -3584,12 +3625,43 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
         </div>
       )}
 
-      {tab === "bookings" && (
+            {tab === "bookings" && (
         <div style={{ overflowX: "auto", borderRadius: 16, border: `1px solid ${COLORS.line}` }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
             <thead><tr style={{ background: COLORS.paper }}><th style={th}>Type</th><th style={th}>Details</th><th style={th}>Date</th><th style={th}>Action</th></tr></thead>
             <tbody>
-              {bookings.map(b => (<tr key={b.id}><td style={td}>{b.type === "party" ? "🎉 Party" : "🍽️ Table"}</td><td style={td}><strong>{b.name}</strong><br />{b.phone}<br />{b.guests} Guests</td><td style={td}>{b.date} at {b.time}</td><td style={td}><button onClick={() => deleteBooking(b.id)} style={{ background: 'transparent', border: `1.5px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>Delete</button></td></tr>))}
+              {bookings.map(b => (
+                <tr key={b.id}>
+                  <td style={td}>{b.type === "party" ? "🎉 Party" : "🍽️ Table"}</td>
+                  <td style={td}><strong>{b.name}</strong><br />{b.phone}<br />{b.guests} Guests</td>
+                  <td style={td}>{b.date} at {b.time}</td>
+                  <td style={td}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <a 
+                        href={`https://wa.me/91${b.phone}?text=${encodeURIComponent(
+                          `Hello ${b.name}! 🍽️\n\nAapki ${b.type === "party" ? "Party" : "Table"} booking confirm ho gayi hai.\n\n📅 Date: ${b.date}\n⏰ Time: ${b.time}\n👥 Guests: ${b.guests}\n\nEat & Park mein aapka swagat hai! 🎉`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ 
+                          background: '#25D366', color: '#fff', 
+                          padding: '6px 12px', borderRadius: 8, 
+                          textDecoration: 'none', fontWeight: 700, fontSize: 12,
+                          display: 'inline-flex', alignItems: 'center', gap: 4
+                        }}
+                      >
+                        ✅ Confirm
+                      </a>
+                      <button 
+                        onClick={() => deleteBooking(b.id)} 
+                        style={{ background: 'transparent', border: `1.5px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -4182,6 +4254,11 @@ export default function App() {
   };
 
   useEffect(() => {
+      // 🔔 Notification permission maango
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+
   const fetchAllData = async () => {
     try {
       const lq = await getDocs(collection(db, "loyaltyUsers"));
