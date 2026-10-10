@@ -1697,26 +1697,7 @@ if (savedCart) {
     });
   }, [menu]);
  
-    const prevCart = cartRef.current;
-    const oldQty = getCartQty(prevCart[id]);
-    if (q > oldQty && q === 1) {
-      const options = getSmartSuggestionPool(menu, prevCart);
-      if (options.length > 0) {
-        setAiSuggestion(options[Math.floor(Math.random() * options.length)]);
-        clearTimeout(aiTimerRef.current);
-        aiTimerRef.current = setTimeout(() => setAiSuggestion(null), 6000);
-      }
-    }
-    setCart((prev) => {
-      const next = { ...prev };
-      if (q <= 0) delete next[id];
-      else {
-        const existingOverride = prev[id]?.priceOverride;
-        next[id] = existingOverride != null ? { qty: q, priceOverride: existingOverride } : { qty: q };
-      }
-      return next;
-    });
-  }, [menu]);
+   
   const toggleFavorite = useCallback((itemId) => {
     if (favorites.includes(itemId)) {
       setFavorites(favorites.filter(id => id !== itemId));
