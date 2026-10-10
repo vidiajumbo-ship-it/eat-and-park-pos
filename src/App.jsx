@@ -1783,10 +1783,7 @@ if (savedCart) {
       return next;
     });
   
- 
-   
->>>>>>> 836c1c0f5d75038a9f8970d8a27d439a0a44a659
-  const toggleFavorite = useCallback((itemId) => {
+    const toggleFavorite = useCallback((itemId) => {
     if (favorites.includes(itemId)) {
       setFavorites(favorites.filter(id => id !== itemId));
       showToast('Removed from favorites', 'info');
