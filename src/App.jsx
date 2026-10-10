@@ -1,7 +1,6 @@
 
 /* eslint-disable */
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
- 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db } from "./firebase";
 import {
@@ -1772,17 +1771,6 @@ if (savedCart) {
     });
   }, [menu]);
 
-    setCart((prev) => {
-      const next = { ...prev };
-    
-      if (q <= 0) delete next[id];
-      else {
-        const existingOverride = prev[id]?.priceOverride;
-        next[id] = existingOverride != null ? { qty: q, priceOverride: existingOverride } : { qty: q };
-      }
-      return next;
-    });
-  
     const toggleFavorite = useCallback((itemId) => {
     if (favorites.includes(itemId)) {
       setFavorites(favorites.filter(id => id !== itemId));
@@ -3668,8 +3656,7 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
 
 // 18. ADMIN VIEW — HELPER COMPONENTS
 
-// 17.5 (KEEP — ye closing hai StaffView ka)
- 836c1c0f5d75038a9f8970d8a27d439a0a44a659
+ 
 // ==
 
 function KitchenMetrics({ filteredOrders }) {
