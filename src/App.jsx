@@ -3291,10 +3291,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           <div id="report-content" style={{ display: 'none' }}><div style={{ padding: 20 }}><h2>{RESTAURANT.name} - Report</h2><p>Date: {filterDate}</p><p>Orders: {filteredOrders.length}</p><p>Revenue: {inr(revenue)}</p></div></div>
         </>
       )}
-
-            {tab === "settings" && (
-        <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16 }}>
-          <h3 style={{ marginTop: 0, marginBottom: 16 }}>🖼️ Hero Image</h3>
+{tab === "settings" &&
                 {tab === "settings" && (
         <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16 }}>
           <h3 style={{ marginTop: 0, marginBottom: 16 }}>🖼️ Hero Image / Wallpaper</h3>
