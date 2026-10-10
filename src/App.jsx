@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 /* eslint-disable */
 =======
 /* eslint-disable */
