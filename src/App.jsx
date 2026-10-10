@@ -1696,7 +1696,7 @@ if (savedCart) {
       return next;
     });
   }, [menu]);
-  const handleSetQtyOld = useCallback((id, q) => {
+  const handleSetQtyOld2 = useCallback((id, q) => { ... }); = useCallback((id, q) => {
     const prevCart = cartRef.current;
     const oldQty = getCartQty(prevCart[id]);
     if (q > oldQty && q === 1) {
@@ -1717,28 +1717,7 @@ if (savedCart) {
       return next;
     });
   }, [menu]);
-  const handleSetQtyOld = useCallback((id, q) => {
-  setCart((prevCart) => {
-    const oldQty = getCartQty(prevCart[id]);
-    if (q > oldQty && q === 1) {
-      const options = getSmartSuggestionPool(menu, prevCart);
-      if (options.length > 0) {
-        const randomSug = options[Math.floor(Math.random() * options.length)];
-        setAiSuggestion(randomSug);
-        setTimeout(() => setAiSuggestion(null), 6000);
-      }
-    }
-    const next = { ...prevCart };
-    if (q <= 0) {
-      delete next[id];
-    } else {
-      const existingOverride = prevCart[id]?.priceOverride;
-      next[id] = existingOverride != null
-        ? { qty: q, priceOverride: existingOverride }
-        : { qty: q };
-    }
-    return next;
-  });
+ 
 }, [menu]);
   const toggleFavorite = useCallback((itemId) => {
     if (favorites.includes(itemId)) {
@@ -1850,26 +1829,7 @@ if (savedCart) {
     window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
     return order;
   }, [placeOrder]);
-  const handleWaiterOrderOld = useCallback(async ({ table: t, items, waiterName, customerName, customerPhone, notes: orderNotes }) => {
-    const orderId = uid("o");
-    const total = items.reduce((s, it) => s + it.price * it.qty, 0);
-    const order = {
-      id: orderId, table: t, orderType: "dine_in",
-      customer: { name: customerName, phone: customerPhone || "WALK-IN", address: "" },
-      items, waiter: waiterName || "Staff", takenBy: "waiter",
-      kots: [{ id: uid("kot"), kotNumber: 1, items: items.map(it => ({ ...it, kotNumber: 1 })), createdAt: Date.now(), status: "new", isRunning: false }],
-      notes: orderNotes, payment: "cash", paymentStatus: "pending",
-      status: "new", paid: false, createdAt: Date.now(),
-      coinsClaimed: true, earnedCoins: 0, rewardUsedCoins: 0,
-      deliveryFee: 0, loyaltyDiscount: 0, discount: 0,
-      subtotal: total, finalTotal: total
-    };
-    await placeOrder(order);
-    playNotificationSound();
-    const waText = `🧑‍🍳 *WAITER ORDER* (#${orderId.slice(1, 5).toUpperCase()})\nTable ${t} · Waiter: ${waiterName || "Staff"}\nCustomer: ${customerName}\n` + items.map(i => `• ${i.qty}x ${i.name}`).join("\n") + (orderNotes ? `\nNotes: ${orderNotes}` : "") + `\n\nTotal: ₹${total}`;
-    window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
-    return order;
-  }, [placeOrder]);
+  
   const handleWaiterOrderOld = useCallback(async ({ table: t, items, waiterName, customerName, customerPhone, notes: orderNotes }) => {
     const orderId = uid("o");
     const total = items.reduce((s, it) => s + it.price * it.qty, 0);
