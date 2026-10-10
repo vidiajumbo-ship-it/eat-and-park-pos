@@ -3481,59 +3481,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           </div>
         </div>
       )}
-
-      {tab === "gallery" && (
-        <>
-          <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 16 }}>📸 Add Photo</h3>
-
-            {/* 📸 Upload from device */}
-            <div style={{ marginBottom: 16 }}>
-              <ImageUploadButton
-                currentImage={newGalleryImg}
-                onUploaded={(url) => {
-                  setNewGalleryImg(url);
-                  setTimeout(() => {
-                    const u = [...gallery, url];
-                    setGallery(u);
-                    setDoc(doc(db, "settings", "gallery"), { images: u }).catch(console.error);
-                    setNewGalleryImg("");
-                    alert("✅ Photo gallery mein add ho gayi!");
-                  }, 100);
-                }}
-                label="📸 Upload Photo (Phone / Camera / Gallery)"
-              />
-            </div>
-
-            <div style={{ fontSize: 12, color: COLORS.textLight, textAlign: 'center', marginBottom: 12 }}>
-              ─── ya URL se add karo ───
-            </div>
-
-                         ─── ya URL se add karo ───
-            </div>
-
-            <div style={{ display: "flex", gap: 12 }}>
-              <input type="url" placeholder="Image URL..." value={newGalleryImg} onChange={e => setNewGalleryImg(e.target.value)} style={{ ...inputStyle, flex: 2 }} />
-              <button onClick={handleAddGalleryPhoto} style={{ ...primaryBtn, flex: 1 }}>+ Add</button>
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
-            {gallery.map((imgUrl, idx) => (
-              <div key={idx} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 14, padding: 10 }}>
-                <img src={imgUrl} alt="" style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 10, marginBottom: 10 }} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; }} />
-                <button onClick={() => handleDeleteGalleryPhoto(idx)} style={{ width: "100%", background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 0', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-
-      {tab === "gallery" && (
-        <>
-          <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 16 }}>📸 Add Photo</h3>
                   {tab === "gallery" && (
         <>
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30 }}>
