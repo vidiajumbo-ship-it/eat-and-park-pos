@@ -1784,7 +1784,7 @@ if (savedCart) {
       }
     }
 <<<<<<< HEAD
-    setCart((prev) => {
+        setCart((prev) => {
       const next = { ...prev };
       if (q <= 0) delete next[id];
       else {
@@ -1794,29 +1794,7 @@ if (savedCart) {
       return next;
     });
   }, [menu]);
-  const handleSetQtyOld2 = useCallback((id, q) => { ... }); = useCallback((id, q) => {
-    const prevCart = cartRef.current;
-    const oldQty = getCartQty(prevCart[id]);
-    if (q > oldQty && q === 1) {
-      const options = getSmartSuggestionPool(menu, prevCart);
-      if (options.length > 0) {
-        setAiSuggestion(options[Math.floor(Math.random() * options.length)]);
-        clearTimeout(aiTimerRef.current);
-        aiTimerRef.current = setTimeout(() => setAiSuggestion(null), 6000);
-      }
-=======
-    setCart((prev) => {
-      const next = { ...prev };
-      if (q <= 0) delete next[id];
-      else {
-        const existingOverride = prev[id]?.priceOverride;
-        next[id] = existingOverride != null ? { qty: q, priceOverride: existingOverride } : { qty: q };
-      }
-      return next;
-    });
-  }, [menu]);
- 
-   
+  
   const toggleFavorite = useCallback((itemId) => {
     if (favorites.includes(itemId)) {
       setFavorites(favorites.filter(id => id !== itemId));
@@ -1824,16 +1802,8 @@ if (savedCart) {
     } else {
       setFavorites([...favorites, itemId]);
       showToast('Added to favorites!', 'success');
->>>>>>> c59ac2fe05533bcd14d01af2ee227a4555f0119c
     }
   }, [favorites, setFavorites, showToast]);
-  const toggleFavoriteOld = useCallback((itemId) => {
-    setFavorites(prev => {
-      if (prev.includes(itemId)) { showToast('Removed from favorites', 'info'); return prev.filter(id => id !== itemId); }
-      showToast('Added to favorites!', 'success');
-      return [...prev, itemId];
-    });
-  }, [setFavorites, showToast]);
 
   const sendPushNotification = useCallback((title, message) => {
     if ('Notification' in window && Notification.permission === 'granted') {
