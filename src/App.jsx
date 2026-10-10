@@ -1,3 +1,4 @@
+/* eslint-disable */
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db } from "./firebase";
 import {
@@ -116,7 +117,25 @@ function inr(n) {
   if (!Number.isFinite(num)) return "₹0";
   return "₹" + num.toLocaleString("en-IN");
 }
+/* eslint-disable */
 function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// Ek hi jagah se order total (coupon + loyalty + delivery sab included)
+function getOrderTotal(o) {
+  const hasRunning = (o?.kots || []).some(k => k.isRunning);
+  if (Number.isFinite(o?.finalTotal) && !hasRunning) return o.finalTotal;
+  const sub = (o?.items || []).reduce((s, it) => s + it.price * it.qty, 0);
+  const coupon = Math.round((sub * (o?.discount || 0)) / 100);
+  return Math.max(0, sub - coupon - (o?.loyaltyDiscount || 0)) + (o?.deliveryFee || 0);
+}
+
+const patchAt = (list, idx, patch) => list.map((x, i) => (i === idx ? { ...x, ...patch } : x));
+
+const DEMO_OTP = process.env.REACT_APP_DEMO_OTP === "true";
 function timeAgo(ts) { const s = Math.floor((Date.now() - ts) / 1000); if (s < 60) return s + "s ago"; const m = Math.floor(s / 60); if (m < 60) return m + "m ago"; return Math.floor(m / 60) + "h ago"; }
 function toLocalISODate(timestamp) { const d = new Date(timestamp); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]; }
 
@@ -148,6 +167,15 @@ function getCartLineTotal(cartEntry, menuItem) {
 }
 
 function getSmartSuggestionPool(menu, cart) {
+  const hour = new Date().getHours();
+  let cats;
+  if (hour < 11) cats = ["Shakes & Drinks", "Momos & Rolls"];
+  else if (hour < 15) cats = ["Biryani & Rice", "Thali", "Dal, Roti & Chole"];
+  else if (hour < 18) cats = ["Maggi, Corn & Fries", "Shakes & Drinks", "Momos & Rolls"];
+  else cats = ["Tandoor", "Chinese", "Paneer & Mushroom"];
+  return menu.filter(m => cats.includes(m.category) && m.available && !cart[m.id]);
+}
+function getSmartSuggestionPoolOld(menu, cart) {
   const hour = new Date().getHours();
   let pool = [];
   if (hour < 11) pool = menu.filter(m => m.category.includes("Tea") || m.category.includes("Bread"));
@@ -227,7 +255,7 @@ class ErrorBoundary extends React.Component {
             {'\n\n'}
             {this.state.errorInfo?.componentStack}
           </pre>
-          <button onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>Clear Cache & Refresh</button>
+          <button onClick={() => { try { localStorage.removeItem('eatpark_cart'); } catch (e) {} window.location.reload(); }} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>Clear Cache & Refresh</button>
         </div>
       );
     }
@@ -328,7 +356,7 @@ const ComboCard = memo(({ combo, onAdd }) => {
 });
 
 const FlashSaleItem = memo(({ item, onAdd }) => {
-  if (!item.active) return null;
+  if (!item.active || (item.stock != null && item.stock <= 0)) return null;
   return (
     <div style={{ background: '#fff', borderRadius: 12, border: `2px solid ${COLORS.error}`, padding: 12, minWidth: 150, flexShrink: 0 }}>
       <div style={{ fontSize: 20 }}>🔥</div>
@@ -337,6 +365,8 @@ const FlashSaleItem = memo(({ item, onAdd }) => {
         <span style={{ fontWeight: 800, color: COLORS.error }}>₹{item.discountPrice}</span>
         <span style={{ textDecoration: 'line-through', fontSize: 12, color: COLORS.textLight }}>₹{item.price}</span>
       </div>
+      {item.stock != null && item.stock <= 5 && (<div style={{ fontSize: 11, color: COLORS.error, fontWeight: 700, marginBottom: 4 }}>Only {item.stock} left!</div>)}
+      {item.stock != null && item.stock <= 5 && (<div style={{ fontSize: 11, color: COLORS.error, fontWeight: 700, marginBottom: 4 }}>Only {item.stock} left!</div>)}
       <button onClick={onAdd} style={{ background: COLORS.error, color: '#fff', border: 'none', padding: '4px 12px', borderRadius: 6, fontWeight: 700, width: '100%', cursor: 'pointer' }}>Add</button>
     </div>
   );
@@ -353,6 +383,35 @@ function useLiveNow(intervalMs = 30000) {
   }, [intervalMs]);
 }
 const useLocalStorage = (key, initialValue) => {
+  const [storedValue, setStoredValue] = useState(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) { return initialValue; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(key, JSON.stringify(storedValue)); }
+    catch (error) { console.error('useLocalStorage error:', error); }
+  }, [key, storedValue]);
+  return [storedValue, setStoredValue];
+};
+
+// 5 galat PIN ke baad 30 second lock
+function usePinLockout(max = 5, lockMs = 30000) {
+  const [fails, setFails] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState(0);
+  return {
+    isLocked: () => Date.now() < lockedUntil,
+    secondsLeft: () => Math.max(0, Math.ceil((lockedUntil - Date.now()) / 1000)),
+    registerFail: () => {
+      const n = fails + 1;
+      if (n >= max) { setLockedUntil(Date.now() + lockMs); setFails(0); } else setFails(n);
+    },
+    reset: () => setFails(0)
+  };
+}
+
+const useLocalStorageOld = (key, initialValue) => {
   const [storedValue, setStoredValue] = useState(() => {
     try {
       const item = window.localStorage.getItem(key);
@@ -446,7 +505,7 @@ const LoyaltyProgress = memo(({ currentPoints, nextTier, loyaltyRules }) => {
 const ChatBox = memo(({ orderId, customerId }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const messagesRef = collection(db, 'chats', orderId, 'messages');
+  const messagesRef = useMemo(() => collection(db, 'chats', orderId, 'messages'), [orderId]);
   useEffect(() => {
     try {
       const q = query(messagesRef, orderBy('timestamp', 'asc'));
@@ -507,6 +566,7 @@ const GoogleReviewButton = memo(({ variant = 'primary', size = 'md', showText = 
 // ============================================
 
 const loadRazorpayScript = () => new Promise((resolve) => {
+  if (window.Razorpay) { resolve(true); return; }
   const script = document.createElement('script');
   script.src = 'https://checkout.razorpay.com/v1/checkout.js';
   script.onload = () => resolve(true);
@@ -514,7 +574,36 @@ const loadRazorpayScript = () => new Promise((resolve) => {
   document.body.appendChild(script);
 });
 
-const processRazorpayPayment = async (amount, orderId, customerName, customerPhone) => {
+// Success pe Razorpay response, cancel/fail pe null return karta hai
+const processRazorpayPayment = (amount, orderId, customerName, customerPhone) =>
+  new Promise(async (resolve) => {
+    if (!RAZORPAY_KEY || RAZORPAY_KEY.startsWith("YOUR_")) {
+      alert("⚠️ Razorpay key configure nahi hai.");
+      return resolve(null);
+    }
+    const loaded = await loadRazorpayScript();
+    if (!loaded || !window.Razorpay) { alert("⚠️ Payment gateway load nahi hua."); return resolve(null); }
+    const rzp = new window.Razorpay({
+      key: RAZORPAY_KEY, amount: Math.round(amount * 100), currency: "INR",
+      name: RESTAURANT.name, description: `Order #${orderId.slice(1, 5).toUpperCase()}`,
+      prefill: { name: customerName, contact: customerPhone },
+      theme: { color: COLORS.copper },
+      handler: (response) => resolve(response),
+      modal: { ondismiss: () => resolve(null) }
+    });
+    rzp.on('payment.failed', () => resolve(null));
+    rzp.open();
+  });
+
+const loadRazorpayScriptOld = () => new Promise((resolve) => {
+  const script = document.createElement('script');
+  script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+  script.onload = () => resolve(true);
+  script.onerror = () => resolve(false);
+  document.body.appendChild(script);
+});
+
+const processRazorpayPaymentOld = async (amount, orderId, customerName, customerPhone) => {
   const loaded = await loadRazorpayScript();
   if (!loaded) { alert("⚠️ Payment gateway could not load."); return false; }
   const options = {
@@ -630,7 +719,7 @@ const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
             <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 800 }}>➕ Add Running Items</div>
-            <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>Order #{order.id.slice(1, 5).toUpperCase()} · New KOT #{((order.kots?.length || 1) + 1)}</div>
+            <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>Order #{order.id.slice(1, 5).toUpperCase()} · New KOT #{Math.max(1, ...(order.kots || [{ kotNumber: 1 }]).map(k => k.kotNumber || 1)) + 1}</div>
           </div>
           <button onClick={onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, fontSize: 18, cursor: "pointer" }}>✕</button>
         </div>
@@ -1007,7 +1096,13 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
           qty: getCartQty(entry)
         };
       });
-      const created = await onSubmit({ table, items, waiterName, customerName: customerName || "Walk-in", customerPhone: customerPhone || "", notes });
+      let created = null;
+      try {
+        created = await onSubmit({ table, items, waiterName, customerName: customerName || "Walk-in", customerPhone: customerPhone || "", notes });
+      } catch (err) {
+        console.error(err);
+        alert("❌ Order send nahi hua. Internet check karke dobara try karo.");
+      }
       if (created) {
         setPlacedOrder(created);
         setCart({});
@@ -1018,6 +1113,25 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   };
 
   const handlePrintKOT = (order) => {
+    const w = window.open('', '_blank', 'width=300,height=600');
+    if (!w) return;
+    const totalAmount = getOrderTotal(order);
+    w.document.write(`<html><head><title>KOT</title>
+      <style>body{font-family:monospace;font-size:13px;padding:12px;width:280px}
+      h2,h4{text-align:center;margin:4px 0}
+      .row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed #000}</style></head><body>
+      <h2>${escapeHtml(RESTAURANT.name)}</h2>
+      <h4>WAITER ORDER — TABLE ${escapeHtml(order.table)}</h4>
+      <p>Order: #${escapeHtml(order.id.toUpperCase())}<br/>Waiter: ${escapeHtml(order.waiter || "-")}<br/>Customer: ${escapeHtml(order.customer.name)}</p>
+      <div style="margin-top:10px">
+        ${order.items.map(it => `<div class="row"><span>${it.qty}x ${escapeHtml(it.name)}</span><span>₹${it.price * it.qty}</span></div>`).join('')}
+      </div>
+      <div style="text-align:right;font-weight:bold;margin-top:12px;font-size:15px">Total: ₹${totalAmount}</div>
+      <p style="text-align:center;margin-top:12px;font-size:11px">— Thank You —</p>
+      <script>window.print();setTimeout(()=>window.close(),500)</script></body></html>`);
+    w.document.close();
+  };
+  const handlePrintKOTOld = (order) => {
     const w = window.open('', '_blank', 'width=300,height=600');
     if (!w) return;
     const totalAmount = order.items.reduce((s, it) => s + (it.price * it.qty), 0);
@@ -1038,7 +1152,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   };
 
   // Running Tables List Component
-  const RunningTablesList = () => {
+  const renderRunningTables = () => {
     if (runningTables.length === 0) return null;
     return (
       <div style={{ background: 'linear-gradient(135deg, #FFF8E1 0%, #FFE0B2 100%)', borderRadius: 14, padding: 14, marginBottom: 16, border: `1.5px solid ${COLORS.warning}` }}>
@@ -1310,7 +1424,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
             </button>
           </div>
 
-          <RunningTablesList />
+          {renderRunningTables()}
 
           <div style={{ fontSize: 11, color: COLORS.textLight, textAlign: 'center', lineHeight: 1.5 }}>
             💡 Tap any running table above to add extra items (new KOT).
@@ -1355,7 +1469,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
           ➕ Add New Menu Item
         </button>
 
-        <RunningTablesList />
+        {renderRunningTables()}
 
         {currentTableRunning && (
           <div style={{ background: '#FFF3E0', border: `1.5px solid ${COLORS.warning}`, borderRadius: 12, padding: 12, marginBottom: 12 }}>
@@ -1420,7 +1534,10 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
 // ============================================
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState }) {
-  const [category, setCategory] = useState(categories[0] || "Drinks");  const [cart, setCart] = useState({});
+  const [category, setCategory] = useState(categories[0] || "Thali");
+  const cartRef = useRef({});
+  const aiTimerRef = useRef(null);
+  const waiterLock = usePinLockout();  const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
@@ -1453,6 +1570,8 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
   const [runningOrderId, setRunningOrderId] = useState(null);
+  cartRef.current = cart;
+  useEffect(() => () => clearTimeout(aiTimerRef.current), []);
   const [showWaiterMode, setShowWaiterMode] = useState(false);
     const [showWaiterPinModal, setShowWaiterPinModal] = useState(false);
   const [waiterPinInput, setWaiterPinInput] = useState("");
@@ -1472,7 +1591,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   if (vegOnly) emptyReason = 'veg_filtered';
   else if (searchQuery && searchQuery.trim() !== '') emptyReason = 'search_no_results';
 
-  const cartItems = Object.entries(cart).filter(([, entry]) => getCartQty(entry) > 0);
+  const cartItems = Object.entries(cart).filter(([id, entry]) => getCartQty(entry) > 0 && menu.some(m => m.id === id));
 const cartCount = cartItems.reduce((s, [, entry]) => s + getCartQty(entry), 0);
 const subtotal = cartItems.reduce((s, [id, entry]) => {
   const item = menu.find((m) => m.id === id);
@@ -1484,8 +1603,8 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
   const currentCoins = activeUser ? activeUser.coins : 0;
   const loyaltyTier = getLoyaltyTier(currentCoins);
-  const loyaltyDiscount = loyaltyTier.discount * subtotal;
-  const finalTotal = cartTotal - loyaltyDiscount;
+  const loyaltyDiscount = activeUser ? Math.round(loyaltyTier.discount * subtotal) : 0;
+  const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDiscount) + deliveryFee;
   const newEarnedCoins = Math.floor(finalTotal / loyaltyRules.rate);
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served" && o.status !== "cancelled");
   const myOrders = orders.filter(o => myOrderIds.includes(o.id));
@@ -1533,7 +1652,12 @@ if (savedCart) {
     if (custName || custPhone) localStorage.setItem('eatpark_customer', JSON.stringify({ name: custName, phone: custPhone, address: custAddress, isLoggedIn }));
   }, [custName, custPhone, custAddress, isLoggedIn]);
 
-  useEffect(() => { if (Object.keys(cart).length > 0) localStorage.setItem('eatpark_cart', JSON.stringify(cart)); }, [cart]);
+  useEffect(() => {
+    try {
+      if (Object.keys(cart).length > 0) localStorage.setItem('eatpark_cart', JSON.stringify(cart));
+      else localStorage.removeItem('eatpark_cart');
+    } catch (e) {}
+  }, [cart]);
 
   useEffect(() => {
     if (myOrderIds.length === 0) return;
@@ -1552,6 +1676,48 @@ if (savedCart) {
   }, [myOrderIds.join(",")]);
 
   const handleSetQty = useCallback((id, q) => {
+    const prevCart = cartRef.current;
+    const oldQty = getCartQty(prevCart[id]);
+    if (q > oldQty && q === 1) {
+      const options = getSmartSuggestionPool(menu, prevCart);
+      if (options.length > 0) {
+        setAiSuggestion(options[Math.floor(Math.random() * options.length)]);
+        clearTimeout(aiTimerRef.current);
+        aiTimerRef.current = setTimeout(() => setAiSuggestion(null), 6000);
+      }
+    }
+    setCart((prev) => {
+      const next = { ...prev };
+      if (q <= 0) delete next[id];
+      else {
+        const existingOverride = prev[id]?.priceOverride;
+        next[id] = existingOverride != null ? { qty: q, priceOverride: existingOverride } : { qty: q };
+      }
+      return next;
+    });
+  }, [menu]);
+  const handleSetQtyOld = useCallback((id, q) => {
+    const prevCart = cartRef.current;
+    const oldQty = getCartQty(prevCart[id]);
+    if (q > oldQty && q === 1) {
+      const options = getSmartSuggestionPool(menu, prevCart);
+      if (options.length > 0) {
+        setAiSuggestion(options[Math.floor(Math.random() * options.length)]);
+        clearTimeout(aiTimerRef.current);
+        aiTimerRef.current = setTimeout(() => setAiSuggestion(null), 6000);
+      }
+    }
+    setCart((prev) => {
+      const next = { ...prev };
+      if (q <= 0) delete next[id];
+      else {
+        const existingOverride = prev[id]?.priceOverride;
+        next[id] = existingOverride != null ? { qty: q, priceOverride: existingOverride } : { qty: q };
+      }
+      return next;
+    });
+  }, [menu]);
+  const handleSetQtyOld = useCallback((id, q) => {
   setCart((prevCart) => {
     const oldQty = getCartQty(prevCart[id]);
     if (q > oldQty && q === 1) {
@@ -1575,6 +1741,15 @@ if (savedCart) {
   });
 }, [menu]);
   const toggleFavorite = useCallback((itemId) => {
+    if (favorites.includes(itemId)) {
+      setFavorites(favorites.filter(id => id !== itemId));
+      showToast('Removed from favorites', 'info');
+    } else {
+      setFavorites([...favorites, itemId]);
+      showToast('Added to favorites!', 'success');
+    }
+  }, [favorites, setFavorites, showToast]);
+  const toggleFavoriteOld = useCallback((itemId) => {
     setFavorites(prev => {
       if (prev.includes(itemId)) { showToast('Removed from favorites', 'info'); return prev.filter(id => id !== itemId); }
       showToast('Added to favorites!', 'success');
@@ -1599,6 +1774,17 @@ if (savedCart) {
 
   const reorderOrder = useCallback((order) => {
     const newCart = {};
+    order.items.forEach(item => {
+      if (!menu.some(m => m.id === item.itemId)) return;
+      newCart[item.itemId] = { qty: getCartQty(newCart[item.itemId]) + item.qty };
+    });
+    if (Object.keys(newCart).length === 0) { showToast("⚠️ Ye items ab menu mein nahi hain", 'warning'); return; }
+    setCart(newCart);
+    setCartOpen(true);
+    showToast("🔄 Items added to cart!", 'success');
+  }, [menu, showToast]);
+  const reorderOrderOld = useCallback((order) => {
+    const newCart = {};
     order.items.forEach(item => { newCart[item.itemId] = (newCart[item.itemId] || 0) + item.qty; });
     setCart(newCart);
     setCartOpen(true);
@@ -1606,6 +1792,27 @@ if (savedCart) {
   }, [showToast]);
 
   const addRunningItems = useCallback(async (orderId, newItems) => {
+    try {
+      const order = orders.find(o => o.id === orderId);
+      if (!order) return;
+      const baseKots = order.kots?.length
+        ? order.kots
+        : [{ id: uid("kot"), kotNumber: 1, items: order.items, createdAt: order.createdAt, status: order.status }];
+      const existingKots = baseKots.map(k => (k.status === "new" && order.status !== "new") ? { ...k, status: order.status } : k);
+      const nextKotNumber = Math.max(...existingKots.map(k => k.kotNumber || 1)) + 1;
+      const taggedItems = newItems.map(it => ({ ...it, kotNumber: nextKotNumber }));
+      const newKot = { id: uid("kot"), kotNumber: nextKotNumber, items: taggedItems, createdAt: Date.now(), status: "new", isRunning: true };
+      const updatedKots = [...existingKots, newKot];
+      const updatedItems = [...order.items, ...taggedItems];
+      const addedTotal = taggedItems.reduce((s, it) => s + it.price * it.qty, 0);
+      await updateDoc(doc(db, "orders", orderId), { kots: updatedKots, items: updatedItems, status: "new", lastKotAt: Date.now() });
+      const waText = `🍳 *RUNNING KOT* — Order #${orderId.slice(1, 5).toUpperCase()}\nTable ${order.table}\n` + taggedItems.map(i => `• ${i.qty}x ${i.name}`).join("\n") + `\n\nAdditional: ₹${addedTotal}`;
+      window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
+      setRunningOrderId(null);
+      showToast("🍳 New KOT sent to kitchen!", "success");
+    } catch (e) { console.error(e); showToast("⚠️ Failed to add items", "error"); }
+  }, [orders, showToast]);
+  const addRunningItemsOld = useCallback(async (orderId, newItems) => {
     try {
       const order = orders.find(o => o.id === orderId);
       if (!order) return;
@@ -1634,6 +1841,46 @@ if (savedCart) {
       notes: orderNotes, payment: "cash", paymentStatus: "pending",
       status: "new", paid: false, createdAt: Date.now(),
       coinsClaimed: true, earnedCoins: 0, rewardUsedCoins: 0,
+      deliveryFee: 0, loyaltyDiscount: 0, discount: 0,
+      subtotal: total, finalTotal: total
+    };
+    await placeOrder(order);
+    playNotificationSound();
+    const waText = `🧑‍🍳 *WAITER ORDER* (#${orderId.slice(1, 5).toUpperCase()})\nTable ${t} · Waiter: ${waiterName || "Staff"}\nCustomer: ${customerName}\n` + items.map(i => `• ${i.qty}x ${i.name}`).join("\n") + (orderNotes ? `\nNotes: ${orderNotes}` : "") + `\n\nTotal: ₹${total}`;
+    window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
+    return order;
+  }, [placeOrder]);
+  const handleWaiterOrderOld = useCallback(async ({ table: t, items, waiterName, customerName, customerPhone, notes: orderNotes }) => {
+    const orderId = uid("o");
+    const total = items.reduce((s, it) => s + it.price * it.qty, 0);
+    const order = {
+      id: orderId, table: t, orderType: "dine_in",
+      customer: { name: customerName, phone: customerPhone || "WALK-IN", address: "" },
+      items, waiter: waiterName || "Staff", takenBy: "waiter",
+      kots: [{ id: uid("kot"), kotNumber: 1, items: items.map(it => ({ ...it, kotNumber: 1 })), createdAt: Date.now(), status: "new", isRunning: false }],
+      notes: orderNotes, payment: "cash", paymentStatus: "pending",
+      status: "new", paid: false, createdAt: Date.now(),
+      coinsClaimed: true, earnedCoins: 0, rewardUsedCoins: 0,
+      deliveryFee: 0, loyaltyDiscount: 0, discount: 0,
+      subtotal: total, finalTotal: total
+    };
+    await placeOrder(order);
+    playNotificationSound();
+    const waText = `🧑‍🍳 *WAITER ORDER* (#${orderId.slice(1, 5).toUpperCase()})\nTable ${t} · Waiter: ${waiterName || "Staff"}\nCustomer: ${customerName}\n` + items.map(i => `• ${i.qty}x ${i.name}`).join("\n") + (orderNotes ? `\nNotes: ${orderNotes}` : "") + `\n\nTotal: ₹${total}`;
+    window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
+    return order;
+  }, [placeOrder]);
+  const handleWaiterOrderOld = useCallback(async ({ table: t, items, waiterName, customerName, customerPhone, notes: orderNotes }) => {
+    const orderId = uid("o");
+    const total = items.reduce((s, it) => s + it.price * it.qty, 0);
+    const order = {
+      id: orderId, table: t, orderType: "dine_in",
+      customer: { name: customerName, phone: customerPhone || "WALK-IN", address: "" },
+      items, waiter: waiterName || "Staff", takenBy: "waiter",
+      kots: [{ id: uid("kot"), kotNumber: 1, items: items.map(it => ({ ...it, kotNumber: 1 })), createdAt: Date.now(), status: "new", isRunning: false }],
+      notes: orderNotes, payment: "cash", paymentStatus: "pending",
+      status: "new", paid: false, createdAt: Date.now(),
+      coinsClaimed: true, earnedCoins: 0, rewardUsedCoins: 0,
       deliveryFee: 0, loyaltyDiscount: 0, discount: 0
     };
     await placeOrder(order, 0);
@@ -1644,6 +1891,28 @@ if (savedCart) {
   }, [placeOrder, showToast]);
 
 const handleWaiterPinSubmit = () => {
+  if (waiterLock.isLocked()) {
+    showToast(`⏳ Bahut galat attempts. ${waiterLock.secondsLeft()}s ruko`, "error");
+    setWaiterPinInput("");
+    return;
+  }
+  const wPin = (settings?.waiterPin ?? "1234").toString().trim();
+  const sPin = (settings?.staffPin ?? "5432").toString().trim();
+  const aPin = (settings?.adminPin ?? "9876").toString().trim();
+  if (waiterPinInput === wPin || waiterPinInput === sPin || waiterPinInput === aPin) {
+    waiterLock.reset();
+    setWaiterUnlocked(true);
+    setShowWaiterPinModal(false);
+    setWaiterPinInput("");
+    setShowWaiterMode(true);
+    showToast("🔓 Waiter Mode Unlocked!", "success");
+  } else {
+    waiterLock.registerFail();
+    showToast("❌ Incorrect Waiter PIN", "error");
+    setWaiterPinInput("");
+  }
+};
+const handleWaiterPinSubmitOld = () => {
   const wPin = (settings?.waiterPin ?? "1234").toString().trim();
   const sPin = (settings?.staffPin ?? "5432").toString().trim();
   const aPin = (settings?.adminPin ?? "9876").toString().trim();
@@ -1661,12 +1930,42 @@ const handleWaiterPinSubmit = () => {
 
   const handleSendOtp = () => {
     if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid phone", 'error'); return; }
+    if (!DEMO_OTP) {
+      showToast("ℹ️ OTP service abhi connected nahi — naam & phone se order karo", 'info');
+      return;
+    }
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    setGeneratedOtp(code);
+    setOtpStep("verify");
+    showToast(`🔐 Demo OTP: ${code}`, 'success');
+  };
+  const handleSendOtpOld = () => {
+    if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid phone", 'error'); return; }
     const code = Math.floor(1000 + Math.random() * 9000).toString();
     setGeneratedOtp(code); setOtpStep("verify");
     showToast(`🔐 OTP: ${code}`, 'success');
     alert(`🔐 Demo OTP: ${code}`);
   };
   const handleVerifyOtp = () => {
+    if (generatedOtp && otpCode === generatedOtp) {
+      setIsLoggedIn(true); setOtpStep("phone");
+      (async () => {
+        try {
+          const userRef = doc(db, "customers", custPhone);
+          const userSnap = await getDoc(userRef);
+          if (!userSnap.exists()) {
+            await setDoc(userRef, { phone: custPhone, name: custName || "Guest", address: custAddress || "", createdAt: Date.now(), lastLogin: Date.now(), totalOrders: 0, totalSpent: 0 });
+            showToast("✅ New customer registered!", 'success');
+          } else {
+            await updateDoc(userRef, { lastLogin: Date.now(), name: custName || userSnap.data().name });
+            showToast("✅ Welcome back!", 'success');
+          }
+          localStorage.setItem('eatpark_customer', JSON.stringify({ name: custName, phone: custPhone, address: custAddress, isLoggedIn: true }));
+        } catch (error) { console.error(error); }
+      })();
+    } else showToast("❌ Incorrect OTP", 'error');
+  };
+  const handleVerifyOtpOld = () => {
     if (otpCode === generatedOtp || otpCode === "1234") {
       setIsLoggedIn(true); setOtpStep("phone");
       (async () => {
@@ -1725,7 +2024,116 @@ const handleWaiterPinSubmit = () => {
     showToast(coupon.msg, 'success');
   };
 
+  const consumeFlashStock = useCallback(async (lines) => {
+    const used = lines.filter(l => flashSaleItems.some(f => f.active && f.id === l.itemId && f.discountPrice === l.price));
+    if (used.length === 0) return;
+    try {
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, "settings", "promotions");
+        const snap = await tx.get(ref);
+        if (!snap.exists()) return;
+        const flash = (snap.data().flashSale || []).map(f => {
+          const u = used.find(l => l.itemId === f.id);
+          if (!u) return f;
+          const left = Math.max(0, (f.stock || 0) - u.qty);
+          return { ...f, stock: left, active: left > 0 ? f.active : false };
+        });
+        tx.update(ref, { flashSale: flash });
+      });
+    } catch (e) { console.error("Flash stock update failed:", e); }
+  }, [flashSaleItems]);
+
   const handlePlaceOrder = useCallback(async () => {
+    if (isProcessingPayment) return;
+    if (cartItems.length === 0) return;
+    if (!custName.trim()) { showToast("⚠️ Enter Name", 'error'); return; }
+    if (!custPhone.trim() || custPhone.length < 10) { showToast("⚠️ Enter valid Phone", 'error'); return; }
+    if (orderType === "parcel" && !custAddress.trim()) { showToast("⚠️ Enter Address", 'error'); return; }
+
+    setIsProcessingPayment(true);
+    try {
+      const orderId = uid("o");
+      let paymentInfo = { paid: false, status: "pending", paymentId: null };
+
+      if (paymentMethod === "razorpay") {
+        const result = await processRazorpayPayment(finalTotal, orderId, custName, custPhone);
+        if (!result) { showToast("❌ Payment cancel/fail hua. Order place nahi hua.", 'error'); return; }
+        paymentInfo = { paid: true, status: "paid_unverified", paymentId: result.razorpay_payment_id || null };
+      } else if (paymentMethod === "phonepe" || paymentMethod === "gpay") {
+        showToast("📱 UPI payment counter par karein — staff paid mark karega", 'info');
+      }
+
+      const itemStrings = cartItems.map(([id, entry]) => {
+        const m = menu.find((x) => x.id === id);
+        return `${getCartQty(entry)}x ${m.name}`;
+      }).join(", ");
+
+      const initialItems = cartItems.map(([id, entry]) => {
+        const m = menu.find((x) => x.id === id);
+        return {
+          itemId: id, name: m.name, portion: m.portion || "",
+          price: entry.priceOverride ?? m.price, originalPrice: m.price,
+          qty: getCartQty(entry), kotNumber: 1
+        };
+      });
+
+      const order = {
+        id: orderId, table, orderType,
+        customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "" },
+        items: initialItems,
+        claimedReward: claimedReward ? claimedReward.item : null,
+        rewardUsedCoins: claimedReward ? claimedReward.cost : 0,
+        earnedCoins: newEarnedCoins,
+        discount: appliedDiscount,
+        couponDiscountAmount: discountAmount,
+        loyaltyDiscount, loyaltyTier: loyaltyTier.name,
+        deliveryFee, subtotal, finalTotal,
+        notes, payment: paymentMethod,
+        paymentStatus: paymentInfo.status, paymentId: paymentInfo.paymentId,
+        status: "new", paid: paymentInfo.paid,
+        createdAt: Date.now(),
+        scheduledDate: isScheduled ? scheduleDate : null,
+        scheduledTime: isScheduled ? scheduleTime : null,
+        isScheduled, coinsClaimed: false,
+        kots: [{ id: uid("kot"), kotNumber: 1, items: initialItems, createdAt: Date.now(), status: "new", isRunning: false }]
+      };
+
+      await placeOrder(order);
+
+      const orderHistory = JSON.parse(localStorage.getItem('eatpark_orders') || '[]');
+      orderHistory.push(order);
+      localStorage.setItem('eatpark_orders', JSON.stringify(orderHistory));
+
+      const customerData = JSON.parse(localStorage.getItem('eatpark_customer') || '{}');
+      customerData.totalOrders = (customerData.totalOrders || 0) + 1;
+      customerData.totalSpent = (customerData.totalSpent || 0) + finalTotal;
+      customerData.lastOrderDate = Date.now();
+      localStorage.setItem('eatpark_customer', JSON.stringify(customerData));
+      try { await updateDoc(doc(db, "customers", custPhone), { totalOrders: customerData.totalOrders, totalSpent: customerData.totalSpent, lastOrderDate: Date.now() }); } catch (e) { }
+
+      consumeFlashStock(initialItems);
+
+      const claimedText = claimedReward ? `\n🎁 *Free Reward:* ${claimedReward.item}` : "";
+      const scheduleText = isScheduled && scheduleDate && scheduleTime ? `\n📅 *Scheduled:* ${scheduleDate} at ${scheduleTime}` : "";
+      const waText = `🚨 *NEW ORDER* (#${orderId.slice(1, 5).toUpperCase()})\n\n*Type:* ${orderType === 'parcel' ? '🛍️ Parcel' : `🍽️ Table ${table}`}\n*Customer:* ${custName} (${custPhone})\n` + (orderType === 'parcel' ? `*Address:* ${custAddress}\n\n` : `\n`) + `*Items:* ${itemStrings}${claimedText}\n` + (appliedDiscount > 0 ? `*Coupon:* ${appliedDiscount}%\n` : ``) + (loyaltyDiscount > 0 ? `*Loyalty:* ${loyaltyTier.name}\n` : ``) + `*Total:* ₹${finalTotal}\n*Payment:* ${paymentMethod} (${paymentInfo.paid ? "PAID" : "PENDING"})\n` + scheduleText + (notes ? `\n*Notes:* ${notes}` : ``);
+      const link = document.createElement('a');
+      link.href = `https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`;
+      link.target = '_blank'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+
+      playNotificationSound();
+      sendPushNotification("🛎️ New Order", `Order #${orderId.slice(1, 5)} - ₹${finalTotal}`);
+      setMyOrderIds(prev => [...prev, order.id]);
+      setCart({});
+      setNotes(""); setClaimedReward(null); setCartOpen(false); setActiveModal('track');
+      setIsScheduled(false); setScheduleDate(""); setScheduleTime("");
+      showToast("🎉 Order Placed!", 'success');
+    } catch (e) {
+      console.error("Order error:", e);
+      showToast("⚠️ Order fail hua. Internet check karke dobara try karo.", 'error');
+    } finally { setIsProcessingPayment(false); }
+  }, [isProcessingPayment, cartItems, custName, custPhone, custAddress, orderType, table, paymentMethod, finalTotal, subtotal, discountAmount, deliveryFee, claimedReward, newEarnedCoins, isScheduled, scheduleDate, scheduleTime, appliedDiscount, loyaltyDiscount, loyaltyTier, notes, menu, placeOrder, sendPushNotification, consumeFlashStock, showToast]);
+
+  const handlePlaceOrderOld = useCallback(async () => {
     if (cartItems.length === 0) return;
     if (!custName.trim()) { showToast("⚠️ Enter Name", 'error'); return; }
     if (!custPhone.trim() || custPhone.length < 10) { showToast("⚠️ Enter valid Phone", 'error'); return; }
@@ -1826,6 +2234,21 @@ const handleWaiterPinSubmit = () => {
   };
 
   const addComboToCart = useCallback((combo) => {
+    const lines = combo.items.map(it => ({ ...it, menuItem: menu.find(m => m.id === it.id) }));
+    if (lines.some(l => !l.menuItem || !l.menuItem.available)) { showToast("⚠️ Combo ka koi item available nahi", 'warning'); return; }
+    const totalMenuPrice = lines.reduce((s, l) => s + l.menuItem.price * l.quantity, 0);
+    if (totalMenuPrice <= 0) return;
+    const ratio = combo.finalPrice / totalMenuPrice;
+    setCart(prev => {
+      const next = { ...prev };
+      lines.forEach(l => {
+        next[l.id] = { qty: getCartQty(next[l.id]) + l.quantity, priceOverride: Math.round(l.menuItem.price * ratio) };
+      });
+      return next;
+    });
+    showToast(`🎉 ${combo.name} added!`, 'success');
+  }, [menu, showToast]);
+  const addComboToCartOld = useCallback((combo) => {
   const totalMenuPrice = combo.items.reduce((s, it) => s + it.price * it.quantity, 0);
   const ratio = combo.finalPrice / totalMenuPrice;
 
@@ -1843,6 +2266,15 @@ const handleWaiterPinSubmit = () => {
 }, [showToast]);
 
   const addFlashSaleToCart = useCallback((item) => {
+    const menuItem = menu.find(m => m.id === item.id);
+    if (!menuItem || !menuItem.available) { showToast("⚠️ Item available nahi", 'warning'); return; }
+    if (item.stock != null && getCartQty(cartRef.current[item.id]) + 1 > item.stock) {
+      showToast(`⚠️ Sirf ${item.stock} bache hain`, 'warning'); return;
+    }
+    setCart(prev => ({ ...prev, [item.id]: { qty: getCartQty(prev[item.id]) + 1, priceOverride: item.discountPrice } }));
+    showToast(`⚡ ${item.name} added!`, 'success');
+  }, [menu, showToast]);
+  const addFlashSaleToCartOld = useCallback((item) => {
   setCart(prev => {
     const existing = prev[item.id];
     const qty = getCartQty(existing) + 1;
@@ -2410,7 +2842,7 @@ const handleWaiterPinSubmit = () => {
                 {myOrders.length === 0 ? (<div style={{ textAlign: 'center', padding: "40px 0", color: COLORS.textLight }}>No orders yet</div>) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {[...myOrders].reverse().map(o => {
-                      const orderTotal = o.items.reduce((s, i) => s + (i.price * i.qty), 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0);
+                      const orderTotal = getOrderTotal(o);
                       const isCancelled = o.status === "cancelled";
                       const isCompleted = o.status === "served";
                       return (
@@ -2486,7 +2918,7 @@ const handleWaiterPinSubmit = () => {
               <button onClick={handleWaiterPinSubmit}
                 style={{ flex: 1, padding: "13px", borderRadius: 12, background: COLORS.info, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Unlock</button>
             </div>
-            <div style={{ fontSize: 11, color: COLORS.textLight, marginTop: 12 }}>Default PIN: <strong>1234</strong></div>
+            <div style={{ fontSize: 11, color: COLORS.textLight, marginTop: 12 }}></div>
           </div>
         </div>
       )}
@@ -2569,6 +3001,15 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
     const w = window.open('', '_blank', 'width=300,height=600');
     if (!w) return;
     const kots = order.kots?.length ? order.kots : [{ kotNumber: 1, items: order.items }];
+    const itemsHtml = kots.map(kot => `<div style="margin-top:10px;border-top:1px dashed #000;padding-top:6px"><strong>KOT #${kot.kotNumber}${kot.isRunning ? ' (RUNNING)' : ''}</strong>${kot.items.map(it => `<div>${it.qty}x ${escapeHtml(it.name)}</div>`).join('')}</div>`).join('');
+    const totalAmount = getOrderTotal(order);
+    w.document.write(`<html><head><title>KOT</title><style>body{font-family:monospace;font-size:12px;padding:10px;width:260px}h2,h4{text-align:center;margin:4px 0}</style></head><body><h2>${escapeHtml(RESTAURANT.name)}</h2><h4>${order.orderType === 'parcel' ? 'PARCEL' : `TABLE ${escapeHtml(order.table)}`}</h4><p>Order: #${escapeHtml(order.id.toUpperCase())}<br/>Customer: ${escapeHtml(order.customer.name)}</p>${itemsHtml}<div style="text-align:right;font-weight:bold;margin-top:10px">Total: ₹${totalAmount}</div><script>window.print();setTimeout(()=>window.close(),500)</script></body></html>`);
+    w.document.close();
+  };
+  const handlePrintReceiptOld = (order) => {
+    const w = window.open('', '_blank', 'width=300,height=600');
+    if (!w) return;
+    const kots = order.kots?.length ? order.kots : [{ kotNumber: 1, items: order.items }];
     const itemsHtml = kots.map(kot => `<div style="margin-top:10px;border-top:1px dashed #000;padding-top:6px"><strong>KOT #${kot.kotNumber}${kot.isRunning ? ' (RUNNING)' : ''}</strong>${kot.items.map(it => `<div>${it.qty}x ${it.name}</div>`).join('')}</div>`).join('');
     const totalAmount = order.items.reduce((s, it) => s + (it.price * it.qty), 0) + (order.deliveryFee || 0) - (order.loyaltyDiscount || 0);
     w.document.write(`<html><head><title>KOT</title><style>body{font-family:monospace;font-size:12px;padding:10px;width:260px}h2,h4{text-align:center;margin:4px 0}</style></head><body><h2>${RESTAURANT.name}</h2><h4>${order.orderType === 'parcel' ? 'PARCEL' : `TABLE ${order.table}`}</h4><p>Order: #${order.id.toUpperCase()}<br/>Customer: ${order.customer.name}</p>${itemsHtml}<div style="text-align:right;font-weight:bold;margin-top:10px">Total: ₹${totalAmount}</div><script>window.print();setTimeout(()=>window.close(),500)</script></body></html>`);
@@ -2647,7 +3088,19 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
                       </div>
 
                       <div style={{ borderTop: isSelected ? `1px solid rgba(255,255,255,0.3)` : `1.5px dashed ${COLORS.line}`, paddingTop: 14, marginBottom: 14 }}>
-                        {o.items.map((it, idx) => (
+                        {o.items.map((it, idx) => {
+                          const kot = (o.kots || []).find(k => k.kotNumber === (it.kotNumber || 1));
+                          const hasActiveKot = (o.kots || []).some(k => k.status === status);
+                          const isDone = !!kot && kot.status !== status && hasActiveKot;
+                          return (
+                            <div key={idx} style={{ fontSize: 15, marginBottom: 6, fontWeight: 600, color: isSelected ? '#fff' : COLORS.ink, opacity: isDone ? 0.45 : 1 }}>
+                              <span style={{ fontWeight: 800, display: 'inline-block', width: 28 }}>{it.qty}×</span> {it.name}
+                              {it.kotNumber > 1 && (<span style={{ fontSize: 10, marginLeft: 6, color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.info, fontWeight: 700 }}>KOT#{it.kotNumber}</span>)}
+                              {isDone && (<span style={{ fontSize: 10, marginLeft: 6, fontWeight: 800 }}>✓ already sent</span>)}
+                            </div>
+                          );
+                        })}
+                        {[].map((it, idx) => (
                           <div key={idx} style={{ fontSize: 15, marginBottom: 6, fontWeight: 600, color: isSelected ? '#fff' : COLORS.ink }}>
                             <span style={{ fontWeight: 800, display: 'inline-block', width: 28 }}>{it.qty}×</span> {it.name}
                             {it.kotNumber > 1 && (<span style={{ fontSize: 10, marginLeft: 6, color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.info, fontWeight: 700 }}>KOT#{it.kotNumber}</span>)}
@@ -2732,8 +3185,10 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const [newCategoryInput, setNewCategoryInput] = useState('');
 
   const filteredOrders = useMemo(() => orders.filter(o => toLocalISODate(o.createdAt) === filterDate), [orders, filterDate]);
-  const revenue = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0), 0);
-  const avgOrderValue = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
+  const revenue = filteredOrders.filter((o) => o.paid && o.status !== "cancelled").reduce((s, o) => s + getOrderTotal(o), 0);
+  const _revenueOld = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0), 0);
+  const avgOrderValue = (() => { const a = filteredOrders.filter(o => o.status !== "cancelled"); return a.length ? Math.round(a.reduce((s, o) => s + getOrderTotal(o), 0) / a.length) : 0; })();
+  const _avgOld = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
 
   const handleAddCategory = () => { if (!newCategoryInput.trim()) return; updateCategories([...categories, newCategoryInput.trim()]); setNewCategoryInput(''); };
   const handleMoveCategory = (index, direction) => { const ni = index + direction; if (ni < 0 || ni >= categories.length) return; const u = [...categories]; const [r] = u.splice(index, 1); u.splice(ni, 0, r); updateCategories(u); };
@@ -2784,7 +3239,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const handleSaveHeroImage = async () => { if (!heroImgInput.trim()) return; const n = { ...settings, heroImage: heroImgInput.trim() }; setSettings(n); try { await setDoc(doc(db, "settings", "appSettings"), n); } catch (e) { } alert("✅ Saved!"); };
   const handleExportCSV = () => {
     const rows = [["Time", "Type", "Items", "Total", "Paid"]];
-    filteredOrders.forEach(o => { const t = o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0); rows.push([new Date(o.createdAt).toLocaleTimeString('en-IN'), o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`, o.items.map(it => `${it.qty}x ${it.name}`).join("; "), t, o.paid ? "Yes" : "No"]); });
+    filteredOrders.forEach(o => { const t = getOrderTotal(o); rows.push([new Date(o.createdAt).toLocaleTimeString('en-IN'), o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`, o.items.map(it => `${it.qty}x ${it.name}`).join("; "), t, o.paid ? "Yes" : "No"]); });
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const link = document.createElement('a');
     link.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -3158,7 +3613,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
                   <td style={{ ...td, color: COLORS.textLight, fontWeight: 600 }}>{new Date(o.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</td>
                   <td style={td}>{o.orderType === "parcel" ? <Badge color={COLORS.copper}>Parcel</Badge> : <strong>T-{o.table}</strong>}{o.status === "cancelled" && <span style={{ color: COLORS.error, fontSize: 11, fontWeight: 700, display: 'block' }}>❌ Cancelled</span>}</td>
                   <td style={td}>{o.items.map((it) => `${it.qty}×${it.name}`).join(", ")}</td>
-                  <td style={{ ...td, fontWeight: 700 }}>{inr(o.items.reduce((s, it) => s + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0))}</td>
+                  <td style={{ ...td, fontWeight: 700 }}>{inr(getOrderTotal(o))}</td>
                   <td style={td}>{o.payment || "cash"}<span style={{ fontSize: 11, color: o.paid ? COLORS.sage : COLORS.textLight, display: 'block' }}>{o.paid ? "✅" : "⏳"}</span></td>
                   <td style={td}><button onClick={() => markPaid(o.id, !o.paid)} style={{ border: `1.5px solid ${o.paid ? COLORS.sage : COLORS.line}`, background: o.paid ? COLORS.sage : "transparent", color: o.paid ? "#fff" : COLORS.ink, borderRadius: 10, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>{o.paid ? "✓ Paid" : "Mark paid"}</button></td>
                 </tr>
@@ -3180,6 +3635,58 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
       )}
 
       {tab === "promotions" && (
+        <>
+          <h3 style={{ marginBottom: 16 }}>⚡ Flash Sale</h3>
+          {flashSaleItems.map((item, idx) => (
+            <div key={idx} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 12, marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <select value={item.id}
+                  onChange={e => { const m = menu.find(x => x.id === e.target.value); if (m) setFlashSaleItems(patchAt(flashSaleItems, idx, { id: m.id, name: m.name, price: m.price })); }}
+                  style={{ ...inputStyle, flex: 2, minWidth: 200 }}>
+                  {!menu.some(m => m.id === item.id) && <option value={item.id}>⚠️ {item.name} (menu mein nahi)</option>}
+                  {menu.map(m => <option key={m.id} value={m.id}>{m.name}{m.portion ? ` (${m.portion})` : ""} — ₹{m.price}</option>)}
+                </select>
+                <input type="number" placeholder="Sale ₹" value={item.discountPrice} onChange={e => setFlashSaleItems(patchAt(flashSaleItems, idx, { discountPrice: Number(e.target.value) }))} style={{ ...inputStyle, width: 100 }} />
+                <input type="number" placeholder="Stock" value={item.stock} onChange={e => setFlashSaleItems(patchAt(flashSaleItems, idx, { stock: Number(e.target.value) }))} style={{ ...inputStyle, width: 90 }} />
+                <button onClick={() => setFlashSaleItems(patchAt(flashSaleItems, idx, { active: !item.active }))} style={{ background: item.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{item.active ? '✅ Active' : '❌ Inactive'}</button>
+                <button onClick={() => { if (window.confirm('Delete?')) setFlashSaleItems(flashSaleItems.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
+              </div>
+            </div>
+          ))}
+          <button onClick={() => {
+            const m = menu[0]; if (!m) return;
+            setFlashSaleItems([...flashSaleItems, { id: m.id, name: m.name, price: m.price, discountPrice: Math.round(m.price * 0.8), stock: 10, active: true }]);
+          }} style={{ ...primaryBtn, background: COLORS.sage, marginBottom: 30 }}>+ Add Flash Item</button>
+
+          <h3 style={{ marginBottom: 16 }}>🎯 Combo Offers</h3>
+          {comboOffers.map((combo, idx) => {
+            const broken = !combo.items?.every(it => menu.some(m => m.id === it.id));
+            return (
+              <div key={idx} style={{ background: '#fff', border: `1px solid ${broken ? COLORS.error : COLORS.line}`, padding: 16, borderRadius: 12, marginBottom: 12 }}>
+                {broken && <div style={{ color: COLORS.error, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>⚠️ Is combo ke kuch items menu mein nahi hain — customers ko dikhega nahi. Delete karke naya banao.</div>}
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input value={combo.name} onChange={e => setComboOffers(patchAt(comboOffers, idx, { name: e.target.value }))} style={{ ...inputStyle, flex: 2 }} />
+                  <input type="number" value={combo.discount} onChange={e => { const d = Number(e.target.value); setComboOffers(patchAt(comboOffers, idx, { discount: d, finalPrice: Math.round(combo.totalPrice * (1 - d / 100)) })); }} style={{ ...inputStyle, width: 100 }} />
+                  <input value={combo.image} onChange={e => setComboOffers(patchAt(comboOffers, idx, { image: e.target.value }))} style={{ ...inputStyle, width: 80 }} />
+                  <button onClick={() => setComboOffers(patchAt(comboOffers, idx, { active: !combo.active }))} style={{ background: combo.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{combo.active ? '✅' : '❌'}</button>
+                  <button onClick={() => { if (window.confirm('Delete?')) setComboOffers(comboOffers.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
+                </div>
+              </div>
+            );
+          })}
+          <button onClick={() => {
+            const picks = menu.slice(0, 2); if (picks.length === 0) return;
+            const total = picks.reduce((s, m) => s + m.price, 0);
+            setComboOffers([...comboOffers, {
+              id: 'combo' + Date.now(), name: 'New Combo',
+              items: picks.map(m => ({ id: m.id, name: m.name, price: m.price, quantity: 1 })),
+              totalPrice: total, discount: 10, finalPrice: Math.round(total * 0.9), image: '🍽️', active: true
+            }]);
+          }} style={{ ...primaryBtn, background: COLORS.gold, marginBottom: 20 }}>+ Add Combo</button>
+          <button onClick={savePromotions} style={{ ...primaryBtn, width: '100%' }}>💾 Save All</button>
+        </>
+      )}
+      {false && (
         <>
           <h3 style={{ marginBottom: 16 }}>⚡ Flash Sale</h3>
           {flashSaleItems.map((item, idx) => (
@@ -3616,16 +4123,63 @@ export default function App() {
   const [pinInput, setPinInput] = useState("");
   const [categories, setCategories] = useState(CATEGORIES);
   const [flashSaleItems, setFlashSaleItems] = useState([
+    { id: 'mf207', name: 'Fish Curry (4 pc)', price: 220, discountPrice: 179, stock: 10, active: true }
+  ]);
+  const [_oldFlash, _setOldFlash] = useState([
     { id: 'nv19', name: 'Fish Curry', price: 449, discountPrice: 299, stock: 10, active: true }
   ]);
   const [comboOffers, setComboOffers] = useState([
+    { id: 'combo1', name: 'Family Combo', items: [
+        { id: 'pb1107', name: 'E&P Special Pizza', price: 300, quantity: 1 },
+        { id: 'br502', name: 'Chicken Biryani (2 pc + egg)', price: 250, quantity: 1 },
+        { id: 'pm602', name: 'Paneer Masala', price: 250, quantity: 1 }],
+      totalPrice: 800, discount: 20, finalPrice: 640, image: '🍕', active: true },
+    { id: 'combo2', name: 'Weekend Special', items: [
+        { id: 'cc306', name: 'Chicken Butter Masala', price: 350, quantity: 1 },
+        { id: 'dr711', name: 'Garlic Naan', price: 70, quantity: 2 },
+        { id: 'sd1421', name: 'Cold Drinks', price: 50, quantity: 2 }],
+      totalPrice: 590, discount: 25, finalPrice: 443, image: '🍗', active: true }
+  ]);
+  const [_oldCombos, _setOldCombos] = useState([
     { id: 'combo1', name: 'Family Combo', items: [{ id: 'f2', name: 'Special Pizza', price: 280, quantity: 1 }, { id: 'br5', name: 'Chicken Biryani', price: 210, quantity: 1 }, { id: 'pn1', name: 'Paneer Masala', price: 250, quantity: 1 }], totalPrice: 740, discount: 20, finalPrice: 592, image: '🍕', active: true },
     { id: 'combo2', name: 'Weekend Special', items: [{ id: 'nv8', name: 'Butter Chicken', price: 350, quantity: 1 }, { id: 'b8', name: 'Garlic Naan', price: 70, quantity: 2 }, { id: 'd10', name: 'Cold Drink', price: 50, quantity: 2 }], totalPrice: 590, discount: 25, finalPrice: 442, image: '🍗', active: true }
   ]);
 
+  const pinLock = usePinLockout();
+  const validComboOffers = useMemo(
+    () => comboOffers.filter(c => c.items?.length && c.items.every(it => menu.some(m => m.id === it.id))),
+    [comboOffers, menu]
+  );
+  const validFlashSaleItems = useMemo(
+    () => flashSaleItems.filter(f => menu.some(m => m.id === f.id)),
+    [flashSaleItems, menu]
+  );
+
   const requestPinPrompt = (target) => { setTargetRole(target); setShowPinModal(true); setPinInput(""); };
 
    const handlePinSubmit = () => {
+    if (pinLock.isLocked()) {
+      alert(`⏳ Bahut galat attempts. ${pinLock.secondsLeft()}s baad try karo.`);
+      setPinInput("");
+      return;
+    }
+    const aPin = (settings?.adminPin ?? "9876").toString().trim();
+    const sPin = (settings?.staffPin ?? "5432").toString().trim();
+    if (!pinInput) { alert("❌ PIN daalo"); return; }
+
+    if (targetRole === "admin" && pinInput === aPin) {
+      pinLock.reset(); setRole("admin"); setShowPinModal(false); setPinInput("");
+    } else if (targetRole === "staff" && (pinInput === sPin || pinInput === aPin)) {
+      pinLock.reset(); setRole("staff"); setShowPinModal(false); setPinInput("");
+    } else if (targetRole === "customer") {
+      setRole("customer"); setShowPinModal(false); setPinInput("");
+    } else {
+      pinLock.registerFail();
+      alert("❌ Incorrect PIN!");
+      setPinInput("");
+    }
+  };
+  const handlePinSubmitOld = () => {
     const aPin = (settings?.adminPin ?? "9876").toString().trim();
     const sPin = (settings?.staffPin ?? "5432").toString().trim();
     
@@ -3756,13 +4310,26 @@ export default function App() {
     collection(db, "orders"),
     where("createdAt", ">=", startOfToday.getTime())
   );
+  let todayList = [];
+  let openList = [];
+  const mergeOrders = () => {
+    const map = new Map();
+    openList.forEach(o => map.set(o.id, o));
+    todayList.forEach(o => map.set(o.id, o));
+    setOrdersState(Array.from(map.values()));
+  };
+  const unsubOpen = onSnapshot(
+    query(collection(db, "orders"), where("status", "in", ["new", "preparing", "ready"])),
+    (snap) => { openList = snap.docs.map(d => ({ id: d.id, ...d.data() })); mergeOrders(); },
+    (err) => console.error("Open orders listener:", err)
+  );
   const unsubOrders = onSnapshot(ordersQuery, (snap) => {
-    setOrdersState(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    todayList = snap.docs.map(d => ({ id: d.id, ...d.data() })); mergeOrders();
   });
   
   return () => { 
     unsubCalls(); 
-    unsubOrders(); 
+    unsubOrders(); unsubOpen(); 
   };
 }, []);
 
@@ -3790,10 +4357,23 @@ export default function App() {
   const removeOffer = async (id) => { setOffersList(offersList.filter(o => o.id !== id)); };
 
   const placeOrder = async (order) => {
-    try { order.coinsClaimed = false; await setDoc(doc(db, "orders", order.id), order); } catch (e) { console.error(e); }
+    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; await setDoc(doc(db, "orders", order.id), order); } catch (e) { console.error("placeOrder failed:", e); throw e; }
   };
 
   const advanceStatus = async (orderId, currentStatus) => {
+    const idx = STATUS_FLOW.indexOf(currentStatus);
+    const nextStatus = STATUS_FLOW[Math.min(idx + 1, STATUS_FLOW.length - 1)];
+    if (nextStatus === currentStatus) return;
+    const order = orders.find(o => o.id === orderId);
+    const updateData = { status: nextStatus, ...(nextStatus === "served" ? { servedAt: Date.now() } : {}) };
+    if (order?.kots?.length) {
+      updateData.kots = order.kots.map(k => (k.status === currentStatus ? { ...k, status: nextStatus } : k));
+    }
+    setOrdersState(prev => prev.map(o => (o.id === orderId ? { ...o, ...updateData } : o)));
+    try { await updateDoc(doc(db, "orders", orderId), updateData); }
+    catch (e) { console.error(e); alert("⚠️ Status update fail hua. Dobara try karo."); }
+  };
+  const advanceStatusOld = async (orderId, currentStatus) => {
     const idx = STATUS_FLOW.indexOf(currentStatus);
     const nextStatus = STATUS_FLOW[Math.min(idx + 1, STATUS_FLOW.length - 1)];
     const updateData = { status: nextStatus, ...(nextStatus === "served" ? { servedAt: Date.now() } : {}) };
@@ -3893,9 +4473,9 @@ export default function App() {
       <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <style>{FONTS}</style>
         <div className="app-content">
-  {console.log("🎭 RENDER: role =", role) || null}
   
-  {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={flashSaleItems} comboOffers={comboOffers} setMenuState={setMenuState} />}
+  
+  {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} />}
   
   {role === "staff" && <StaffView orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} />}
   
@@ -3933,7 +4513,7 @@ export default function App() {
                 <button onClick={() => { setShowPinModal(false); setPinInput(""); }} style={{ flex: 1, padding: "14px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
                 <button onClick={handlePinSubmit} style={{ flex: 1, padding: "14px", borderRadius: 12, background: COLORS.ink, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>Login</button>
               </div>
-              <div style={{ fontSize: 11, color: COLORS.textLight, marginTop: 16 }}>Staff: 5432 · Admin: 9876</div>
+              <div style={{ fontSize: 11, color: COLORS.textLight, marginTop: 16 }}></div>
             </div>
           </div>
         )}
