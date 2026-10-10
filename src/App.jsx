@@ -1772,8 +1772,6 @@ if (savedCart) {
     });
   }, [menu]);
 
-<<<<<<< HEAD
-=======
     setCart((prev) => {
       const next = { ...prev };
     
@@ -3670,11 +3668,11 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
 }
 
 // ==
-<<<<<<< HEAD
+
 // 18. ADMIN VIEW — HELPER COMPONENTS
-=======
+
 // 17.5 (KEEP — ye closing hai StaffView ka)
->>>>>>> 836c1c0f5d75038a9f8970d8a27d439a0a44a659
+ 836c1c0f5d75038a9f8970d8a27d439a0a44a659
 // ==
 
 function KitchenMetrics({ filteredOrders }) {
