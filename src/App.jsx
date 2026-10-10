@@ -1,7 +1,7 @@
 
 /* eslint-disable */
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
- 05533bcd14d01af2ee227a4555f0119c
+ 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db } from "./firebase";
 import {
@@ -425,7 +425,6 @@ const FlashSaleItem = memo(({ item, onAdd }) => {
         <span style={{ fontWeight: 800, color: COLORS.error }}>₹{item.discountPrice}</span>
         <span style={{ textDecoration: 'line-through', fontSize: 12, color: COLORS.textLight }}>₹{item.price}</span>
       </div>
-      {item.stock != null && item.stock <= 5 && (<div style={{ fontSize: 11, color: COLORS.error, fontWeight: 700, marginBottom: 4 }}>Only {item.stock} left!</div>)}
       {item.stock != null && item.stock <= 5 && (<div style={{ fontSize: 11, color: COLORS.error, fontWeight: 700, marginBottom: 4 }}>Only {item.stock} left!</div>)}
       <button onClick={onAdd} style={{ background: COLORS.error, color: '#fff', border: 'none', padding: '4px 12px', borderRadius: 6, fontWeight: 700, width: '100%', cursor: 'pointer' }}>Add</button>
     </div>
@@ -1646,31 +1645,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 
   cartRef.current = cart;
   useEffect(() => () => clearTimeout(aiTimerRef.current), []);
-
-  const  = async (email, password, expectedRole) => {
-    try {
-      const auth = getAuth();
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Fetch user role from Firestore
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        if (userData.role === expectedRole || (expectedRole === "staff" && userData.role === "admin")) {
-          setRole(userData.role);
-          setShowPinModal(false);
-        } else {
-          alert("❌ You do not have permission for this role.");
-        }
-      }
-    } catch (error) {
-      alert("❌ Login failed: " + error.message);
-    }
-  };
-  cartRef.current = cart;
-  useEffect(() => () => clearTimeout(aiTimerRef.current), []);
- 05533bcd14d01af2ee227a4555f0119c
+ 
   const [showWaiterMode, setShowWaiterMode] = useState(false);
     const [showWaiterPinModal, setShowWaiterPinModal] = useState(false);
   const [waiterPinInput, setWaiterPinInput] = useState("");
@@ -1808,6 +1783,7 @@ if (savedCart) {
 
     setCart((prev) => {
       const next = { ...prev };
+    
       if (q <= 0) delete next[id];
       else {
         const existingOverride = prev[id]?.priceOverride;
@@ -1815,7 +1791,7 @@ if (savedCart) {
       }
       return next;
     });
-  }, [menu]);
+  
  
    
   const toggleFavorite = useCallback((itemId) => {
@@ -1825,7 +1801,7 @@ if (savedCart) {
     } else {
       setFavorites([...favorites, itemId]);
       showToast('Added to favorites!', 'success');
- 05533bcd14d01af2ee227a4555f0119c
+ 
     }
   }, [favorites, setFavorites, showToast]);
   const toggleFavoriteOld = useCallback((itemId) => {
@@ -4523,12 +4499,10 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   
   return () => { 
     unsubCalls(); 
-
-    unsubOrders(); unsubOpen(); 
-
-    unsubOrders(); unsubOpen(); 
+    unsubOrders(); 
+    unsubOrders(); 
     unsubBookings();
- 05533bcd14d01af2ee227a4555f0119c
+ 
   };
 }, []);
 
