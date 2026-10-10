@@ -1717,8 +1717,6 @@ if (savedCart) {
       return next;
     });
   }, [menu]);
- 
-}, [menu]);
   const toggleFavorite = useCallback((itemId) => {
     if (favorites.includes(itemId)) {
       setFavorites(favorites.filter(id => id !== itemId));
