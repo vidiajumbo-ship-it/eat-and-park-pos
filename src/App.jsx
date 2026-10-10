@@ -1,6 +1,7 @@
 
 /* eslint-disable */
 import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
+console.log(import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET)
  
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db } from "./firebase";
