@@ -1570,6 +1570,27 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
   const [runningOrderId, setRunningOrderId] = useState(null);
+  const handleEmailLogin = async (email, password, expectedRole) => {
+    try {
+      const auth = getAuth();
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Fetch user role from Firestore
+      const userDoc = await getDoc(doc(db, "users", user.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (userData.role === expectedRole || (expectedRole === "staff" && userData.role === "admin")) {
+          setRole(userData.role);
+          setShowPinModal(false);
+        } else {
+          alert("❌ You do not have permission for this role.");
+        }
+      }
+    } catch (error) {
+      alert("❌ Login failed: " + error.message);
+    }
+  };
   cartRef.current = cart;
   useEffect(() => () => clearTimeout(aiTimerRef.current), []);
   const [showWaiterMode, setShowWaiterMode] = useState(false);
