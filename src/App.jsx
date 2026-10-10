@@ -8,7 +8,66 @@ import {
   runTransaction  // 👈 ADD THIS
 } from "firebase/firestore";
 import { QRCodeSVG } from 'qrcode.react';
+function ImageUploadButton({ currentImage, onUploaded, label }) {
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // File size check (5 MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert("⚠️ File 5MB se badi hai. Chhoti image use karo.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // 🔥 Firebase Storage use kar rahe hain
+      const storage = getStorage();
+      const storageRef = ref(storage, `uploads/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      onUploaded(downloadURL);
+    } catch (err) {
+      console.error("Upload error:", err);
+      alert("⚠️ Upload fail: " + err.message);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  return (
+    <div>
+      <input
+        type="file"
+        accept="image/*"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        style={{ display: "none" }}
+      />
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploading}
+        style={{
+          width: "100%",
+          padding: 14,
+          border: "none",
+          borderRadius: 12,
+          background: uploading ? "#999" : "#D97706",
+          color: "#fff",
+          fontWeight: 800,
+          fontSize: 14,
+          cursor: uploading ? "wait" : "pointer",
+        }}
+      >
+        {uploading ? "⏳ Uploading..." : label || "📸 Upload Image"}
+      </button>
+    </div>
+  );
+}
 /* ═══════════════════════════════════════════════════════════════════════
    🍽️ EAT & PARK RESTAURANT — V15 FINAL
    Waiter Mode · Running Items · KOT · Touch Kitchen · Live Notifications
