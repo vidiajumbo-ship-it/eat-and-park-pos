@@ -3515,10 +3515,6 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
               <button onClick={handleAddGalleryPhoto} style={{ ...primaryBtn, flex: 1 }}>+ Add</button>
             </div>
           </div>
-              <input type="url" placeholder="Image URL..." value={newGalleryImg} onChange={e => setNewGalleryImg(e.target.value)} style={{ ...inputStyle, flex: 2 }} />
-              <button onClick={handleAddGalleryPhoto} style={{ ...primaryBtn, flex: 1 }}>+ Add</button>
-            </div>
-          </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16 }}>
             {gallery.map((imgUrl, idx) => (
               <div key={idx} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 14, padding: 10 }}>
