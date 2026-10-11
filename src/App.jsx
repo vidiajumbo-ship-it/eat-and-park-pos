@@ -875,10 +875,20 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = 
     running: totalAmount,
   };
 }, [tableData, tables]);
+    const stats = useMemo(() => {
+    const active = tableData.filter(t => t.order);
+    const totalAmount = active.reduce((sum, t) => sum + getOrderTotal(t.order), 0);
+    return {
+      occupied: active.length,
+      empty: tables - active.length,
+      running: totalAmount,
+    };
+  }, [tableData, tables]);
+
   const statusColors = {
-    empty: { bg: "#E8F5E9", border: "#4A7C59", label: "Empty", emoji: "🟢" },
-    occupied: { const stats = useMemo(() => {bg: "#FFEBEE", border: "#EF4444", label: "Occupied", emoji: "🔴" },
-    billing: { bg: "#FFF8E1", border: "#FF9800", label: "Billing", emoji: "🟡" }
+    empty:    { bg: "#E8F5E9", border: "#4A7C59", label: "Empty",    emoji: "🟢" },
+    occupied: { bg: "#FFEBEE", border: "#EF4444", label: "Occupied", emoji: "🔴" },
+    billing:  { bg: "#FFF8E1", border: "#FF9800", label: "Billing",  emoji: "🟡" },
   };
 
   const formatTime = (ts) => {
