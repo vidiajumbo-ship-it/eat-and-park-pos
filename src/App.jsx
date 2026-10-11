@@ -108,6 +108,9 @@ const FONTS = `
 .pulse { animation: pulse 2s ease-in-out infinite; }
 .notification-pulse { animation: notificationPulse 2s ease-in-out infinite; }
 .dark-theme { filter: invert(0.92) hue-rotate(180deg); background: #111; min-height: 100vh; }
+.desktop-menu { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); column-gap: 24px; }
+.desktop-menu > * { grid-column: 1 / -1; }
+.desktop-menu > .smooth-slide-up { grid-column: auto; }
 .dark-theme img, .dark-theme .keep-color { filter: invert(1) hue-rotate(180deg); }
 @media print {
   .app-content { display: none !important; }
@@ -463,6 +466,40 @@ const useLocalStorage = (key, initialValue) => {
   return [storedValue, setStoredValue];
 };
 
+// 🖥️📱 APP / DESKTOP MODE
+const VIEW_KEY = "eatpark_viewmode";
+function useViewMode() {
+  const read = () => {
+    try {
+      const saved = localStorage.getItem(VIEW_KEY);
+      if (saved === "desktop" || saved === "app") return saved;
+    } catch (e) {}
+    return typeof window !== "undefined" && window.innerWidth >= 1024 ? "desktop" : "app";
+  };
+  const [mode, setModeState] = useState(read);
+  useEffect(() => {
+    const sync = () => setModeState(read());
+    window.addEventListener("eatpark_viewmode_change", sync);
+    return () => window.removeEventListener("eatpark_viewmode_change", sync);
+  }, []);
+  const setMode = useCallback((m) => {
+    try { localStorage.setItem(VIEW_KEY, m); } catch (e) {}
+    window.dispatchEvent(new Event("eatpark_viewmode_change"));
+  }, []);
+  return [mode, setMode];
+}
+
+const ViewModeToggle = memo(() => {
+  const [mode, setMode] = useViewMode();
+  const isDesktop = mode === "desktop";
+  return (
+    <button onClick={() => setMode(isDesktop ? "app" : "desktop")} title="App / Desktop mode badlo"
+      style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 12, padding: "8px 12px", cursor: "pointer", fontWeight: 700, fontSize: 13, marginLeft: 8, color: COLORS.ink }}>
+      {isDesktop ? "📱 App Mode" : "🖥️ Desktop Mode"}
+    </button>
+  );
+});
+
 // 5 galat PIN ke baad 30 second lock
 function usePinLockout(max = 5, lockMs = 30000) {
   const [fails, setFails] = useState(0);
@@ -717,7 +754,7 @@ const KotBadge = memo(({ kots }) => {
 // ==
 
 const KitchenNotificationColumn = memo(({ orders, selectedOrderId, onSelect }) => { useLiveNow(30000);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const newOrders = orders.filter(o => o.status === "new");
   const preparingOrders = orders.filter(o => o.status === "preparing");
 
@@ -840,7 +877,7 @@ const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
 // 14.5 TABLE STATUS BOARD
 // ==
 
-const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = true, compact = false }) => { useLiveNow(30000);
+const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, onEmptyTableClick, showStats = true, compact = false }) => { useLiveNow(30000);
   const tableData = useMemo(() => {
     const activeOrders = (orders || []).filter(o =>
       o.orderType === "dine_in" &&
@@ -899,19 +936,19 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = 
             <span style={{ color: COLORS.sage, fontWeight: 700 }}>{stats.empty}</span> free
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(52px, 1fr))', gap: 6 }}>
           {tableData.map(t => {
             const c = statusColors[t.status];
             return (
               <button
                 key={t.table}
-                onClick={() => t.order && onTableClick && onTableClick(t.order)}
-                disabled={!t.order}
+                onClick={() => (t.order ? (onTableClick && onTableClick(t.order)) : (onEmptyTableClick && onEmptyTableClick(t.table)))}
+                disabled={!t.order && !onEmptyTableClick}
                 style={{
                   aspectRatio: '1', borderRadius: 8,
                   background: c.bg, border: `1.5px solid ${c.border}`,
                   fontWeight: 800, fontSize: 13, color: COLORS.ink,
-                  cursor: t.order ? 'pointer' : 'default',
+                  cursor: (t.order || onEmptyTableClick) ? 'pointer' : 'default',
                   fontFamily: "'JetBrains Mono', monospace",
                   padding: 0
                 }}>
@@ -1653,6 +1690,8 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState }) {
   const [category, setCategory] = useState(categories[0] || "Thali");
+  const [viewMode, setViewMode] = useViewMode();
+  const [viewMode, setViewMode] = useViewMode();
   const cartRef = useRef({});
   const aiTimerRef = useRef(null);
   const waiterLock = usePinLockout();  const [cart, setCart] = useState({});
@@ -2433,7 +2472,7 @@ const handleWaiterPinSubmitOld = () => {
   const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, width: "100%", boxSizing: "border-box" };
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", paddingBottom: cartCount ? 120 : 60, background: "var(--bg-color, #fff)", minHeight: "100vh", position: "relative" }}>
+    <div style={{ maxWidth: viewMode === "desktop" ? 1100 : 480, margin: "0 auto", paddingBottom: cartCount ? 120 : 60, background: "var(--bg-color, #fff)", minHeight: "100vh", position: "relative" }}>
       {toast && <Toast message={toast} type={toastType} />}
 
       <button onClick={() => { requestWaiter(table); showToast("🔔 Waiter notified!", 'success'); }}
@@ -2519,7 +2558,7 @@ const handleWaiterPinSubmitOld = () => {
     })}
   </div>
 )}
-      <div style={{ padding: "16px" }}>
+      <div className={viewMode === "desktop" ? "desktop-menu" : ""} style={{ padding: "16px" }}>
         <div style={{ display: "flex", gap: 10, marginBottom: 8, alignItems: "center" }}>
           <SearchBar value={searchQuery} onChange={setSearchQuery} />
           <button onClick={() => setVegOnly(!vegOnly)} style={{ padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${vegOnly ? COLORS.sage : COLORS.line}`, background: vegOnly ? COLORS.sageLight : "transparent", color: vegOnly ? COLORS.sageDark : COLORS.textLight, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
@@ -2831,6 +2870,7 @@ const handleWaiterPinSubmitOld = () => {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
               <SidebarBtn icon={isDark ? "☀️" : "🌙"} text={isDark ? "Light Mode" : "Dark Mode"} onClick={() => { setIsDark(!isDark); setShowSidebar(false); }} highlight />
+              <SidebarBtn icon={viewMode === "desktop" ? "📱" : "🖥️"} text={viewMode === "desktop" ? "App Mode" : "Desktop Mode"} onClick={() => { setViewMode(viewMode === "desktop" ? "app" : "desktop"); setShowSidebar(false); }} highlight />
               <SidebarBtn icon="🖼️" text="Photo Gallery" onClick={() => { setShowSidebar(false); setActiveModal('gallery'); }} />
               <SidebarBtn icon="📜" text="Order History" onClick={() => { setShowSidebar(false); setActiveModal('orderHistory'); }} />
               <SidebarBtn icon="🪙" text="Coin History" onClick={() => { setShowSidebar(false); setActiveModal('coinHistory'); }} />
@@ -3101,13 +3141,225 @@ const KeyboardHelpModal = memo(({ onClose }) => (
   </div>
 ));
 
-function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, resolveCall, cancelOrderByStaff }) {
+// ═══════════════════════════════════════════════
+// 🧾 BILL + ORDER — ONE SCREEN POS
+// ═══════════════════════════════════════════════
+function BillPOSScreen(p) {
+  const { order, orders, menu, viewMode, items, setItems, calc } = p;
+  const [tab, setTab] = useState("menu");
+  const [search, setSearch] = useState("");
+  const [cat, setCat] = useState("all");
+  const isDesktop = viewMode === "desktop";
+  const isDraft = !!(order && order.isDraft);
+  const cats = p.categories && p.categories.length ? p.categories : Array.from(new Set((menu || []).map((m) => m.category)));
+
+  const list = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (menu || []).filter((m) => m.available && (cat === "all" || m.category === cat) && (!q || String(m.name).toLowerCase().includes(q)));
+  }, [menu, cat, search]);
+
+  const qtyOf = (id) => items.filter((it) => it.itemId === id).reduce((s, it) => s + (it.qty || 0), 0);
+  const itemCount = items.reduce((s, it) => s + (it.qty || 0), 0);
+
+  const addItem = (m) => setItems((prev) => {
+    const i = prev.findIndex((it) => it.itemId === m.id && it.price === m.price);
+    if (i >= 0) return prev.map((it, k) => (k === i ? { ...it, qty: it.qty + 1 } : it));
+    return [...prev, { itemId: m.id, name: m.name, portion: m.portion || "", price: m.price, qty: 1, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) }];
+  });
+  const changeQty = (rowId, d) => setItems((prev) => prev.flatMap((it) => (it._rowId !== rowId ? [it] : (it.qty + d <= 0 ? [] : [{ ...it, qty: it.qty + d }]))));
+  const removeRow = (rowId) => setItems((prev) => prev.filter((it) => it._rowId !== rowId));
+
+  const clash = isDraft && p.orderType === "dine_in"
+    ? (orders || []).find((o) => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled" && Number(o.table) === Number(p.table))
+    : null;
+
+  const inp = { padding: "7px 9px", border: `1.5px solid ${COLORS.line}`, borderRadius: 8, fontSize: 13, width: "100%", boxSizing: "border-box", fontFamily: "inherit" };
+  const chip = (on, color = COLORS.copper) => ({ padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${on ? color : COLORS.line}`, background: on ? color : "#fff", color: on ? "#fff" : COLORS.text, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" });
+  const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: 34 };
+  const disabled = p.saving || items.length === 0;
+  const actBtn = (bg, color, border) => ({ flex: 1, padding: "11px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
+  const qtyBtn = { width: 24, height: 24, border: "none", background: "transparent", color: COLORS.sage, fontSize: 16, fontWeight: 800, cursor: "pointer", padding: 0 };
+
+  const menuPane = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
+      <input placeholder="🔍 Item search..." value={search} onChange={(e) => setSearch(e.target.value)} style={inp} />
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, flexShrink: 0 }}>
+        {["all", ...cats].map((c) => (
+          <button key={c} type="button" onClick={() => setCat(c)} style={chip(cat === c, COLORS.ink)}>{c === "all" ? "All" : c}</button>
+        ))}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "grid", gridTemplateColumns: isDesktop ? "repeat(auto-fill, minmax(170px, 1fr))" : "repeat(2, 1fr)", gap: 6, alignContent: "start" }}>
+        {list.length === 0 && <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 20, color: COLORS.textLight, fontSize: 12 }}>Koi item nahi mila</div>}
+        {list.map((m) => {
+          const q = qtyOf(m.id);
+          return (
+            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "6px 8px", borderRadius: 8, border: `1.5px solid ${q > 0 ? COLORS.sage : COLORS.line}`, background: q > 0 ? COLORS.sageLight : "#fff", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: 52 }}>
+              <div style={{ display: "flex", gap: 5, alignItems: "flex-start" }}>
+                <VegDot veg={m.veg} />
+                <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2, color: COLORS.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{m.name}</span>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.copper, marginTop: 3 }}>
+                ₹{m.price}{m.portion ? <span style={{ color: COLORS.textLight, fontWeight: 600 }}> · {m.portion}</span> : null}
+              </div>
+              {q > 0 && <span style={{ position: "absolute", top: 4, right: 4, background: COLORS.sage, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 800 }}>{q}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const billPane = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%", overflowY: isDesktop ? "auto" : "visible" }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {isDraft ? (
+          <>
+            <button type="button" onClick={() => p.setOrderType("dine_in")} style={chip(p.orderType === "dine_in")}>🍽️ Table</button>
+            <button type="button" onClick={() => p.setOrderType("parcel")} style={chip(p.orderType === "parcel")}>🛍️ Parcel</button>
+            {p.orderType === "dine_in" && (
+              <select value={p.table} onChange={(e) => p.setTable(Number(e.target.value))} style={{ ...inp, width: 84 }}>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>T-{n}</option>)}
+              </select>
+            )}
+            <input placeholder="Waiter" value={p.waiter} onChange={(e) => p.setWaiter(e.target.value)} style={{ ...inp, flex: 1, minWidth: 80, width: "auto" }} />
+          </>
+        ) : (
+          <div style={{ fontWeight: 800, fontSize: 13 }}>
+            {order.orderType === "parcel" ? "🛍️ Parcel" : `🍽️ Table ${order.table}`} · #{order.id.slice(1, 9).toUpperCase()}{order.waiter ? ` · 🧑‍🍳 ${order.waiter}` : ""}
+          </div>
+        )}
+      </div>
+
+      {clash && (
+        <div style={{ background: "#FFF3E0", border: `1.5px solid ${COLORS.warning}`, borderRadius: 8, padding: "6px 8px", fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <span>⚠️ Table {p.table} pe order #{clash.id.slice(1, 5).toUpperCase()} pehle se chal raha hai</span>
+          <button type="button" onClick={() => p.onOpenOrder(clash)} style={chip(true, COLORS.info)}>Wahi kholo</button>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6 }}>
+        <input placeholder="Customer" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={inp} />
+        <input placeholder="Phone" value={p.custPhone} onChange={(e) => p.setCustPhone(e.target.value)} style={inp} />
+        <input placeholder="GSTIN" value={p.gstin} onChange={(e) => p.setGstin(e.target.value.toUpperCase())} style={inp} />
+      </div>
+
+      <div style={{ flex: 1, minHeight: 80, overflowY: "auto", border: `1px solid ${COLORS.line}`, borderRadius: 10, background: "#fff" }}>
+        {items.length === 0 && <div style={{ textAlign: "center", padding: 16, color: COLORS.textLight, fontSize: 12 }}>Menu se item tap karo ➕</div>}
+        {items.map((it) => (
+          <div key={it._rowId} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderBottom: `1px solid ${COLORS.line}` }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}{it.portion ? ` (${it.portion})` : ""}</div>
+              <div style={{ fontSize: 10, color: COLORS.textLight }}>₹{it.price} × {it.qty}</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", border: `1.5px solid ${COLORS.sage}`, borderRadius: 8 }}>
+              <button type="button" onClick={() => changeQty(it._rowId, -1)} style={qtyBtn}>−</button>
+              <span style={{ fontWeight: 800, fontSize: 12, minWidth: 16, textAlign: "center" }}>{it.qty}</span>
+              <button type="button" onClick={() => changeQty(it._rowId, 1)} style={qtyBtn}>+</button>
+            </div>
+            <div style={{ width: 52, textAlign: "right", fontWeight: 800, fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>₹{it.price * it.qty}</div>
+            <button type="button" onClick={() => removeRow(it._rowId)} style={{ background: "transparent", border: `1.5px solid ${COLORS.error}`, color: COLORS.error, width: 24, height: 24, borderRadius: 6, fontSize: 11, cursor: "pointer", fontWeight: 800, padding: 0 }}>✕</button>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={lbl}>GST</span>
+        {[0, 5, 12, 18].map((r) => (
+          <button key={r} type="button" onClick={() => p.setGstRate(r)} style={chip(p.gstRate === r)}>{r === 0 ? "No" : r + "%"}</button>
+        ))}
+        <button type="button" onClick={() => p.setGstRate("custom")} style={chip(p.gstRate === "custom")}>Custom</button>
+        {p.gstRate === "custom" && <input type="number" placeholder="%" value={p.gstCustom} onChange={(e) => p.setGstCustom(e.target.value)} style={{ ...inp, width: 60 }} />}
+        <span style={{ ...lbl, marginLeft: 6 }}>Disc</span>
+        <input type="number" min={0} max={100} placeholder="%" value={p.discPct || ""} onChange={(e) => p.setDiscPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} style={{ ...inp, width: 56 }} />
+        <input type="number" min={0} placeholder="₹" value={p.disc || ""} onChange={(e) => p.setDisc(Math.max(0, Number(e.target.value) || 0))} style={{ ...inp, width: 64 }} />
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        <span style={lbl}>Pay</span>
+        {[["cash", "💵 Cash"], ["upi", "📱 UPI"], ["card", "💳 Card"], ["razorpay", "⚡ Razorpay"], ["due", "⏳ Due"]].map(([id, label]) => (
+          <button key={id} type="button" onClick={() => p.setPayMode(id)} style={chip(p.payMode === id)}>{label}</button>
+        ))}
+        <button type="button" onClick={() => p.setPayStatus(p.payStatus === "paid" ? "pending" : "paid")} style={chip(true, p.payStatus === "paid" ? COLORS.success : COLORS.warning)}>
+          {p.payStatus === "paid" ? "✓ Paid" : "⏳ Pending"}
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <input placeholder="Notes..." value={p.notes} onChange={(e) => p.setNotes(e.target.value)} style={{ ...inp, flex: 1, minWidth: 120, width: "auto" }} />
+        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          <input type="checkbox" checked={p.showBillNo} onChange={(e) => p.setShowBillNo(e.target.checked)} /> Bill #
+        </label>
+        {isDraft && (
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            <input type="checkbox" checked={p.sendKot} onChange={(e) => p.setSendKot(e.target.checked)} /> 🍳 Kitchen ko bhejo
+          </label>
+        )}
+      </div>
+
+      <div style={{ background: COLORS.paper, borderRadius: 10, padding: "8px 10px", fontSize: 12, border: `1.5px solid ${COLORS.gold}` }}>
+        <div style={{ display: "flex", justifyContent: "space-between" }}><span>Subtotal ({itemCount} items)</span><b>₹{calc.sub}</b></div>
+        {p.discPct > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.success }}><span>Discount {p.discPct}%</span><b>-₹{calc.discPctAmt}</b></div>}
+        {p.disc > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.success }}><span>Extra discount</span><b>-₹{calc.discAmt}</b></div>}
+        {calc.gstRate > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.copper }}><span>GST {calc.gstRate}%</span><b>+₹{calc.gst}</b></div>}
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 800, borderTop: `2px solid ${COLORS.ink}`, paddingTop: 5, marginTop: 4 }}>
+          <span>TOTAL</span><span style={{ color: COLORS.copper, fontFamily: "'JetBrains Mono', monospace" }}>₹{calc.total}</span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 6 }}>
+        <button type="button" disabled={disabled} onClick={() => p.onAction("save")} style={actBtn("transparent", COLORS.sage, `2px solid ${COLORS.sage}`)}>
+          {p.saving ? "⏳..." : (isDraft && p.sendKot ? "🍳 KOT Bhejo" : "💾 Save")}
+        </button>
+        <button type="button" disabled={disabled} onClick={() => p.onAction("print")} style={actBtn(COLORS.info, "#fff")}>🖨️ Save & Print</button>
+        <button type="button" disabled={disabled} onClick={() => p.onAction("paid")} style={actBtn(COLORS.sage, "#fff")}>✓ Paid & Print</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", zIndex: 200, display: "flex", alignItems: isDesktop ? "center" : "flex-end", justifyContent: "center" }} onClick={p.onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="slide-up"
+        style={{ background: "#fff", width: isDesktop ? "min(1200px, 97vw)" : "100%", maxWidth: isDesktop ? 1200 : 560, height: isDesktop ? "92vh" : "96vh", borderRadius: isDesktop ? 18 : "20px 20px 0 0", padding: 12, display: "flex", flexDirection: "column", boxSizing: "border-box", gap: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>🧾 {isDraft ? "New Order + Bill" : "Order Bill"}</div>
+          <button type="button" onClick={p.onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 30, height: 30, fontSize: 14, cursor: "pointer" }}>✕</button>
+        </div>
+
+        {isDesktop ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 14, flex: 1, minHeight: 0 }}>
+            <div style={{ minHeight: 0 }}>{menuPane}</div>
+            <div style={{ minHeight: 0 }}>{billPane}</div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" onClick={() => setTab("menu")} style={{ ...chip(tab === "menu", COLORS.ink), flex: 1, padding: "8px 6px" }}>🍽️ Menu</button>
+              <button type="button" onClick={() => setTab("bill")} style={{ ...chip(tab === "bill", COLORS.ink), flex: 1, padding: "8px 6px" }}>🧾 Bill ({itemCount}) · ₹{calc.total}</button>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, overflowY: tab === "bill" ? "auto" : "hidden" }}>
+              {tab === "menu" ? menuPane : billPane}
+            </div>
+            {tab === "menu" && (
+              <button type="button" onClick={() => setTab("bill")} style={{ padding: 12, borderRadius: 12, border: "none", background: COLORS.sage, color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
+                <span>{itemCount} item{itemCount !== 1 ? "s" : ""}</span><span>Bill dekho ₹{calc.total} ➔</span>
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, resolveCall, cancelOrderByStaff, placeOrder, categories = [] }) {
   const active = orders.filter((o) => o.status !== "served" && o.status !== "cancelled").sort((a, b) => a.createdAt - b.createdAt);
   const activeCalls = calls.filter(c => c.status === 'active');
   const columns = ["new", "preparing", "ready"];
   const newOrderCount = active.filter(o => o.status === "new").length;
   const prevCountRef = useRef(newOrderCount);
   const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [viewMode] = useViewMode();
+  const [colTab, setColTab] = useState("new");
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [billOrder, setBillOrder] = useState(null);
   const [billEditItems, setBillEditItems] = useState([]);
@@ -3124,6 +3376,11 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
   const [billSearch, setBillSearch] = useState("");
   const [billAddItemOpen, setBillAddItemOpen] = useState(false);
   const [billShowBillNo, setBillShowBillNo] = useState(true);
+  const [billTable, setBillTable] = useState(1);
+  const [billOrderType, setBillOrderType] = useState("dine_in");
+  const [billWaiter, setBillWaiter] = useState("");
+  const [billSendKot, setBillSendKot] = useState(true);
+  const [billSaving, setBillSaving] = useState(false);
 
   useEffect(() => {
     if (newOrderCount > prevCountRef.current) {
@@ -3200,6 +3457,41 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
     setBillSearch("");
     setBillAddItemOpen(false);
     setBillShowBillNo(true);
+    setBillTable(Number(order.table) || 1);
+    setBillOrderType(order.orderType || "dine_in");
+    setBillWaiter(order.waiter || "");
+    setBillSendKot(!!order.isDraft);
+  };
+
+  // ➕ NEW ORDER — table/parcel, items, KOT aur bill sab yahin se
+  const openNewOrder = (preTable) => {
+    openBillEditor({
+      id: uid("o"), isDraft: true,
+      table: Number(preTable) || 1, orderType: "dine_in",
+      customer: { name: "Walk-in", phone: "WALK-IN", address: "" },
+      items: [], kots: [], waiter: "", takenBy: "staff",
+      notes: "", payment: "cash", paymentStatus: "pending", paid: false,
+      status: "new", createdAt: Date.now(),
+      coinsClaimed: true, earnedCoins: 0, rewardUsedCoins: 0,
+      deliveryFee: 0, loyaltyDiscount: 0, discount: 0
+    });
+  };
+
+  // mode: "save" | "print" | "paid"
+  const handleBillAction = async (mode) => {
+    if (billSaving || !billOrder) return;
+    if (billEditItems.length === 0) { alert("⚠️ Pehle items add karo"); return; }
+    setBillSaving(true);
+    try {
+      const saved = await saveBillEdits(mode === "paid" ? { payStatus: "paid" } : {});
+      if (!saved) return;
+      const itemsSnapshot = billEditItems;
+      if (mode === "paid" && saved.status === "ready") await advanceStatus(saved.id, "ready");
+      setBillOrder(null);
+      if (mode !== "save") setTimeout(() => printFinalBill(saved, itemsSnapshot), 200);
+    } finally {
+      setBillSaving(false);
+    }
   };
 
   // 🧮 BILL CALC
@@ -3215,7 +3507,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
   }, [billOrder, billEditItems, billGstRate, billGstCustom, billDiscount, billDiscountPct]);
 
   // 💾 SAVE BILL EDITS TO FIRESTORE
-  const saveBillEdits = async () => {
+  const saveBillEdits = async (override = {}) => {
     if (!billOrder) return null;
     try {
       const { sub, gstRate, gst, discPctAmt, discAmt, total } = billCalc;
@@ -3229,8 +3521,8 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
         billDiscountAmt: discPctAmt,
         finalTotal: total,
         payment: billPayMode,
-        paid: billPayStatus === "paid",
-        paymentStatus: billPayStatus,
+        paid: (override.payStatus ?? billPayStatus) === "paid",
+        paymentStatus: override.payStatus ?? billPayStatus,
         customer: {
           ...(billOrder.customer || {}),
           name: billCustomerName || "Walk-in",
@@ -3241,7 +3533,24 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
         billEditedAt: Date.now(),
         billEditedBy: "staff",
       };
-      await updateDoc(doc(db, "orders", billOrder.id), updated);
+      const clean = JSON.parse(JSON.stringify(updated)); // undefined values hata deta hai (Firestore error fix)
+      if (billOrder.isDraft) {
+        const { isDraft, ...base } = billOrder;
+        const kotItems = clean.items.map((it) => ({ ...it, kotNumber: 1 }));
+        const fullOrder = JSON.parse(JSON.stringify({
+          ...base, ...clean,
+          table: billOrderType === "parcel" ? 0 : billTable,
+          orderType: billOrderType,
+          waiter: billWaiter || "Staff",
+          items: kotItems,
+          kots: billSendKot ? [{ id: uid("kot"), kotNumber: 1, items: kotItems, createdAt: Date.now(), status: "new", isRunning: false }] : [],
+          status: billSendKot ? "new" : "served",
+          ...(billSendKot ? {} : { servedAt: Date.now() })
+        }));
+        await placeOrder(fullOrder);
+        return fullOrder;
+      }
+      await updateDoc(doc(db, "orders", billOrder.id), clean);
       return { ...billOrder, ...updated };
     } catch (e) {
       console.error("saveBillEdits error:", e);
@@ -3342,7 +3651,7 @@ ${order.waiter ? `<div style="font-size:10px;margin-top:4px">Waiter: ${escapeHtm
 <div class="line"></div>
 <div class="center">
   <span class="badge">${payLabel}</span>
-  <span class="badge">${billPayStatus === "paid" ? "PAID" : "PENDING"}</span>
+  <span class="badge">${order.paymentStatus === "paid" ? "PAID" : "PENDING"}</span>
 </div>
 
 ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #000;padding-top:6px"><b>Notes:</b> ${escapeHtml(billNotes)}</div>` : ""}
@@ -3361,19 +3670,21 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
     }, 400);
   };
   return (
-    <div style={{ padding: "26px 20px 60px", maxWidth: 1200, margin: "0 auto" }}>
+    <div style={{ padding: "12px 12px 40px", maxWidth: viewMode === "desktop" ? 1400 : 560, margin: "0 auto" }}>
       <KitchenNotificationColumn orders={active} selectedOrderId={selectedOrderId} onSelect={setSelectedOrderId} />
 
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, fontWeight: 800 }}>🍳 Kitchen Board</div>
+        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 800 }}>🍳 Kitchen Board</div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={() => setShowHelpModal(true)} style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 12, padding: "10px 16px", cursor: "pointer", fontWeight: 700 }}>⌨️ Shortcuts</button>
+          <button onClick={() => openNewOrder()} style={{ background: COLORS.sage, color: "#fff", border: "none", borderRadius: 12, padding: "10px 16px", cursor: "pointer", fontWeight: 800 }}>➕ New Order</button>
+          <ViewModeToggle />
           <button onClick={() => requestPinPrompt("admin")} style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 14, padding: "13px 20px", fontWeight: 700, cursor: 'pointer' }}>⚙️ Admin</button>
         </div>
       </div>
-      <div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 24, fontWeight: 600 }}>👆 Tap to advance. No sliding needed.</div>
+      <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 8, fontWeight: 600 }}>👆 Tap to advance · Table pe tap = bill</div>
 
-      {newOrderCount > 0 && (
+      {false && newOrderCount > 0 && (
         <div className="slide-up" style={{ background: 'rgba(226,89,56,0.1)', border: `2px solid ${COLORS.copper}`, borderRadius: 16, padding: 16, marginBottom: 24, display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 24 }}>🛎️</span>
           <div><div style={{ fontWeight: 800, fontSize: 16, color: COLORS.copper }}>{newOrderCount} New Order{newOrderCount > 1 ? 's' : ''}!</div><div style={{ fontSize: 13, color: COLORS.textLight }}>Tap the card to advance</div></div>
@@ -3384,7 +3695,9 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
         <TableStatusBoard
           orders={orders}
           tables={12}
-          onTableClick={(o) => setSelectedOrderId(o.id)}
+          compact
+          onTableClick={(o) => openBillEditor(o)}
+          onEmptyTableClick={(t) => openNewOrder(t)}
           showStats={true}
         />
       </div>
@@ -3405,8 +3718,17 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 24 }}>
-        {columns.map((status) => {
+      {viewMode !== "desktop" && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          {columns.map((s) => (
+            <button key={s} onClick={() => setColTab(s)} style={{ flex: 1, padding: "9px 6px", borderRadius: 10, border: `2px solid ${colTab === s ? STATUS_COLOR[s] : COLORS.line}`, background: colTab === s ? STATUS_COLOR[s] : "#fff", color: colTab === s ? "#fff" : COLORS.ink, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+              {STATUS_LABEL[s]} ({active.filter((o) => o.status === s).length})
+            </button>
+          ))}
+        </div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: viewMode === "desktop" ? "repeat(3, minmax(0, 1fr))" : "1fr", gap: 12 }}>
+        {columns.filter((s) => viewMode === "desktop" || s === colTab).map((status) => {
           const list = active.filter((o) => o.status === status);
           return (
             <div key={status} style={{ background: COLORS.paper, border: `1px solid ${COLORS.line}`, borderRadius: 18, padding: 20 }}>
@@ -3421,9 +3743,9 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
                   const isSelected = selectedOrderId === o.id;
                   const runningCount = (o.kots || []).filter(k => k.isRunning).length;
                   return (
-                    <div key={o.id} onClick={() => setSelectedOrderId(o.id)} style={{ background: isSelected ? COLORS.copper : '#fff', border: `2px solid ${isSelected ? COLORS.copper : COLORS.line}`, borderRadius: 16, padding: 18, cursor: 'pointer', transition: 'all 0.2s ease' }}>
+                    <div key={o.id} onClick={() => setSelectedOrderId(o.id)} style={{ background: isSelected ? COLORS.copper : '#fff', border: `2px solid ${isSelected ? COLORS.copper : COLORS.line}`, borderRadius: 12, padding: 10, cursor: 'pointer', transition: 'all 0.2s ease' }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: "center" }}>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: isSelected ? '#fff' : (o.orderType === "parcel" ? COLORS.rust : COLORS.ink), display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: isSelected ? '#fff' : (o.orderType === "parcel" ? COLORS.rust : COLORS.ink), display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
                           {o.orderType === "parcel" ? "🛍️ PARCEL" : `🍽️ Table ${o.table}`}
                           <KotBadge kots={o.kots} />
                           {runningCount > 0 && (<span style={{ background: isSelected ? 'rgba(255,255,255,0.3)' : COLORS.info, color: '#fff', fontSize: 10, padding: "2px 6px", borderRadius: 8, fontWeight: 800 }}>RUNNING</span>)}
@@ -3431,13 +3753,13 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
                         <div style={{ fontSize: 12, fontWeight: 700, color: isSelected ? 'rgba(255,255,255,0.85)' : COLORS.textLight, background: isSelected ? 'rgba(255,255,255,0.2)' : COLORS.paper2, padding: '4px 10px', borderRadius: 12 }}>{timeAgo(o.createdAt)}</div>
                       </div>
 
-                      <div style={{ borderTop: isSelected ? `1px solid rgba(255,255,255,0.3)` : `1.5px dashed ${COLORS.line}`, paddingTop: 14, marginBottom: 14 }}>
+                      <div style={{ borderTop: isSelected ? `1px solid rgba(255,255,255,0.3)` : `1.5px dashed ${COLORS.line}`, paddingTop: 8, marginBottom: 8 }}>
                         {o.items.map((it, idx) => {
                           const kot = (o.kots || []).find(k => k.kotNumber === (it.kotNumber || 1));
                           const hasActiveKot = (o.kots || []).some(k => k.status === status);
                           const isDone = !!kot && kot.status !== status && hasActiveKot;
                           return (
-                            <div key={idx} style={{ fontSize: 15, marginBottom: 6, fontWeight: 600, color: isSelected ? '#fff' : COLORS.ink, opacity: isDone ? 0.45 : 1 }}>
+                            <div key={idx} style={{ fontSize: 13, marginBottom: 3, fontWeight: 600, color: isSelected ? '#fff' : COLORS.ink, opacity: isDone ? 0.45 : 1 }}>
                               <span style={{ fontWeight: 800, display: 'inline-block', width: 28 }}>{it.qty}×</span> {it.name}
                               {it.kotNumber > 1 && (<span style={{ fontSize: 10, marginLeft: 6, color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.info, fontWeight: 700 }}>KOT#{it.kotNumber}</span>)}
                               {isDone && (<span style={{ fontSize: 10, marginLeft: 6, fontWeight: 800 }}>✓ already sent</span>)}
@@ -3455,10 +3777,10 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
                       </div>
 
                       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                        <button onClick={(e) => { e.stopPropagation(); advanceStatus(o.id, status); }} style={{ flex: 1, padding: "14px 12px", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 14, cursor: "pointer", background: status === "ready" ? COLORS.sage : (status === "preparing" ? COLORS.copper : COLORS.ink), color: "#fff" }}>
+                        <button onClick={(e) => { e.stopPropagation(); advanceStatus(o.id, status); }} style={{ flex: 1, padding: "10px 8px", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: "pointer", background: status === "ready" ? COLORS.sage : (status === "preparing" ? COLORS.copper : COLORS.ink), color: "#fff" }}>
                           {status === "new" ? "👨‍🍳 Start Cooking" : status === "preparing" ? "✅ Mark Ready" : "🍽️ Mark Served"}
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(o); }} title="Print KOT (Kitchen)" style={{ background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, color: isSelected ? '#fff' : COLORS.ink, border: 'none', width: 44, height: 48, borderRadius: 12, fontSize: 18, cursor: 'pointer' }}>🍳</button>
+                        <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(o); }} title="Print KOT (Kitchen)" style={{ background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, color: isSelected ? '#fff' : COLORS.ink, border: 'none', width: 44, height: 38, borderRadius: 12, fontSize: 18, cursor: 'pointer' }}>🍳</button>
                         <button onClick={(e) => { e.stopPropagation(); openBillEditor(o); }} title="Edit & Print Bill" style={{ background: COLORS.sage, color: '#fff', border: 'none', width: 52, height: 48, borderRadius: 12, fontSize: 18, cursor: 'pointer', fontWeight: 800 }}>🧾</button>
                         <button onClick={(e) => { e.stopPropagation(); if (window.confirm(`Cancel order #${o.id.slice(1, 5)}?`)) { cancelOrderByStaff && cancelOrderByStaff(o.id); } }} style={{ background: 'transparent', color: isSelected ? '#fff' : COLORS.error, border: `1.5px solid ${isSelected ? 'rgba(255,255,255,0.5)' : COLORS.error}`, width: 48, height: 48, borderRadius: 12, fontSize: 18, cursor: 'pointer', fontWeight: 800 }}>✕</button>
                       </div>
@@ -3472,8 +3794,35 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
         })}
       </div>
 
-      {/* 🧾 BILL EDITOR MODAL */}
-      {billOrder && (
+      {/* 🧾 NEW: ONE-SCREEN ORDER + BILL */}
+      {billOrder ? (
+        <BillPOSScreen
+          order={billOrder} orders={orders} menu={menu} categories={categories} viewMode={viewMode}
+          items={billEditItems} setItems={setBillEditItems} calc={billCalc}
+          orderType={billOrderType} setOrderType={setBillOrderType}
+          table={billTable} setTable={setBillTable}
+          waiter={billWaiter} setWaiter={setBillWaiter}
+          sendKot={billSendKot} setSendKot={setBillSendKot}
+          custName={billCustomerName} setCustName={setBillCustomerName}
+          custPhone={billCustomerPhone} setCustPhone={setBillCustomerPhone}
+          gstin={billCustomerGstin} setGstin={setBillCustomerGstin}
+          gstRate={billGstRate} setGstRate={setBillGstRate}
+          gstCustom={billGstCustom} setGstCustom={setBillGstCustom}
+          disc={billDiscount} setDisc={setBillDiscount}
+          discPct={billDiscountPct} setDiscPct={setBillDiscountPct}
+          payMode={billPayMode} setPayMode={setBillPayMode}
+          payStatus={billPayStatus} setPayStatus={setBillPayStatus}
+          notes={billNotes} setNotes={setBillNotes}
+          showBillNo={billShowBillNo} setShowBillNo={setBillShowBillNo}
+          saving={billSaving}
+          onClose={() => setBillOrder(null)}
+          onOpenOrder={(o) => openBillEditor(o)}
+          onAction={handleBillAction}
+        />
+      ) : null}
+
+      {/* 🧾 OLD BILL EDITOR (hidden) */}
+      {false && billOrder && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
           onClick={() => setBillOrder(null)}>
@@ -3892,7 +4241,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   return (
     <div style={{ padding: "26px 20px 60px", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 28, alignItems: 'center' }}>
-        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, fontWeight: 800 }}>📊 Admin Dashboard</div>
+        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, fontWeight: 800 }}>📊 Admin Dashboard <ViewModeToggle /></div>
         <button onClick={() => requestPinPrompt("customer")} style={{ background: COLORS.paper2, border: "none", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontWeight: 700 }}>← Exit</button>
       </div>
 
@@ -5224,7 +5573,7 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   
   {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} />}
   
-  {role === "staff" && <StaffView menu={menu} orders={orders} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} />}
+  {role === "staff" && <StaffView menu={menu} orders={orders} placeOrder={placeOrder} categories={categories} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} />}
   
   {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} />}
   
