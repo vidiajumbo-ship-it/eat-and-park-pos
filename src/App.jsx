@@ -16,13 +16,14 @@ function ImageUploadButton({ currentImage, onUploaded, label }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     let tries = 0;
-    if (++tries < 20) setTimeout(tryInit, 300);
-        else alert("Cloudinary script load nahi hui. public/index.html check karo.");
+    const tryInit = () => {
+      if (cancelled) return;
       if (window.cloudinary) {
         widgetRef.current = window.cloudinary.createUploadWidget(
           {
-            cloudName: "5dfc389197bbc293b64579d25342c4",
+            cloudName: "nnddxvcn",
             uploadPreset: "eatpark_uploads",
             sources: ["local", "camera", "url"],
             multiple: false,
@@ -41,11 +42,14 @@ function ImageUploadButton({ currentImage, onUploaded, label }) {
           }
         );
         setReady(true);
-      } else {
+      } else if (++tries < 20) {
         setTimeout(tryInit, 300);
+      } else {
+        alert("Cloudinary script load nahi hui. public/index.html check karo.");
       }
     };
     tryInit();
+    return () => { cancelled = true; };
   }, []);
 
   const openWidget = () => {
