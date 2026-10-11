@@ -1691,7 +1691,6 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState }) {
   const [category, setCategory] = useState(categories[0] || "Thali");
   const [viewMode, setViewMode] = useViewMode();
-  const [viewMode, setViewMode] = useViewMode();
   const cartRef = useRef({});
   const aiTimerRef = useRef(null);
   const waiterLock = usePinLockout();  const [cart, setCart] = useState({});
