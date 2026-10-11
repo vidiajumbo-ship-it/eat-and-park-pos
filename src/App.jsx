@@ -3166,6 +3166,49 @@ function BillPOSScreen(p) {
     return [...prev, { itemId: m.id, name: m.name, portion: m.portion || "", price: m.price, qty: 1, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) }];
   });
   const changeQty = (rowId, d) => setItems((prev) => prev.flatMap((it) => (it._rowId !== rowId ? [it] : (it.qty + d <= 0 ? [] : [{ ...it, qty: Math.round((it.qty + d) * 100) / 100 }]))));
+  const [showNew, setShowNew] = useState(false);
+  const [savingItem, setSavingItem] = useState(false);
+  const emptyNew = { name: "", price: "", category: cats[0] || "Thali", veg: true, portion: "" };
+  const [newItem, setNewItem] = useState(emptyNew);
+
+  const checkNewItem = () => {
+    const name = newItem.name.trim();
+    const price = Number(newItem.price);
+    if (!name) { alert("⚠️ Item ka naam daalo"); return null; }
+    if (!Number.isFinite(price) || price <= 0) { alert("⚠️ Sahi rate daalo"); return null; }
+    return { name, price };
+  };
+
+  // Sirf is bill me (menu me save nahi hota)
+  const addCustomOnly = () => {
+    const v = checkNewItem();
+    if (!v) return;
+    setItems((prev) => [...prev, { itemId: uid("c"), name: v.name, portion: newItem.portion.trim(), price: v.price, qty: 1, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) }]);
+    setNewItem(emptyNew);
+    setShowNew(false);
+  };
+
+  // Menu me hamesha ke liye save + bill me add
+  const saveNewItem = async () => {
+    const v = checkNewItem();
+    if (!v || savingItem) return;
+    setSavingItem(true);
+    try {
+      const dish = mi(uid("m"), v.name, v.price, newItem.category || cats[0] || "Thali", newItem.veg, "", newItem.portion.trim(), false, true, "");
+      const updatedMenu = [dish, ...(menu || [])];
+      await setDoc(doc(db, "settings", "menu"), { items: updatedMenu });
+      if (p.setMenuState) p.setMenuState(updatedMenu);
+      addItem(dish);
+      setNewItem(emptyNew);
+      setShowNew(false);
+    } catch (e) {
+      console.error("Save new item error:", e);
+      alert("❌ Item save nahi hua. Internet check karke dobara try karo.");
+    } finally {
+      setSavingItem(false);
+    }
+  };
+
   const commitQty = (rowId, raw) => {
     const v = parseFloat(String(raw).replace(",", "."));
     if (!Number.isFinite(v) || v <= 0) return false;
@@ -3194,7 +3237,36 @@ function BillPOSScreen(p) {
 
   const menuPane = (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
-      <input placeholder="🔍 Item search..." value={search} onChange={(e) => setSearch(e.target.value)} style={inp} />
+      <div style={{ display: "flex", gap: 6 }}>
+        <input placeholder="🔍 Item search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...inp, flex: 1, width: "auto" }} />
+        <button type="button" onClick={() => setShowNew(true)} style={{ ...chip(true, COLORS.sage), padding: "7px 12px" }}>➕ New Item</button>
+      </div>
+      {showNew && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 260, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }} onClick={() => setShowNew(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 16, width: "100%", maxWidth: 380, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>➕ Naya Item</div>
+            <input autoFocus placeholder="Item ka naam *" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={inp} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <input type="number" inputMode="decimal" placeholder="Rate ₹ *" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: e.target.value })} style={inp} />
+              <input placeholder="Portion (Half/Full)" value={newItem.portion} onChange={(e) => setNewItem({ ...newItem, portion: e.target.value })} style={inp} />
+            </div>
+            <select value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} style={{ ...inp, background: "#fff" }}>
+              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" onClick={() => setNewItem({ ...newItem, veg: true })} style={{ ...chip(newItem.veg, COLORS.sage), flex: 1 }}>🟢 Veg</button>
+              <button type="button" onClick={() => setNewItem({ ...newItem, veg: false })} style={{ ...chip(!newItem.veg, COLORS.rust), flex: 1 }}>🔴 Non-Veg</button>
+            </div>
+            <button type="button" disabled={savingItem} onClick={saveNewItem} style={{ padding: 12, borderRadius: 10, border: "none", background: savingItem ? COLORS.paper2 : COLORS.sage, color: savingItem ? COLORS.textLight : "#fff", fontWeight: 800, fontSize: 14, cursor: savingItem ? "wait" : "pointer" }}>
+              {savingItem ? "⏳ Saving..." : "💾 Menu me save + bill me add"}
+            </button>
+            <button type="button" onClick={addCustomOnly} style={{ padding: 11, borderRadius: 10, border: `2px solid ${COLORS.info}`, background: "transparent", color: COLORS.info, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+              ➕ Sirf is bill me (menu me save nahi)
+            </button>
+            <button type="button" onClick={() => setShowNew(false)} style={{ padding: 8, border: "none", background: "transparent", color: COLORS.textLight, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, flexShrink: 0 }}>
         {["all", ...cats].map((c) => (
           <button key={c} type="button" onClick={() => setCat(c)} style={chip(cat === c, COLORS.ink)}>{c === "all" ? "All" : c}</button>
@@ -3383,7 +3455,7 @@ function BillPOSScreen(p) {
   );
 }
 
-function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, resolveCall, cancelOrderByStaff, placeOrder, categories = [] }) {
+function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, resolveCall, cancelOrderByStaff, placeOrder, categories = [], setMenuState }) {
   const active = orders.filter((o) => o.status !== "served" && o.status !== "cancelled").sort((a, b) => a.createdAt - b.createdAt);
   const activeCalls = calls.filter(c => c.status === 'active');
   const columns = ["new", "preparing", "ready"];
@@ -3866,7 +3938,7 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
       {/* 🧾 NEW: ONE-SCREEN ORDER + BILL */}
       {billOrder ? (
         <BillPOSScreen
-          order={billOrder} orders={orders} menu={menu} categories={categories} viewMode={viewMode}
+          order={billOrder} orders={orders} menu={menu} categories={categories} viewMode={viewMode} setMenuState={setMenuState}
           items={billEditItems} setItems={setBillEditItems} calc={billCalc}
           orderType={billOrderType} setOrderType={setBillOrderType}
           table={billTable} setTable={setBillTable}
@@ -5642,7 +5714,7 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   
   {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} />}
   
-  {role === "staff" && <StaffView menu={menu} orders={orders} placeOrder={placeOrder} categories={categories} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} />}
+  {role === "staff" && <StaffView menu={menu} orders={orders} placeOrder={placeOrder} categories={categories} setMenuState={setMenuState} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} />}
   
   {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} />}
   
