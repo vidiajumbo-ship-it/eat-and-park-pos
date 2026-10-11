@@ -1060,6 +1060,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [notes, setNotes] = useState("");
+  const [orderMode, setOrderMode] = useState("dine_in"); 
   const [placedOrder, setPlacedOrder] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -1176,7 +1177,15 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
       });
       let created = null;
       try {
-        created = await onSubmit({ table, items, waiterName, customerName: customerName || "Walk-in", customerPhone: customerPhone || "", notes });
+      created = await onSubmit({
+  table: orderMode === "parcel" ? 0 : table,
+  orderType: orderMode,
+  items, waiterName,
+  customerName: customerName || "Walk-in",
+  customerPhone: customerPhone || "",
+  notes
+});
+});
       } catch (err) {
         console.error(err);
         alert("❌ Order send nahi hua. Internet check karke dobara try karo.");
@@ -1566,12 +1575,44 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
           </div>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-          <input placeholder="Waiter Name" value={waiterName} onChange={e => setWaiterName(e.target.value)} style={inputStyle} />
-          <select value={table} onChange={e => setTable(Number(e.target.value))} style={{ ...inputStyle, background: "#fff" }}>
-            {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>Table {n}</option>)}
-          </select>
-        </div>
+        <div style={{ marginBottom: 12 }}>
+  <input placeholder="Waiter Name" value={waiterName} onChange={e => setWaiterName(e.target.value)} style={{ ...inputStyle, marginBottom: 10 }} />
+
+  {/* 🆕 Dine-in / Parcel toggle */}
+  <div style={{ display: "flex", gap: 8 }}>
+    <button
+      type="button"
+      onClick={() => setOrderMode("dine_in")}
+      style={{
+        flex: 1, padding: "12px 8px", borderRadius: 10,
+        border: `2px solid ${orderMode === "dine_in" ? COLORS.copper : COLORS.line}`,
+        background: orderMode === "dine_in" ? COLORS.copper : "#fff",
+        color: orderMode === "dine_in" ? "#fff" : COLORS.ink,
+        fontWeight: 800, fontSize: 13, cursor: "pointer"
+      }}>
+      🍽️ Table
+    </button>
+    <button
+      type="button"
+      onClick={() => setOrderMode("parcel")}
+      style={{
+        flex: 1, padding: "12px 8px", borderRadius: 10,
+        border: `2px solid ${orderMode === "parcel" ? COLORS.copper : COLORS.line}`,
+        background: orderMode === "parcel" ? COLORS.copper : "#fff",
+        color: orderMode === "parcel" ? "#fff" : COLORS.ink,
+        fontWeight: 800, fontSize: 13, cursor: "pointer"
+      }}>
+      🛍️ Parcel
+    </button>
+  </div>
+
+  {/* Table dropdown sirf Dine-in me */}
+  {orderMode === "dine_in" && (
+    <select value={table} onChange={e => setTable(Number(e.target.value))} style={{ ...inputStyle, background: "#fff", marginTop: 10 }}>
+      {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>Table {n}</option>)}
+    </select>
+  )}
+</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
           <input placeholder="Customer Name (optional)" value={customerName} onChange={e => setCustomerName(e.target.value)} style={inputStyle} />
           <input placeholder="Customer Phone (optional)" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} style={inputStyle} />
@@ -1899,11 +1940,11 @@ if (savedCart) {
     } catch (e) { showToast("⚠️ Failed to add items", "error"); }
   }, [orders, showToast]);
 
-  const handleWaiterOrder = useCallback(async ({ table: t, items, waiterName, customerName, customerPhone, notes: orderNotes }) => {
+  const handleWaiterOrder = useCallback(async ({ table: t, orderType: ot, items, waiterName, customerName, customerPhone, notes: orderNotes }) => {
     const orderId = uid("o");
     const total = items.reduce((s, it) => s + it.price * it.qty, 0);
     const order = {
-      id: orderId, table: t, orderType: "dine_in",
+      id: orderId, table: t, orderType: ot || "dine_in",
       customer: { name: customerName, phone: customerPhone || "WALK-IN", address: "" },
       items, waiter: waiterName || "Staff", takenBy: "waiter",
       kots: [{ id: uid("kot"), kotNumber: 1, items: items.map(it => ({ ...it, kotNumber: 1 })), createdAt: Date.now(), status: "new", isRunning: false }],
@@ -1915,7 +1956,8 @@ if (savedCart) {
     };
     await placeOrder(order);
     playNotificationSound();
-    const waText = `🧑‍🍳 *WAITER ORDER* (#${orderId.slice(1, 5).toUpperCase()})\nTable ${t} · Waiter: ${waiterName || "Staff"}\nCustomer: ${customerName}\n` + items.map(i => `• ${i.qty}x ${i.name}`).join("\n") + (orderNotes ? `\nNotes: ${orderNotes}` : "") + `\n\nTotal: ₹${total}`;
+    const typeLabel = ot === "parcel" ? "🛍️ *PARCEL ORDER*" : `🍽️ Table ${t}`;
+    const waText = `🧑‍🍳 *WAITER ORDER* (#${orderId.slice(1, 5).toUpperCase()})\n${typeLabel} · Waiter: ${waiterName || "Staff"}\nCustomer: ${customerName}\n` + items.map(i => `• ${i.qty}x ${i.name}`).join("\n") + (orderNotes ? `\nNotes: ${orderNotes}` : "") + `\n\nTotal: ₹${total}`;
     window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
     return order;
   }, [placeOrder]);
