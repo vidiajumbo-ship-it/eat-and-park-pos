@@ -3165,7 +3165,19 @@ function BillPOSScreen(p) {
     if (i >= 0) return prev.map((it, k) => (k === i ? { ...it, qty: it.qty + 1 } : it));
     return [...prev, { itemId: m.id, name: m.name, portion: m.portion || "", price: m.price, qty: 1, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) }];
   });
-  const changeQty = (rowId, d) => setItems((prev) => prev.flatMap((it) => (it._rowId !== rowId ? [it] : (it.qty + d <= 0 ? [] : [{ ...it, qty: it.qty + d }]))));
+  const changeQty = (rowId, d) => setItems((prev) => prev.flatMap((it) => (it._rowId !== rowId ? [it] : (it.qty + d <= 0 ? [] : [{ ...it, qty: Math.round((it.qty + d) * 100) / 100 }]))));
+  const commitQty = (rowId, raw) => {
+    const v = parseFloat(String(raw).replace(",", "."));
+    if (!Number.isFinite(v) || v <= 0) return false;
+    setItems((prev) => prev.map((it) => (it._rowId === rowId ? { ...it, qty: Math.round(v * 100) / 100 } : it)));
+    return true;
+  };
+  const commitPrice = (rowId, raw) => {
+    const v = parseFloat(String(raw).replace(",", "."));
+    if (!Number.isFinite(v) || v < 0) return false;
+    setItems((prev) => prev.map((it) => (it._rowId === rowId ? { ...it, price: Math.round(v * 100) / 100 } : it)));
+    return true;
+  };
   const removeRow = (rowId) => setItems((prev) => prev.filter((it) => it._rowId !== rowId));
 
   const clash = isDraft && p.orderType === "dine_in"
@@ -3249,14 +3261,23 @@ function BillPOSScreen(p) {
           <div key={it._rowId} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderBottom: `1px solid ${COLORS.line}` }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}{it.portion ? ` (${it.portion})` : ""}</div>
-              <div style={{ fontSize: 10, color: COLORS.textLight }}>₹{it.price} × {it.qty}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+                <span style={{ fontSize: 10, color: COLORS.textLight }}>Rate ₹</span>
+                <input key={it._rowId + "_p_" + it.price} type="number" inputMode="decimal" min={0} step="any" defaultValue={it.price}
+                  onBlur={(e) => { if (!commitPrice(it._rowId, e.target.value)) e.target.value = it.price; }}
+                  onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+                  style={{ width: 62, padding: "2px 4px", border: `1px solid ${COLORS.line}`, borderRadius: 6, fontSize: 12, fontWeight: 700 }} />
+              </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", border: `1.5px solid ${COLORS.sage}`, borderRadius: 8 }}>
               <button type="button" onClick={() => changeQty(it._rowId, -1)} style={qtyBtn}>−</button>
-              <span style={{ fontWeight: 800, fontSize: 12, minWidth: 16, textAlign: "center" }}>{it.qty}</span>
+              <input key={it._rowId + "_q_" + it.qty} type="number" inputMode="decimal" min={0} step="any" defaultValue={it.qty}
+                onBlur={(e) => { if (!commitQty(it._rowId, e.target.value)) e.target.value = it.qty; }}
+                onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
+                style={{ width: 46, textAlign: "center", border: "none", background: "transparent", fontWeight: 800, fontSize: 12 }} />
               <button type="button" onClick={() => changeQty(it._rowId, 1)} style={qtyBtn}>+</button>
             </div>
-            <div style={{ width: 52, textAlign: "right", fontWeight: 800, fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>₹{it.price * it.qty}</div>
+            <div style={{ width: 52, textAlign: "right", fontWeight: 800, fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>₹{Math.round(it.price * it.qty * 100) / 100}</div>
             <button type="button" onClick={() => removeRow(it._rowId)} style={{ background: "transparent", border: `1.5px solid ${COLORS.error}`, color: COLORS.error, width: 24, height: 24, borderRadius: 6, fontSize: 11, cursor: "pointer", fontWeight: 800, padding: 0 }}>✕</button>
           </div>
         ))}
@@ -3337,9 +3358,9 @@ function BillPOSScreen(p) {
         )}
 
         {isDesktop ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 14, flex: 1, minHeight: 0 }}>
-            <div style={{ minHeight: 0 }}>{menuPane}</div>
-            <div style={{ minHeight: 0 }}>{billPane}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gridTemplateRows: "minmax(0, 1fr)", gap: 14, flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <div style={{ minHeight: 0, height: "100%", overflow: "hidden" }}>{menuPane}</div>
+            <div style={{ minHeight: 0, height: "100%", overflow: "hidden" }}>{billPane}</div>
           </div>
         ) : (
           <>
@@ -3489,7 +3510,44 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
   };
 
   // mode: "save" | "print" | "paid"
+  const printKotSlip = (order) => {
+    try {
+      const kot = (order.kots && order.kots.length ? order.kots[order.kots.length - 1] : null) || { kotNumber: 1, items: order.items || [] };
+      const rows = (kot.items || []).map((it) => `<div class="r"><span>${it.qty} x ${escapeHtml(it.name)}${it.portion ? " (" + escapeHtml(it.portion) + ")" : ""}</span></div>`).join("");
+      const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+      const iframe = document.createElement("iframe");
+      iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+      document.body.appendChild(iframe);
+      const w = iframe.contentWindow;
+      setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 60000);
+      w.document.open();
+      w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:8px;font-weight:700}h2,h3{text-align:center;margin:3px 0}.r{font-size:17px;padding:4px 0;border-bottom:1px dashed #000}.c{text-align:center;font-size:12px}</style></head><body><h2>KOT #${kot.kotNumber || 1}</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + escapeHtml(String(order.table))}</h3><div class="c">${escapeHtml(now)} · #${escapeHtml(order.id.slice(1, 5).toUpperCase())}${order.waiter ? " · " + escapeHtml(order.waiter) : ""}</div><div style="margin-top:8px">${rows}</div>${order.notes ? `<div class="c" style="margin-top:8px">Note: ${escapeHtml(order.notes)}</div>` : ""}</body></html>`);
+      w.document.close();
+      setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("⚠️ KOT print nahi ho paya: " + e.message); } }, 400);
+    } catch (e) { console.error("KOT print error:", e); }
+  };
+
   const handleBillAction = async (mode) => {
+    if (billSaving || !billOrder) return;
+    if (billEditItems.length === 0) { alert("⚠️ Pehle items add karo"); return; }
+    setBillSaving(true);
+    try {
+      const wasDraft = !!billOrder.isDraft;
+      const sendKot = billSendKot;
+      const saved = await saveBillEdits(mode === "paid" ? { payStatus: "paid" } : {});
+      if (!saved) return;
+      const itemsSnapshot = billEditItems;
+      if (mode === "paid" && saved.status === "ready") await advanceStatus(saved.id, "ready");
+      setBillOrder(null);
+      let delay = 200;
+      if (wasDraft && sendKot) { setTimeout(() => printKotSlip(saved), 200); delay = 1500; }
+      if (mode !== "save") setTimeout(() => printFinalBill(saved, itemsSnapshot), delay);
+    } finally {
+      setBillSaving(false);
+    }
+  };
+
+  const handleBillActionOld = async (mode) => {
     if (billSaving || !billOrder) return;
     if (billEditItems.length === 0) { alert("⚠️ Pehle items add karo"); return; }
     setBillSaving(true);
@@ -3508,7 +3566,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
   // 🧮 BILL CALC
   const billCalc = useMemo(() => {
     if (!billOrder) return { sub: 0, gst: 0, discAmt: 0, discPctAmt: 0, total: 0, gstRate: 0 };
-    const sub = billEditItems.reduce((s, it) => s + (it.price || 0) * (it.qty || 0), 0);
+    const sub = Math.round(billEditItems.reduce((s, it) => s + (it.price || 0) * (it.qty || 0), 0));
     const gstRate = billGstRate === "custom" ? Number(billGstCustom) || 0 : Number(billGstRate) || 0;
     const discPctAmt = Math.round((sub * billDiscountPct) / 100);
     const afterPct = sub - discPctAmt;
@@ -3594,7 +3652,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
         <td style="text-align:left">${escapeHtml(it.name)}${it.portion ? ` <small>(${escapeHtml(it.portion)})</small>` : ""}</td>
         <td style="text-align:center">${it.qty}</td>
         <td style="text-align:right">₹${it.price}</td>
-        <td style="text-align:right">₹${it.price * it.qty}</td>
+        <td style="text-align:right">₹${Math.round(it.price * it.qty * 100) / 100}</td>
       </tr>`
       )
       .join("");
