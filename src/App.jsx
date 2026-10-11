@@ -3145,7 +3145,7 @@ const KeyboardHelpModal = memo(({ onClose }) => (
 // ═══════════════════════════════════════════════
 function BillPOSScreen(p) {
   const { order, orders, menu, viewMode, items, setItems, calc } = p;
-  const [tab, setTab] = useState("menu");
+  const [tab, setTab] = useState(order && order.isDraft ? "menu" : "bill");
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
   const isDesktop = viewMode === "desktop";
@@ -3176,7 +3176,8 @@ function BillPOSScreen(p) {
   const chip = (on, color = COLORS.copper) => ({ padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${on ? color : COLORS.line}`, background: on ? color : "#fff", color: on ? "#fff" : COLORS.text, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" });
   const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: 34 };
   const disabled = p.saving || items.length === 0;
-  const actBtn = (bg, color, border) => ({ flex: 1, padding: "11px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
+  const footBtn = (bg, color, border) => ({ flex: 1, padding: "12px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 14, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
+  const actBtn = (bg, color, border) => ({ display: "none", flex: 1, padding: "11px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
   const qtyBtn = { width: 24, height: 24, border: "none", background: "transparent", color: COLORS.sage, fontSize: 16, fontWeight: 800, cursor: "pointer", padding: 0 };
 
   const menuPane = (
@@ -3323,6 +3324,17 @@ function BillPOSScreen(p) {
           <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>🧾 {isDraft ? "New Order + Bill" : "Order Bill"}</div>
           <button type="button" onClick={p.onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 30, height: 30, fontSize: 14, cursor: "pointer" }}>✕</button>
         </div>
+
+        {(isDesktop || tab === "bill") && (
+          <div style={{ order: 99, display: "flex", gap: 6, alignItems: "center", flexShrink: 0, paddingTop: 8, borderTop: `1px solid ${COLORS.line}` }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: COLORS.copper, fontFamily: "'JetBrains Mono', monospace", minWidth: 70 }}>₹{calc.total}</div>
+            <button type="button" disabled={disabled} onClick={() => p.onAction("save")} style={footBtn("transparent", COLORS.sage, `2px solid ${COLORS.sage}`)}>
+              {p.saving ? "⏳..." : (isDraft && p.sendKot ? "🍳 KOT" : "💾 Save")}
+            </button>
+            <button type="button" disabled={disabled} onClick={() => p.onAction("print")} style={footBtn(COLORS.info, "#fff")}>🖨️ Print</button>
+            <button type="button" disabled={disabled} onClick={() => p.onAction("paid")} style={footBtn(COLORS.sage, "#fff")}>✓ Paid + Print</button>
+          </div>
+        )}
 
         {isDesktop ? (
           <div style={{ display: "grid", gridTemplateColumns: "1.15fr 1fr", gap: 14, flex: 1, minHeight: 0 }}>
