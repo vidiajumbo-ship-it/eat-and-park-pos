@@ -3253,24 +3253,26 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
     w.document.write(`<!doctype html>
 <html><head><title>Bill ${billNo}</title>
 <style>
-  *{box-sizing:border-box}
-  body{font-family:'Courier New',monospace;font-size:12px;padding:10px;width:300px;margin:0 auto;color:#000}
+  *{box-sizing:border-box;color:#000 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  div,span,b{font-size:13px !important;font-weight:700}
+  @page{margin:0}
+  body{font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;padding:8px;width:290px;margin:0 auto;color:#000}
   h2,h4{text-align:center;margin:4px 0}
-  h2{font-size:17px;letter-spacing:1px}
-  .line{border-top:1px dashed #000;margin:8px 0}
-  table{width:100%;border-collapse:collapse;font-size:11px}
-  th,td{padding:3px 2px}
-  th{border-bottom:1px solid #000;text-align:left;font-size:10px}
-  .totals td{padding:3px 2px;font-size:11px}
-  .grand{font-size:14px;font-weight:bold;border-top:2px solid #000;padding-top:6px}
+  h2{font-size:24px;font-weight:900;letter-spacing:1px}
+  .line{border-top:2px dashed #000;margin:8px 0}
+  table{width:100%;border-collapse:collapse;font-size:14px;font-weight:700}
+  th,td{padding:4px 2px}
+  th{border-bottom:2px solid #000;text-align:left;font-size:13px;font-weight:900}
+  .totals td{padding:4px 2px;font-size:14px;font-weight:700}
+  .grand td{font-size:20px;font-weight:900;border-top:3px solid #000;padding-top:8px}
   .footer{text-align:center;font-size:10px;margin-top:10px;line-height:1.4}
-  .badge{display:inline-block;padding:2px 8px;border:1px solid #000;border-radius:10px;font-size:10px;margin:2px}
+  .badge{display:inline-block;padding:3px 10px;border:2px solid #000;border-radius:10px;font-size:13px;font-weight:900;margin:2px}
   .center{text-align:center}
 </style></head><body>
 
 <h2>${escapeHtml(RESTAURANT.name)}</h2>
 <div class="center" style="font-size:10px">${escapeHtml(RESTAURANT.address)}</div>
-<div class="center" style="font-size:10px">📞 ${RESTAURANT.phones.join(" / ")}</div>
+<div class="center" style="font-size:10px">Ph: ${RESTAURANT.phones.join(" / ")}</div>
 <div class="center" style="font-size:10px">GSTIN: ${escapeHtml(billCustomerGstin || "—")}</div>
 
 <div class="line"></div>
@@ -3301,15 +3303,15 @@ ${order.waiter ? `<div style="font-size:10px;margin-top:4px">Waiter: ${escapeHtm
 <div class="line"></div>
 <div class="center">
   <span class="badge">${payLabel}</span>
-  <span class="badge">${billPayStatus === "paid" ? "✓ PAID" : "⏳ PENDING"}</span>
+  <span class="badge">${billPayStatus === "paid" ? "PAID" : "PENDING"}</span>
 </div>
 
 ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #000;padding-top:6px"><b>Notes:</b> ${escapeHtml(billNotes)}</div>` : ""}
 
 <div class="footer">
-  <div>🙏 Thank you! Visit again 🙏</div>
+  <div>** Thank you! Visit again **</div>
   <div>${escapeHtml(RESTAURANT.tagline)}</div>
-  <div style="margin-top:6px">⭐ Rate us on Google</div>
+  <div style="margin-top:6px">Rate us on Google</div>
 </div>
 
 </body></html>`);
