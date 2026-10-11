@@ -11,10 +11,14 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 function ImageUploadButton({ currentImage, onUploaded, label }) {
   const widgetRef = useRef(null);
+  const onUploadedRef = useRef(onUploaded);
+  onUploadedRef.current = onUploaded;
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const tryInit = () => {
+    let tries = 0;
+    if (++tries < 20) setTimeout(tryInit, 300);
+        else alert("Cloudinary script load nahi hui. public/index.html check karo.");
       if (window.cloudinary) {
         widgetRef.current = window.cloudinary.createUploadWidget(
           {
@@ -27,11 +31,12 @@ function ImageUploadButton({ currentImage, onUploaded, label }) {
           },
           (error, result) => {
             if (error) {
-              alert("Upload fail: " + (error.message || "Error"));
+              console.error("Cloudinary error:", error);
+              alert("Upload fail: " + (error.statusText || error.message || JSON.stringify(error)));
               return;
             }
             if (result && result.event === "success") {
-              onUploaded(result.info.secure_url);
+              onUploadedRef.current(result.info.secure_url);
             }
           }
         );
@@ -186,7 +191,7 @@ function escapeHtml(s) {
 // Ek hi jagah se order total (coupon + loyalty + delivery sab included)
 function getOrderTotal(o) {
   const hasRunning = (o?.kots || []).some(k => k.isRunning);
-  if (Number.isFinite(o?.finalTotal) && !hasRunning) return o.finalTotal;
+  if (Number.isFinite(o?.finalTotal) && (!hasRunning || o?.billEditedAt)) return o.finalTotal;
   const sub = (o?.items || []).reduce((s, it) => s + it.price * it.qty, 0);
   const coupon = Math.round((sub * (o?.discount || 0)) / 100);
   return Math.max(0, sub - coupon - (o?.loyaltyDiscount || 0)) + (o?.deliveryFee || 0);
@@ -859,7 +864,7 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = 
   const stats = useMemo(() => {
     const active = tableData.filter(t => t.order);
     const totalAmount = active.reduce((s, t) => 
-      s + t.order.items.reduce((a, i) => a + i.price * i.qty, 0), 0
+      s + getOrderTotal(t.order), 0
     );
     return {
       occupied: active.length,
@@ -965,7 +970,7 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = 
         {tableData.map(t => {
           const c = statusColors[t.status];
           const o = t.order;
-          const total = o ? o.items.reduce((s, i) => s + i.price * i.qty, 0) : 0;
+          s + getOrderTotal(t.order), 0
           const itemCount = o ? o.items.reduce((s, i) => s + i.qty, 0) : 0;
 
           return (
@@ -1260,7 +1265,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
                 <div style={{ fontSize: 11, color: COLORS.textLight, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {o.waiter && <span>🧑‍🍳 {o.waiter}</span>}
                   <span>· {o.items.length} item{o.items.length !== 1 ? 's' : ''}</span>
-                  <span>· ₹{o.items.reduce((s, it) => s + it.price * it.qty, 0)}</span>
+                  <span>· ₹{getOrderTotal(o)}</span>
                   <span>· {timeAgo(o.createdAt)}</span>
                 </div>
               </div>
@@ -1825,6 +1830,36 @@ if (savedCart) {
 
   const addRunningItems = useCallback(async (orderId, newItems) => {
     try {
+      let taggedItems = [];
+      let tableNo = "";
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, "orders", orderId);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error("Order not found");
+        const o = snap.data();
+        const baseKots = (o.kots?.length
+          ? o.kots
+          : [{ id: uid("kot"), kotNumber: 1, items: o.items, createdAt: o.createdAt, status: o.status }]
+        ).map(k => (k.status === "new" && o.status !== "new") ? { ...k, status: o.status } : k);
+        const nextNo = Math.max(...baseKots.map(k => k.kotNumber || 1)) + 1;
+        taggedItems = newItems.map(it => ({ ...it, kotNumber: nextNo }));
+        tableNo = o.table;
+        tx.update(ref, {
+          kots: [...baseKots, { id: uid("kot"), kotNumber: nextNo, items: taggedItems, createdAt: Date.now(), status: "new", isRunning: true }],
+          items: [...(o.items || []), ...taggedItems],
+          status: "new",
+          lastKotAt: Date.now()
+        });
+      });
+      const addedTotal = taggedItems.reduce((s, it) => s + it.price * it.qty, 0);
+      const waText = `🍳 *RUNNING KOT* — Order #${orderId.slice(1, 5).toUpperCase()}\nTable ${tableNo}\n` + taggedItems.map(i => `• ${i.qty}x ${i.name}`).join("\n") + `\n\nAdditional: ₹${addedTotal}`;
+      window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
+      setRunningOrderId(null);
+      showToast("🍳 New KOT sent to kitchen!", "success");
+    } catch (e) { console.error(e); showToast("⚠️ Failed to add items", "error"); }
+  }, [showToast]);
+  const addRunningItemsPrev = useCallback(async (orderId, newItems) => {
+    try {
       const order = orders.find(o => o.id === orderId);
       if (!order) return;
       const baseKots = order.kots?.length
@@ -2275,6 +2310,31 @@ const handleWaiterPinSubmitOld = () => {
   showToast("✅ Booking Sent! WhatsApp kholo aur Send dabao.", 'success');
 };
   const addComboToCart = useCallback((combo) => {
+    try {
+      const lines = (combo.items || []).map(it => ({ ...it, quantity: Number(it.quantity) || 1, menuItem: menu.find(m => m.id === it.id) }));
+      if (lines.length === 0 || lines.some(l => !l.menuItem || !l.menuItem.available)) { showToast("⚠️ Combo ka koi item available nahi", 'warning'); return; }
+      const totalMenuPrice = lines.reduce((s, l) => s + l.menuItem.price * l.quantity, 0);
+      const finalPrice = Number(combo.finalPrice);
+      if (!(totalMenuPrice > 0) || !Number.isFinite(finalPrice)) { showToast("⚠️ Combo ka price set nahi hai", 'warning'); return; }
+      const ratio = finalPrice / totalMenuPrice;
+      setCart(prev => {
+        const next = { ...prev };
+        lines.forEach(l => {
+          const prevEntry = next[l.id];
+          const prevQty = getCartQty(prevEntry);
+          const prevPrice = prevEntry?.priceOverride ?? l.menuItem.price;
+          const newQty = prevQty + l.quantity;
+          next[l.id] = { qty: newQty, priceOverride: Math.round((prevQty * prevPrice + l.quantity * l.menuItem.price * ratio) / newQty) };
+        });
+        return next;
+      });
+      showToast(`🎉 ${combo.name} added!`, 'success');
+    } catch (e) {
+      console.error("Combo error:", e);
+      showToast("⚠️ Combo error: " + (e?.message || e), 'error');
+    }
+  }, [menu, showToast]);
+  const addComboToCartPrev = useCallback((combo) => {
     const lines = combo.items.map(it => ({ ...it, menuItem: menu.find(m => m.id === it.id) }));
     if (lines.some(l => !l.menuItem || !l.menuItem.available)) { showToast("⚠️ Combo ka koi item available nahi", 'warning'); return; }
     const totalMenuPrice = lines.reduce((s, l) => s + l.menuItem.price * l.quantity, 0);
@@ -3043,6 +3103,9 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
 
   useEffect(() => {
     const onKey = (e) => {
+      const tag = (e.target?.tagName || "").toUpperCase();
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target?.isContentEditable) return;
+      if (billOrder) return;
       if (e.key === 'k' && e.ctrlKey) { e.preventDefault(); if (active[0]) setSelectedOrderId(active[0].id); }
       if (e.key === 'ArrowUp') { const i = active.findIndex(o => o.id === selectedOrderId); if (i > 0) setSelectedOrderId(active[i - 1].id); }
       if (e.key === 'ArrowDown') { const i = active.findIndex(o => o.id === selectedOrderId); if (i < active.length - 1 && i >= 0) setSelectedOrderId(active[i + 1].id); }
@@ -3051,7 +3114,7 @@ function StaffView({ orders, advanceStatus, requestPinPrompt, calls, resolveCall
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedOrderId, active, advanceStatus]);
+  }, [selectedOrderId, active, advanceStatus, billOrder]);
 
   const handlePrintReceipt = (order) => {
     const w = window.open('', '_blank', 'width=300,height=600');
@@ -3638,7 +3701,7 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
             <button onClick={async () => {
               const saved = await saveBillEdits();
               if (saved) {
-                await advanceStatus(billOrder.id, "ready");
+                if (billOrder.status === "ready") await advanceStatus(billOrder.id, "ready");
                 setBillOrder(null);
                 setTimeout(() => printFinalBill(saved, billEditItems), 200);
               }
@@ -4995,7 +5058,8 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   const removeOffer = async (id) => { setOffersList(offersList.filter(o => o.id !== id)); };
 
   const placeOrder = async (order) => {
-    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; await setDoc(doc(db, "orders", order.id), order); } catch (e) { console.error("placeOrder failed:", e); throw e; }
+    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; await setDoc(doc(db, "orders", order.id), order);
+    setOrdersState(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]); } catch (e) { console.error("placeOrder failed:", e); throw e; }
   };
 
   const advanceStatus = async (orderId, currentStatus) => {
