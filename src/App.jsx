@@ -865,6 +865,15 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, showStats = 
     return Object.values(map);
   }, [orders, tables]);
 
+  const stats = useMemo(() => {
+    const active = tableData.filter(t => t.order);
+    const totalAmount = active.reduce((sum, t) => sum + getOrderTotal(t.order), 0);
+    return {
+      occupied: active.length,
+      empty: tables - active.length,
+      running: totalAmount,
+    };
+  }, [tableData, tables]);
    
   const statusColors = {
     empty:    { bg: "#E8F5E9", border: "#4A7C59", label: "Empty",    emoji: "🟢" },
