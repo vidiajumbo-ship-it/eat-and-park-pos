@@ -1185,7 +1185,6 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   customerPhone: customerPhone || "",
   notes
 });
-});
       } catch (err) {
         console.error(err);
         alert("❌ Order send nahi hua. Internet check karke dobara try karo.");
