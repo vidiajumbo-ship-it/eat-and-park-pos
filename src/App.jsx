@@ -489,6 +489,32 @@ function useViewMode() {
   return [mode, setMode];
 }
 
+// 📌 ADMIN PRESETS (Firebase: settings/presets) — waiters, customers, notes, discount, GST
+const DEFAULT_PRESETS = { waiters: [], notes: [], discounts: [], gstRates: [], customers: [] };
+function usePresets() {
+  const [presets, setPresetsState] = useState(() => {
+    try { return { ...DEFAULT_PRESETS, ...JSON.parse(localStorage.getItem("eatpark_presets") || "{}") }; }
+    catch (e) { return DEFAULT_PRESETS; }
+  });
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "settings", "presets"), (snap) => {
+      if (snap.exists()) {
+        const d = { ...DEFAULT_PRESETS, ...snap.data() };
+        setPresetsState(d);
+        try { localStorage.setItem("eatpark_presets", JSON.stringify(d)); } catch (e) {}
+      }
+    }, (err) => console.error("presets listener:", err));
+    return () => unsub();
+  }, []);
+  const savePresets = async (next) => {
+    setPresetsState(next);
+    try { localStorage.setItem("eatpark_presets", JSON.stringify(next)); } catch (e) {}
+    try { await setDoc(doc(db, "settings", "presets"), next); }
+    catch (e) { console.error(e); alert("⚠️ Presets save nahi hue. Internet / Firebase rules check karo."); }
+  };
+  return [presets, savePresets];
+}
+
 const ViewModeToggle = memo(() => {
   const [mode, setMode] = useViewMode();
   const isDesktop = mode === "desktop";
@@ -3146,6 +3172,9 @@ const KeyboardHelpModal = memo(({ onClose }) => (
 function BillPOSScreen(p) {
   const { order, orders, menu, viewMode, items, setItems, calc } = p;
   const [tab, setTab] = useState(order && order.isDraft ? "menu" : "bill");
+  const [presets] = usePresets();
+  const waiterNames = presets.waiters || [];
+  const gstList = [0, ...((presets.gstRates && presets.gstRates.length ? presets.gstRates : [5, 12, 18]).filter((r) => Number(r) > 0))];
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
   const isDesktop = viewMode === "desktop";
@@ -3305,7 +3334,11 @@ function BillPOSScreen(p) {
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>T-{n}</option>)}
               </select>
             )}
-            <input placeholder="Waiter" value={p.waiter} onChange={(e) => p.setWaiter(e.target.value)} style={{ ...inp, flex: 1, minWidth: 80, width: "auto" }} />
+            <select value={p.waiter} onChange={(e) => p.setWaiter(e.target.value)} style={{ ...inp, flex: 1, minWidth: 90, width: "auto", background: "#fff" }}>
+              <option value="">🧑‍🍳 Waiter chuno</option>
+              {p.waiter && !waiterNames.includes(p.waiter) && <option value={p.waiter}>{p.waiter}</option>}
+              {waiterNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
           </>
         ) : (
           <div style={{ fontWeight: 800, fontSize: 13 }}>
@@ -3321,6 +3354,12 @@ function BillPOSScreen(p) {
         </div>
       )}
 
+      {(presets.customers || []).length > 0 && (
+        <select value="" onChange={(e) => { const c = (presets.customers || [])[Number(e.target.value)]; if (c) { p.setCustName(c.name); p.setCustPhone(c.phone || ""); } }} style={{ ...inp, background: "#fff" }}>
+          <option value="">👤 Saved customer chuno...</option>
+          {(presets.customers || []).map((c, i) => <option key={i} value={i}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}
+        </select>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6 }}>
         <input placeholder="Customer" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={inp} />
         <input placeholder="Phone" value={p.custPhone} onChange={(e) => p.setCustPhone(e.target.value)} style={inp} />
@@ -3357,12 +3396,15 @@ function BillPOSScreen(p) {
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         <span style={lbl}>GST</span>
-        {[0, 5, 12, 18].map((r) => (
+        {gstList.map((r) => (
           <button key={r} type="button" onClick={() => p.setGstRate(r)} style={chip(p.gstRate === r)}>{r === 0 ? "No" : r + "%"}</button>
         ))}
         <button type="button" onClick={() => p.setGstRate("custom")} style={chip(p.gstRate === "custom")}>Custom</button>
         {p.gstRate === "custom" && <input type="number" placeholder="%" value={p.gstCustom} onChange={(e) => p.setGstCustom(e.target.value)} style={{ ...inp, width: 60 }} />}
         <span style={{ ...lbl, marginLeft: 6 }}>Disc</span>
+        {(presets.discounts || []).map((d) => (
+          <button key={d} type="button" onClick={() => p.setDiscPct(p.discPct === d ? 0 : d)} style={chip(p.discPct === d, COLORS.success)}>{d}%</button>
+        ))}
         <input type="number" min={0} max={100} placeholder="%" value={p.discPct || ""} onChange={(e) => p.setDiscPct(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} style={{ ...inp, width: 56 }} />
         <input type="number" min={0} placeholder="₹" value={p.disc || ""} onChange={(e) => p.setDisc(Math.max(0, Number(e.target.value) || 0))} style={{ ...inp, width: 64 }} />
       </div>
@@ -3378,7 +3420,16 @@ function BillPOSScreen(p) {
       </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <input placeholder="Notes..." value={p.notes} onChange={(e) => p.setNotes(e.target.value)} style={{ ...inp, flex: 1, minWidth: 120, width: "auto" }} />
+        <div style={{ flex: 1, minWidth: 120, display: "flex", flexDirection: "column", gap: 4 }}>
+          {(presets.notes || []).length > 0 && (
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {(presets.notes || []).map((n) => (
+                <button key={n} type="button" onClick={() => p.setNotes(p.notes ? p.notes + ", " + n : n)} style={{ ...chip(false), padding: "3px 8px", fontSize: 11 }}>+ {n}</button>
+              ))}
+            </div>
+          )}
+          <input placeholder="Notes..." value={p.notes} onChange={(e) => p.setNotes(e.target.value)} style={inp} />
+        </div>
         <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
           <input type="checkbox" checked={p.showBillNo} onChange={(e) => p.setShowBillNo(e.target.checked)} /> Bill #
         </label>
@@ -4290,6 +4341,85 @@ function InventoryAlertBanner({ inventory }) {
   );
 }
 
+function PresetListEditor({ title, hint, items, onChange, placeholder, number, suffix }) {
+  const [val, setVal] = useState("");
+  const add = () => {
+    const raw = val.trim();
+    if (!raw) return;
+    const v = number ? Number(raw) : raw;
+    if (number && (!Number.isFinite(v) || v < 0)) { alert("⚠️ Sahi number daalo"); return; }
+    if (items.some((x) => String(x).toLowerCase() === String(v).toLowerCase())) { setVal(""); return; }
+    onChange([...items, v]);
+    setVal("");
+  };
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
+      <div style={{ fontWeight: 800, fontSize: 16 }}>{title}</div>
+      <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 10 }}>{hint}</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        {items.length === 0 && <span style={{ fontSize: 12, color: COLORS.textLight }}>Abhi koi nahi</span>}
+        {items.map((it) => (
+          <span key={String(it)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: COLORS.paper2, borderRadius: 20, padding: "5px 6px 5px 12px", fontWeight: 700, fontSize: 13 }}>
+            {it}{suffix || ""}
+            <button type="button" onClick={() => { if (window.confirm(`"${it}" delete karna hai?`)) onChange(items.filter((x) => x !== it)); }}
+              style={{ background: COLORS.error, color: "#fff", border: "none", borderRadius: "50%", width: 22, height: 22, fontSize: 11, cursor: "pointer", fontWeight: 800, padding: 0 }}>✕</button>
+          </span>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input type={number ? "number" : "text"} placeholder={placeholder} value={val} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+          style={{ padding: "10px 12px", border: `1.5px solid ${COLORS.line}`, borderRadius: 10, fontSize: 14, flex: 1, boxSizing: "border-box" }} />
+        <button type="button" onClick={add} style={{ background: COLORS.copper, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontWeight: 800, cursor: "pointer" }}>+ Add</button>
+      </div>
+    </div>
+  );
+}
+
+function PresetsAdmin() {
+  const [presets, savePresets] = usePresets();
+  const [cName, setCName] = useState("");
+  const [cPhone, setCPhone] = useState("");
+  const customers = presets.customers || [];
+  const addCustomer = () => {
+    if (!cName.trim()) { alert("⚠️ Customer ka naam daalo"); return; }
+    savePresets({ ...presets, customers: [...customers, { name: cName.trim(), phone: cPhone.trim() }] });
+    setCName(""); setCPhone("");
+  };
+  const fld = { padding: "10px 12px", border: `1.5px solid ${COLORS.line}`, borderRadius: 10, fontSize: 14, boxSizing: "border-box" };
+  return (
+    <div>
+      <div style={{ fontSize: 13, color: COLORS.textLight, marginBottom: 16, lineHeight: 1.5 }}>
+        Yahan ek baar daalo, hamesha save rahega. Staff ke bill screen me sirf select karna padega.
+      </div>
+      <PresetListEditor title="🧑‍🍳 Waiters" hint="Bill screen me chips ki tarah dikhenge" placeholder="Waiter ka naam"
+        items={presets.waiters || []} onChange={(l) => savePresets({ ...presets, waiters: l })} />
+      <div style={{ background: "#fff", border: `1px solid ${COLORS.line}`, borderRadius: 14, padding: 16, marginBottom: 16 }}>
+        <div style={{ fontWeight: 800, fontSize: 16 }}>👤 Saved Customers</div>
+        <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 10 }}>Select karte hi naam + phone bhar jayega</div>
+        {customers.length === 0 && <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 10 }}>Abhi koi nahi</div>}
+        {customers.map((c, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: COLORS.paper2, borderRadius: 10, padding: "8px 12px", marginBottom: 6, fontWeight: 700, fontSize: 13 }}>
+            <span>{c.name}{c.phone ? ` · ${c.phone}` : ""}</span>
+            <button type="button" onClick={() => { if (window.confirm(`"${c.name}" delete karna hai?`)) savePresets({ ...presets, customers: customers.filter((_, k) => k !== i) }); }}
+              style={{ background: COLORS.error, color: "#fff", border: "none", borderRadius: "50%", width: 24, height: 24, fontSize: 11, cursor: "pointer", fontWeight: 800, padding: 0 }}>✕</button>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+          <input placeholder="Naam" value={cName} onChange={(e) => setCName(e.target.value)} style={{ ...fld, flex: 1, minWidth: 120 }} />
+          <input placeholder="Phone" value={cPhone} onChange={(e) => setCPhone(e.target.value)} style={{ ...fld, flex: 1, minWidth: 120 }} />
+          <button type="button" onClick={addCustomer} style={{ background: COLORS.copper, color: "#fff", border: "none", borderRadius: 10, padding: "10px 18px", fontWeight: 800, cursor: "pointer" }}>+ Add</button>
+        </div>
+      </div>
+      <PresetListEditor title="📝 Quick Notes" hint="Jaise: Kam teekha, Bina pyaaz — bill me tap karke notes me judega" placeholder="Note likho"
+        items={presets.notes || []} onChange={(l) => savePresets({ ...presets, notes: l })} />
+      <PresetListEditor title="🎁 Discount %" hint="Bill me ek tap se discount lagega" placeholder="Jaise 10" number suffix="%"
+        items={presets.discounts || []} onChange={(l) => savePresets({ ...presets, discounts: l })} />
+      <PresetListEditor title="🧾 GST %" hint="Khali chhodoge to 5 / 12 / 18 chalega" placeholder="Jaise 5" number suffix="%"
+        items={presets.gstRates || []} onChange={(l) => savePresets({ ...presets, gstRates: l })} />
+    </div>
+  );
+}
+
 function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery, categories, updateCategories, flashSaleItems, setFlashSaleItems, comboOffers, setComboOffers, savePromotions }) {
   const [tab, setTab] = useState("overview");
   const [filterDate, setFilterDate] = useState(toLocalISODate(Date.now()));
@@ -4387,7 +4517,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto" }}>
-        {["overview", "menu","tables", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings", "promotions"].map((t) => (<button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button>))}
+        {["overview", "menu", "tables", "presets", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings", "promotions"].map((t) => (<button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button>))}
       </div>
       {tab === "tables" && (
         <TableStatusBoard
@@ -4607,7 +4737,9 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           </div>
         </div>
       )}
-                  {tab === "gallery" && (
+                  {tab === "presets" && <PresetsAdmin />}
+
+      {tab === "gallery" && (
         <>
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30 }}>
             <h3 style={{ marginTop: 0, marginBottom: 16 }}>📸 Add Photo</h3>
