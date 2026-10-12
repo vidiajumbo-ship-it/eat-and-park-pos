@@ -1821,6 +1821,9 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   const loyaltyTier = getLoyaltyTier(currentCoins);
   const loyaltyDiscount = activeUser ? Math.round(loyaltyTier.discount * subtotal) : 0;
   const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDiscount) + deliveryFee;
+  const newEarnedCoins = activeUser && loyaltyRules?.rate 
+  ? Math.floor(finalTotal / loyaltyRules.rate) 
+  : 0;
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served" && o.status !== "cancelled");
   const [pastOrders, setPastOrders] = useState([]);
   useEffect(() => {
