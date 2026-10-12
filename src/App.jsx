@@ -1,6 +1,6 @@
 
 /* eslint-disable */
-import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
+
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db } from "./firebase";
 import {
@@ -1821,6 +1821,7 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   const loyaltyTier = getLoyaltyTier(currentCoins);
   const loyaltyDiscount = activeUser ? Math.round(loyaltyTier.discount * subtotal) : 0;
   const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDiscount) + deliveryFee;
+const newEarnedCoins = Math.floor(finalTotal / (Number(loyaltyRules?.rate) || 10));
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served" && o.status !== "cancelled");
   const [pastOrders, setPastOrders] = useState([]);
   useEffect(() => {
