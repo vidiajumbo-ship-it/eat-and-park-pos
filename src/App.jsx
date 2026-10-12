@@ -2255,7 +2255,6 @@ const handleWaiterPinSubmitOld = () => {
     try {
       const orderId = uid("o");
       payIdRef.current = null;
-      payIdRef.current = null;
       let paymentInfo = { paid: false, status: "pending", paymentId: null };
 
       if (paymentMethod === "razorpay") {
@@ -3875,7 +3874,6 @@ ${RESTAURANT.gstin ? `<div class="center" style="font-size:10px">GSTIN: ${escape
 <div style="font-size:10px;text-align:center;margin-top:4px">${now}</div>
 
 ${order.waiter ? `<div style="font-size:10px;margin-top:4px">Waiter: ${escapeHtml(order.waiter)}</div>` : ""}
-${RESTAURANT.gstin ? `<div class="center" style="font-size:10px">GSTIN: ${escapeHtml(RESTAURANT.gstin)}</div>` : ""}
 
 <div class="line"></div>
 <table>
