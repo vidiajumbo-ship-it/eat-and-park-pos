@@ -132,7 +132,7 @@ const COLORS = {
 const RESTAURANT = {
   name: "Eat & Park", full: "Eat & Park Restaurant", tagline: "A Premium Family Restaurant",
   address: "Girja More, Ara – Buxar Main Road, Pakri, Ara",
-  phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "heckeyhr@ybl"
+  phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "heckeyhr@ybl", gstin: process.env.REACT_APP_GSTIN || ""
 };
 
 const GOOGLE_PLACE_ID = "ChIJc8jv-j9fjTkRYFQLM7KK1aA";
@@ -203,6 +203,27 @@ function getOrderTotal(o) {
   const coupon = Math.round((sub * (o?.discount || 0)) / 100);
   return Math.max(0, sub - coupon - (o?.loyaltyDiscount || 0)) + (o?.deliveryFee || 0);
 }
+
+// Firestore doc ko safe shape deta hai (purane/adhure docs se crash nahi hoga)
+const normOrder = (d) => {
+  const o = { id: d.id, ...d.data() };
+  if (!Array.isArray(o.items)) o.items = [];
+  if (!o.customer) o.customer = { name: "Walk-in", phone: "" };
+  return o;
+};
+
+// Running KOT aane par total / paid status theek karta hai
+const runningPatch = (o, added) => {
+  const addT = added.reduce((s, it) => s + it.price * it.qty, 0);
+  const p = {};
+  if (o.billEditedAt) {
+    const g = Number(o.gstRate) || 0;
+    p.finalTotal = Math.round((Number(o.finalTotal) || 0) + addT * (1 + g / 100));
+    p.subtotal = (Number(o.subtotal) || 0) + addT;
+  }
+  if (o.paid) { p.paid = false; p.paymentStatus = "pending"; }
+  return p;
+};
 
 const patchAt = (list, idx, patch) => list.map((x, i) => (i === idx ? { ...x, ...patch } : x));
 
@@ -327,6 +348,8 @@ class ErrorBoundary extends React.Component {
             {this.state.errorInfo?.componentStack}
           </pre>
           <button onClick={() => { try { localStorage.removeItem('eatpark_cart'); } catch (e) {} window.location.reload(); }} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>Clear Cache & Refresh</button>
+          <button onClick={() => this.setState({ hasError: false, error: null, errorInfo: null })} style={{ background: COLORS.ink, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', marginTop: 10 }}>🔄 Try Again</button>
+          <button onClick={() => this.setState({ hasError: false, error: null, errorInfo: null })} style={{ background: COLORS.ink, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', marginTop: 10 }}>🔄 Try Again</button>
         </div>
       );
     }
@@ -573,6 +596,11 @@ const useLocalStorageOld = (key, initialValue) => {
 
 const notificationAudio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
 notificationAudio.volume = 0.5;
+// Notification Android pe crash na kare
+const safeNotify = (title, opts) => { try { return new Notification(title, opts); } catch (e) { console.warn("Notification:", e); } };
+// localStorage corrupt ho to bhi crash na ho
+const safeJSON = (key, fallback) => { try { const v = JSON.parse(localStorage.getItem(key) || "null"); return v ?? fallback; } catch (e) { return fallback; } };
+const safeSet = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { console.error("localStorage:", e); } };
 const playNotificationSound = () => {
   try { notificationAudio.currentTime = 0; notificationAudio.play().catch(e => console.log("Sound play error:", e)); } catch (e) { console.log("Sound error:", e); }
 };
@@ -1718,6 +1746,8 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [category, setCategory] = useState(categories[0] || "Thali");
   const [viewMode, setViewMode] = useViewMode();
   const cartRef = useRef({});
+  const lastStatusRef = useRef({});
+  const payIdRef = useRef(null);
   const aiTimerRef = useRef(null);
   const waiterLock = usePinLockout();  const [cart, setCart] = useState({});
   const [cartOpen, setCartOpen] = useState(false);
@@ -1741,6 +1771,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [couponCode, setCouponCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(0);
+  const [couponMin, setCouponMin] = useState(0);
   const [bookType, setBookType] = useState("table");
   const [bookData, setBookData] = useState({ name: "", phone: "", date: "", time: "", guests: "" });
   const [confirmedBooking, setConfirmedBooking] = useState(null);
@@ -1782,6 +1813,7 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   return s + getCartLineTotal(entry, item);
 }, 0);
   const deliveryFee = orderType === "parcel" ? 40 : 0;
+  useEffect(() => { if (appliedDiscount > 0 && subtotal < couponMin) setAppliedDiscount(0); }, [appliedDiscount, couponMin, subtotal]);
   const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
   const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
   const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
@@ -1789,9 +1821,19 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   const loyaltyTier = getLoyaltyTier(currentCoins);
   const loyaltyDiscount = activeUser ? Math.round(loyaltyTier.discount * subtotal) : 0;
   const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDiscount) + deliveryFee;
-  const newEarnedCoins = Math.floor(finalTotal / loyaltyRules.rate);
+  setLoyaltyRules={saveLoyaltyRules}
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served" && o.status !== "cancelled");
-  const myOrders = orders.filter(o => myOrderIds.includes(o.id));
+  const [pastOrders, setPastOrders] = useState([]);
+  useEffect(() => {
+    if (activeModal !== "orderHistory") return;
+    const missing = myOrderIds.slice(-15).filter(id => !orders.some(o => o.id === id));
+    if (missing.length === 0) return;
+    let off = false;
+    Promise.all(missing.map(id => getDoc(doc(db, "orders", id)).then(s => (s.exists() ? { id: s.id, ...s.data(), items: s.data().items || [] } : null)).catch(() => null)))
+      .then(list => { if (!off) setPastOrders(list.filter(Boolean)); });
+    return () => { off = true; };
+  }, [activeModal, myOrderIds.join(",")]);
+  const myOrders = [...pastOrders.filter(p => !orders.some(o => o.id === p.id)), ...orders.filter(o => myOrderIds.includes(o.id))].sort((a, b) => a.createdAt - b.createdAt);
   const myCoinLogs = coinHistory.filter(c => c.phone === custPhone);
   const cartQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${finalTotal}&cu=INR`)}`;
   const loyaltyQrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`upi://pay?pa=${RESTAURANT.upiId}&pn=${encodeURIComponent(RESTAURANT.name)}&am=999&cu=INR`)}`;
@@ -1822,7 +1864,7 @@ if (savedCart) {
     const migrated = {};
     Object.entries(parsed).forEach(([id, val]) => {
       if (typeof val === 'number') migrated[id] = { qty: val };
-      else migrated[id] = val;
+      else migrated[id] = { qty: Number(val?.qty) || 0 };
     });
     setCart(migrated);
   } catch (e) {}
@@ -1849,8 +1891,8 @@ if (savedCart) {
       return onSnapshot(doc(db, "orders", id), (snap) => {
         if (!snap.exists()) return;
         const data = snap.data();
-        const prev = orders.find(o => o.id === id);
-        if (prev && prev.status !== data.status) {
+        const prevStatus = lastStatusRef.current[id]; lastStatusRef.current[id] = data.status;
+        if (prevStatus && prevStatus !== data.status) {
           const labels = { new: "🍽️ Received", preparing: "👨‍🍳 Cooking", ready: "✅ Ready!", served: "🎉 Served" };
           showToast(`${labels[data.status] || data.status} — Order #${id.slice(1, 5)}`, 'order');
         }
@@ -1862,6 +1904,8 @@ if (savedCart) {
   const handleSetQty = useCallback((id, q) => {
     const prevCart = cartRef.current;
     const oldQty = getCartQty(prevCart[id]);
+    const flashRow = flashSaleItems.find(f => f.active && f.id === id && f.stock != null && prevCart[id]?.priceOverride === f.discountPrice);
+    if (flashRow && q > flashRow.stock) { showToast(`⚠️ Sirf ${flashRow.stock} bache hain`, 'warning'); return; }
     if (q > oldQty && q === 1) {
       const options = getSmartSuggestionPool(menu, prevCart);
       if (options.length > 0) {
@@ -1880,7 +1924,7 @@ if (savedCart) {
       }
       return next;
     });
-  }, [menu]);
+  }, [menu, flashSaleItems, showToast]);
 
     const toggleFavorite = useCallback((itemId) => {
     if (favorites.includes(itemId)) {
@@ -1902,7 +1946,7 @@ if (savedCart) {
 
   const sendPushNotification = useCallback((title, message) => {
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { body: message, icon: '/icon-192.png' });
+      safeNotify(title, { body: message, icon: '/icon-192.png' });
     }
   }, []);
 
@@ -1943,6 +1987,7 @@ if (savedCart) {
         const snap = await tx.get(ref);
         if (!snap.exists()) throw new Error("Order not found");
         const o = snap.data();
+        if (o.status === "cancelled") throw new Error("Order cancelled hai");
         const baseKots = (o.kots?.length
           ? o.kots
           : [{ id: uid("kot"), kotNumber: 1, items: o.items, createdAt: o.createdAt, status: o.status }]
@@ -1953,6 +1998,7 @@ if (savedCart) {
         tx.update(ref, {
           kots: [...baseKots, { id: uid("kot"), kotNumber: nextNo, items: taggedItems, createdAt: Date.now(), status: "new", isRunning: true }],
           items: [...(o.items || []), ...taggedItems],
+          ...runningPatch(o, taggedItems),
           status: "new",
           lastKotAt: Date.now()
         });
@@ -2175,7 +2221,7 @@ const handleWaiterPinSubmitOld = () => {
     if (!coupon) { showToast("❌ Invalid coupon", 'error'); return; }
     if (!coupon.ok()) { showToast(coupon.failMsg || "⚠️ Conditions not met", 'warning'); return; }
     if (subtotal < coupon.min) { showToast(`⚠️ Min ₹${coupon.min} required`, 'warning'); return; }
-    setAppliedDiscount(coupon.discount);
+    setAppliedDiscount(coupon.discount); setCouponMin(coupon.min || 0);
     showToast(coupon.msg, 'success');
   };
 
@@ -2208,12 +2254,15 @@ const handleWaiterPinSubmitOld = () => {
     setIsProcessingPayment(true);
     try {
       const orderId = uid("o");
+      payIdRef.current = null;
+      payIdRef.current = null;
       let paymentInfo = { paid: false, status: "pending", paymentId: null };
 
       if (paymentMethod === "razorpay") {
         const result = await processRazorpayPayment(finalTotal, orderId, custName, custPhone);
         if (!result) { showToast("❌ Payment cancel/fail hua. Order place nahi hua.", 'error'); return; }
         paymentInfo = { paid: true, status: "paid_unverified", paymentId: result.razorpay_payment_id || null };
+        payIdRef.current = paymentInfo.paymentId;
       } else if (paymentMethod === "phonepe" || paymentMethod === "gpay") {
         showToast("📱 UPI payment counter par karein — staff paid mark karega", 'info');
       }
@@ -2255,15 +2304,15 @@ const handleWaiterPinSubmitOld = () => {
 
       await placeOrder(order);
 
-      const orderHistory = JSON.parse(localStorage.getItem('eatpark_orders') || '[]');
+      const orderHistory = safeJSON('eatpark_orders', []);
       orderHistory.push(order);
-      localStorage.setItem('eatpark_orders', JSON.stringify(orderHistory));
+      safeSet('eatpark_orders', orderHistory.slice(-30));
 
-      const customerData = JSON.parse(localStorage.getItem('eatpark_customer') || '{}');
+      const customerData = safeJSON('eatpark_customer', {});
       customerData.totalOrders = (customerData.totalOrders || 0) + 1;
       customerData.totalSpent = (customerData.totalSpent || 0) + finalTotal;
       customerData.lastOrderDate = Date.now();
-      localStorage.setItem('eatpark_customer', JSON.stringify(customerData));
+      safeSet('eatpark_customer', customerData);
       try { await updateDoc(doc(db, "customers", custPhone), { totalOrders: customerData.totalOrders, totalSpent: customerData.totalSpent, lastOrderDate: Date.now() }); } catch (e) { }
 
       consumeFlashStock(initialItems);
@@ -2284,7 +2333,8 @@ const handleWaiterPinSubmitOld = () => {
       showToast("🎉 Order Placed!", 'success');
     } catch (e) {
       console.error("Order error:", e);
-      showToast("⚠️ Order fail hua. Internet check karke dobara try karo.", 'error');
+      if (payIdRef.current) alert("⚠️ Payment ho gaya hai par order save nahi hua.\nPayment ID: " + payIdRef.current + "\nYe ID staff ko dikhao.");
+      else showToast("⚠️ Order fail hua. Internet check karke dobara try karo.", 'error');
     } finally { setIsProcessingPayment(false); }
   }, [isProcessingPayment, cartItems, custName, custPhone, custAddress, orderType, table, paymentMethod, finalTotal, subtotal, discountAmount, deliveryFee, claimedReward, newEarnedCoins, isScheduled, scheduleDate, scheduleTime, appliedDiscount, loyaltyDiscount, loyaltyTier, notes, menu, placeOrder, sendPushNotification, consumeFlashStock, showToast]);
 
@@ -2393,7 +2443,7 @@ const handleWaiterPinSubmitOld = () => {
     createdAt: Date.now() 
   };
 
-  await bookEvent(newBooking);
+  try { await bookEvent(newBooking); } catch (e) { console.error(e); showToast("⚠️ Booking send nahi hui. Internet check karo.", 'error'); return; }
 
   // 📲 WhatsApp notification to restaurant
   const bookingType = bookType === "party" ? "🎉 PARTY BOOKING" : "🍽️ TABLE BOOKING";
@@ -2408,7 +2458,7 @@ const handleWaiterPinSubmitOld = () => {
     `_Sent from Eat & Park App_`;
 
   window.open(
-    `https://wa.me/${RESTAURANT.whatsapp}?text=${waText}`,
+    `https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText.replace(/%0A/g, "\n"))}`,
     "_blank"
   );
 
@@ -3067,7 +3117,7 @@ const handleWaiterPinSubmitOld = () => {
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                               {!isCancelled && (<button onClick={() => reorderOrder(o)} style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${COLORS.sage}`, background: 'transparent', color: COLORS.sage, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>🔄 Reorder</button>)}
                               <GoogleReviewButton variant="primary" size="sm" />
-                              {!isCompleted && !isCancelled && (
+                              {o.status === "new" && (
                                 <button onClick={() => cancelOrder(o.id)} style={{ padding: '4px 12px', borderRadius: 8, border: `1px solid ${COLORS.error}`, background: 'transparent', color: COLORS.error, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>❌ Cancel</button>
                               )}
                             </div>
@@ -3088,7 +3138,7 @@ const handleWaiterPinSubmitOld = () => {
 
             {activeModal === 'booking' && (<><ModalHeader title={bookType === "party" ? "Party Booking 🎉" : "Table Booking 🍽️"} onClose={() => { setActiveModal(null); setConfirmedBooking(null); }} />{confirmedBooking ? (<div style={{ textAlign: "center", padding: "30px 0" }}><div style={{ fontSize: 56, marginBottom: 16 }}>✅</div><h3 style={{ fontSize: 28, fontWeight: 800, marginBottom: 10 }}>Request Sent!</h3><button onClick={() => { setActiveModal(null); setConfirmedBooking(null); }} style={{ background: COLORS.paper2, border: 'none', padding: '12px', borderRadius: 12, width: '100%', fontWeight: 800, cursor: 'pointer' }}>Close</button></div>) : (<div style={{ display: "flex", flexDirection: "column", gap: 14 }}><input type="text" placeholder="Name" value={bookData.name} onChange={(e) => setBookData({ ...bookData, name: e.target.value })} style={inputStyle} /><input type="tel" placeholder="Phone" value={bookData.phone} onChange={(e) => setBookData({ ...bookData, phone: e.target.value })} style={inputStyle} /><div style={{ display: "flex", gap: 14 }}><input type="date" value={bookData.date} onChange={(e) => setBookData({ ...bookData, date: e.target.value })} style={inputStyle} /><input type="time" value={bookData.time} onChange={(e) => setBookData({ ...bookData, time: e.target.value })} style={inputStyle} /></div><input type="number" placeholder="Guests" value={bookData.guests} onChange={(e) => setBookData({ ...bookData, guests: e.target.value })} style={inputStyle} /><button onClick={handleBooking} style={{ background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 14, padding: '13px 20px', fontWeight: 800, cursor: 'pointer' }}>Send Request</button></div>)}</>)}
 
-            {activeModal === 'track' && (<><ModalHeader title="Active Orders" onClose={() => setActiveModal(null)} />{myActiveOrders.length === 0 ? (<div style={{ textAlign: 'center', padding: 50, color: COLORS.textLight }}>No active orders</div>) : myActiveOrders.map(o => { const estimatedTime = getEstimatedTime(o.items, menu); const isCancellable = o.status === "new" || o.status === "preparing"; return (<div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, marginBottom: 16 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><div style={{ fontSize: 20, fontWeight: 700 }}>Order #{o.id.slice(1, 5).toUpperCase()}</div>{o.kots?.length > 1 && <KotBadge kots={o.kots} />}</div><OrderTimer createdAt={o.createdAt} estimatedTime={estimatedTime} /><div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}><ProgressRing progress={getOrderProgress(o.status)} size={80} /></div><div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 12 }}>{o.items.map(i => `${i.qty}x ${i.name}`).join(", ")}</div><div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}><button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back</button><button onClick={() => setRunningOrderId(o.id)} style={{ padding: "13px 20px", background: COLORS.info, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>➕ Running</button>{isCancellable && (<button onClick={() => cancelOrder(o.id)} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.error, border: `2px solid ${COLORS.error}`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>❌ Cancel</button>)}</div></div>); })}</>)}
+            {activeModal === 'track' && (<><ModalHeader title="Active Orders" onClose={() => setActiveModal(null)} />{myActiveOrders.length === 0 ? (<div style={{ textAlign: 'center', padding: 50, color: COLORS.textLight }}>No active orders</div>) : myActiveOrders.map(o => { const estimatedTime = getEstimatedTime(o.items, menu); const isCancellable = o.status === "new"; return (<div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, marginBottom: 16 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><div style={{ fontSize: 20, fontWeight: 700 }}>Order #{o.id.slice(1, 5).toUpperCase()}</div>{o.kots?.length > 1 && <KotBadge kots={o.kots} />}</div><OrderTimer createdAt={o.createdAt} estimatedTime={estimatedTime} /><div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}><ProgressRing progress={getOrderProgress(o.status)} size={80} /></div><div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 12 }}>{o.items.map(i => `${i.qty}x ${i.name}`).join(", ")}</div><div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}><button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back</button><button onClick={() => setRunningOrderId(o.id)} style={{ padding: "13px 20px", background: COLORS.info, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>➕ Running</button>{isCancellable && (<button onClick={() => cancelOrder(o.id)} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.error, border: `2px solid ${COLORS.error}`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>❌ Cancel</button>)}</div></div>); })}</>)}
 
             {activeModal === 'chat' && (<><ModalHeader title="💬 Chat" onClose={() => setActiveModal(null)} /><ChatBox orderId={activeOrderIdForChat || 'general'} customerId={custPhone || 'customer'} /></>)}
           </div>
@@ -3145,7 +3195,7 @@ const handleWaiterPinSubmitOld = () => {
 const STAFF_SHORTCUTS = {
   'Ctrl+K': 'Focus first order',
   '↑ / ↓': 'Navigate',
-  'Enter / Space': 'Advance selected',
+  'Ctrl+Enter': 'Advance selected',
   'Shift+?': 'Toggle help'
 };
 
@@ -3445,6 +3495,7 @@ function BillPOSScreen(p) {
         {p.discPct > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.success }}><span>Discount {p.discPct}%</span><b>-₹{calc.discPctAmt}</b></div>}
         {p.disc > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.success }}><span>Extra discount</span><b>-₹{calc.discAmt}</b></div>}
         {calc.gstRate > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.copper }}><span>GST {calc.gstRate}%</span><b>+₹{calc.gst}</b></div>}
+        {calc.delivery > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.copper }}><span>Delivery</span><b>+₹{calc.delivery}</b></div>}
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 18, fontWeight: 800, borderTop: `2px solid ${COLORS.ink}`, paddingTop: 5, marginTop: 4 }}>
           <span>TOTAL</span><span style={{ color: COLORS.copper, fontFamily: "'JetBrains Mono', monospace" }}>₹{calc.total}</span>
         </div>
@@ -3564,7 +3615,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
       if (e.key === 'k' && e.ctrlKey) { e.preventDefault(); if (active[0]) setSelectedOrderId(active[0].id); }
       if (e.key === 'ArrowUp') { const i = active.findIndex(o => o.id === selectedOrderId); if (i > 0) setSelectedOrderId(active[i - 1].id); }
       if (e.key === 'ArrowDown') { const i = active.findIndex(o => o.id === selectedOrderId); if (i < active.length - 1 && i >= 0) setSelectedOrderId(active[i + 1].id); }
-      if ((e.key === 'Enter' || e.key === ' ') && selectedOrderId) { const o = active.find(x => x.id === selectedOrderId); if (o) { e.preventDefault(); advanceStatus(o.id, o.status); } }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && selectedOrderId) { const o = active.find(x => x.id === selectedOrderId); if (o) { e.preventDefault(); advanceStatus(o.id, o.status); } }
       if ((e.key === '?' || e.key === '/') && e.shiftKey) { e.preventDefault(); setShowHelpModal(v => !v); }
     };
     window.addEventListener('keydown', onKey);
@@ -3601,13 +3652,13 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
     );
     setBillGstRate(order.gstRate ?? 0);
     setBillGstCustom("");
-    setBillDiscount(0);
-    setBillDiscountPct(0);
+    setBillDiscount(order.billEditedAt ? (order.billDiscount || 0) : (order.loyaltyDiscount || 0));
+    setBillDiscountPct(order.billEditedAt ? (order.billDiscountPct || 0) : (order.discount || 0));
     setBillPayMode(order.payment || "cash");
     setBillPayStatus(order.paid ? "paid" : "pending");
     setBillCustomerName(order.customer?.name || "");
     setBillCustomerPhone(order.customer?.phone || "");
-    setBillCustomerGstin("");
+    setBillCustomerGstin(order.customerGstin || "");
     setBillNotes(order.notes || "");
     setBillSearch("");
     setBillAddItemOpen(false);
@@ -3694,8 +3745,9 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
     const discPctAmt = Math.round((sub * billDiscountPct) / 100);
     const afterPct = sub - discPctAmt;
     const gst = Math.round((afterPct * gstRate) / 100);
-    const total = Math.max(0, afterPct - billDiscount) + gst;
-    return { sub, gstRate, gst, discPctAmt, discAmt: billDiscount, total };
+    const delivery = Number(billOrder.deliveryFee) || 0;
+    const total = Math.max(0, afterPct - billDiscount) + gst + delivery;
+    return { sub, gstRate, gst, discPctAmt, discAmt: billDiscount, total, delivery };
   }, [billOrder, billEditItems, billGstRate, billGstCustom, billDiscount, billDiscountPct]);
 
   // 💾 SAVE BILL EDITS TO FIRESTORE
@@ -3813,7 +3865,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
 <h2>${escapeHtml(RESTAURANT.name)}</h2>
 <div class="center" style="font-size:10px">${escapeHtml(RESTAURANT.address)}</div>
 <div class="center" style="font-size:10px">Ph: ${RESTAURANT.phones.join(" / ")}</div>
-<div class="center" style="font-size:10px">GSTIN: ${escapeHtml(billCustomerGstin || "—")}</div>
+${RESTAURANT.gstin ? `<div class="center" style="font-size:10px">GSTIN: ${escapeHtml(RESTAURANT.gstin)}</div>` : ""}
 
 <div class="line"></div>
 <div style="display:flex;justify-content:space-between;font-size:11px">
@@ -3823,7 +3875,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
 <div style="font-size:10px;text-align:center;margin-top:4px">${now}</div>
 
 ${order.waiter ? `<div style="font-size:10px;margin-top:4px">Waiter: ${escapeHtml(order.waiter)}</div>` : ""}
-<div style="font-size:10px">Customer: ${escapeHtml(billCustomerName || "Walk-in")}${billCustomerPhone ? ` · ${escapeHtml(billCustomerPhone)}` : ""}</div>
+${RESTAURANT.gstin ? `<div class="center" style="font-size:10px">GSTIN: ${escapeHtml(RESTAURANT.gstin)}</div>` : ""}
 
 <div class="line"></div>
 <table>
@@ -3836,7 +3888,8 @@ ${order.waiter ? `<div style="font-size:10px;margin-top:4px">Waiter: ${escapeHtm
   <tr><td>Subtotal</td><td style="text-align:right">₹${sub}</td></tr>
   ${billDiscountPct > 0 ? `<tr><td>Discount (${billDiscountPct}%)</td><td style="text-align:right">-₹${discPctAmt}</td></tr>` : ""}
   ${discAmt > 0 ? `<tr><td>Extra Discount</td><td style="text-align:right">-₹${discAmt}</td></tr>` : ""}
-  ${gstRate > 0 ? `<tr><td>GST @ ${gstRate}%</td><td style="text-align:right">+₹${gst}</td></tr>` : ""}
+  ${gstRate > 0 ? `<tr><td>CGST @ ${gstRate / 2}%</td><td style="text-align:right">+₹${Math.round(gst / 2)}</td></tr><tr><td>SGST @ ${gstRate / 2}%</td><td style="text-align:right">+₹${gst - Math.round(gst / 2)}</td></tr>` : ""}
+  ${billCalc.delivery > 0 ? `<tr><td>Delivery</td><td style="text-align:right">+₹${billCalc.delivery}</td></tr>` : ""}
   <tr class="grand"><td>GRAND TOTAL</td><td style="text-align:right">₹${total}</td></tr>
 </table>
 
@@ -4442,15 +4495,30 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState('');
 
-  const filteredOrders = useMemo(() => orders.filter(o => toLocalISODate(o.createdAt) === filterDate), [orders, filterDate]);
+  const [histOrders, setHistOrders] = useState([]);
+  useEffect(() => {
+    if (filterDate === toLocalISODate(Date.now())) { setHistOrders([]); return; }
+    let off = false;
+    const s = new Date(filterDate + "T00:00:00").getTime();
+    getDocs(query(collection(db, "orders"), where("createdAt", ">=", s), where("createdAt", "<", s + 86400000)))
+      .then((snap) => { if (!off) setHistOrders(snap.docs.map(normOrder)); })
+      .catch((e) => console.error("history load:", e));
+    return () => { off = true; };
+  }, [filterDate]);
+  const filteredOrders = useMemo(() => {
+    const m = new Map();
+    histOrders.forEach(o => m.set(o.id, o));
+    orders.forEach(o => m.set(o.id, o));
+    return Array.from(m.values()).filter(o => toLocalISODate(o.createdAt) === filterDate);
+  }, [orders, histOrders, filterDate]);
   const revenue = filteredOrders.filter((o) => o.paid && o.status !== "cancelled").reduce((s, o) => s + getOrderTotal(o), 0);
   const _revenueOld = filteredOrders.filter((o) => o.paid).reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) + (o.deliveryFee || 0) - (o.loyaltyDiscount || 0), 0);
   const avgOrderValue = (() => { const a = filteredOrders.filter(o => o.status !== "cancelled"); return a.length ? Math.round(a.reduce((s, o) => s + getOrderTotal(o), 0) / a.length) : 0; })();
   const _avgOld = filteredOrders.length > 0 ? Math.round(filteredOrders.reduce((s, o) => s + o.items.reduce((a, it) => a + it.price * it.qty, 0) - (o.loyaltyDiscount || 0), 0) / filteredOrders.length) : 0;
 
-  const handleAddCategory = () => { if (!newCategoryInput.trim()) return; updateCategories([...categories, newCategoryInput.trim()]); setNewCategoryInput(''); };
+  const handleAddCategory = () => { if (!newCategoryInput.trim()) return; if (categories.some(c => c.toLowerCase() === newCategoryInput.trim().toLowerCase())) { alert("⚠️ Ye category pehle se hai"); return; } updateCategories([...categories, newCategoryInput.trim()]); setNewCategoryInput(''); };
   const handleMoveCategory = (index, direction) => { const ni = index + direction; if (ni < 0 || ni >= categories.length) return; const u = [...categories]; const [r] = u.splice(index, 1); u.splice(ni, 0, r); updateCategories(u); };
-  const handleDeleteCategory = (index) => { if (window.confirm("Delete this category?")) { updateCategories(categories.filter((_, i) => i !== index)); } };
+  const handleDeleteCategory = (index) => { if (menu.some(m => m.category === categories[index])) { alert("⚠️ Is category me items hain. Pehle unhe doosri category me daalo ya delete karo."); return; } if (window.confirm("Delete this category?")) { updateCategories(categories.filter((_, i) => i !== index)); } };
 
   const generatePDFReport = async () => {
     setIsGeneratingPDF(true);
@@ -4477,12 +4545,13 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
 
   const handleSaveMenuItem = async () => {
     if (!editingItem) return;
+    if (!String(newItemName).trim() || !(Number(newItemPrice) > 0)) { alert("⚠️ Naam aur sahi price daalo"); return; }
     const updatedMenu = menu.map(m => m.id === editingItem.id ? { ...m, name: newItemName, price: Number(newItemPrice), category: newItemCat, ...(newItemImage ? { image: newItemImage } : {}) } : m);
     setMenuState(updatedMenu);
     try { await setDoc(doc(db, "settings", "menu"), { items: updatedMenu }); } catch (e) { alert("⚠️ Failed to save"); }
     setEditingItem(null); setNewItemImage("");
   };
-  const handleDeleteMenuItem = async (id) => { if (window.confirm("Delete this item?")) { const u = menu.filter(m => m.id !== id); setMenuState(u); try { await setDoc(doc(db, "settings", "menu"), { items: u }); } catch (e) { } } };
+  const handleDeleteMenuItem = async (id) => { if (window.confirm("Delete this item?")) { const u = menu.filter(m => m.id !== id); setMenuState(u); try { await setDoc(doc(db, "settings", "menu"), { items: u }); } catch (e) { console.error(e); alert("⚠️ Menu save nahi hua. Internet check karo."); } } };
   const handleAddNewDish = async () => {
     if (!addMenuName.trim() || !addMenuPrice) { alert("Enter name and price"); return; }
     const newDish = mi(uid("m"), addMenuName.trim(), Number(addMenuPrice), addMenuCat, addMenuVeg, addMenuDesc.trim(), "", false, true, addMenuImage.trim());
@@ -4492,15 +4561,15 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
     setAddMenuName(""); setAddMenuPrice(""); setAddMenuDesc(""); setAddMenuImage("");
     alert("✅ Dish added!");
   };
-  const handleAddGalleryPhoto = async () => { if (!newGalleryImg.trim()) return; const u = [...gallery, newGalleryImg.trim()]; setGallery(u); try { await setDoc(doc(db, "settings", "gallery"), { images: u }); } catch (e) { } setNewGalleryImg(""); };
+  const handleAddGalleryPhoto = async () => { if (!newGalleryImg.trim()) return; const u = [...gallery, newGalleryImg.trim()]; setGallery(u); try { await setDoc(doc(db, "settings", "gallery"), { images: u }); } catch (e) { console.error(e); alert("⚠️ Gallery save nahi hui. Internet check karo."); } setNewGalleryImg(""); };
   const handleDeleteGalleryPhoto = async (index) => { const u = gallery.filter((_, i) => i !== index); setGallery(u); try { await setDoc(doc(db, "settings", "gallery"), { images: u }); } catch (e) { } };
-  const handleSaveHeroImage = async () => { if (!heroImgInput.trim()) return; const n = { ...settings, heroImage: heroImgInput.trim() }; setSettings(n); try { await setDoc(doc(db, "settings", "appSettings"), n); } catch (e) { } alert("✅ Saved!"); };
+  const handleSaveHeroImage = async () => { if (!heroImgInput.trim()) return; const n = { ...settings, heroImage: heroImgInput.trim() }; setSettings(n); try { await setDoc(doc(db, "settings", "appSettings"), n); alert("✅ Saved!"); } catch (e) { alert("⚠️ Save nahi hua: " + e.message); } };
   const handleExportCSV = () => {
     const rows = [["Time", "Type", "Items", "Total", "Paid"]];
     filteredOrders.forEach(o => { const t = getOrderTotal(o); rows.push([new Date(o.createdAt).toLocaleTimeString('en-IN'), o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`, o.items.map(it => `${it.qty}x ${it.name}`).join("; "), t, o.paid ? "Yes" : "No"]); });
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
     const link = document.createElement('a');
-    link.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    link.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent("\uFEFF" + csv);
     link.download = `orders_${filterDate}.csv`; link.click();
   };
 
@@ -4544,7 +4613,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
             <StatCard label="Avg Order" value={inr(avgOrderValue)} icon="📈" color={COLORS.gold} />
           </div>
           <KitchenMetrics filteredOrders={filteredOrders} />
-                   <div id="report-content" style={{ display: 'none' }}>
+                   <div id="report-content" style={{ position: 'absolute', left: -9999, top: 0, width: 700, background: '#fff' }}>
             <div style={{ padding: 20 }}>
               <h2>{RESTAURANT.name} - Report</h2>
               <p>Date: {filterDate}</p>
@@ -4876,7 +4945,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           <h3 style={{ marginTop: 40 }}>Top Customers</h3>
           <table style={{ width: "100%", borderCollapse: "collapse", background: "#fff", borderRadius: 12, overflow: 'hidden' }}>
             <thead><tr style={{ background: COLORS.paper }}><th style={th}>Name</th><th style={th}>Phone</th><th style={th}>Coins</th><th style={th}>Tier</th></tr></thead>
-            <tbody>{loyaltyUsers.sort((a, b) => b.coins - a.coins).map((u, i) => (<tr key={i}><td style={td}>{u.name}</td><td style={td}>{u.phone}</td><td style={{ ...td, fontWeight: 800, color: COLORS.sageDark }}>{u.coins}</td><td style={td}>{getLoyaltyTier(u.coins).name}</td></tr>))}</tbody>
+            <tbody>{[...loyaltyUsers].sort((a, b) => b.coins - a.coins).map((u, i) => (<tr key={i}><td style={td}>{u.name}</td><td style={td}>{u.phone}</td><td style={{ ...td, fontWeight: 800, color: COLORS.sageDark }}>{u.coins}</td><td style={td}>{getLoyaltyTier(u.coins).name}</td></tr>))}</tbody>
           </table>
         </>
       )}
@@ -4895,7 +4964,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
             <div key={off.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 20, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <div><div style={{ fontWeight: 800, fontSize: 18 }}>{off.title}</div><div style={{ color: COLORS.textLight, fontWeight: 600 }}>{off.desc}</div></div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => { const nt = prompt("Title:", off.title); if (nt !== null) { const nd = prompt("Desc:", off.desc); if (nd !== null) { removeOffer(off.id); addOffer({ ...off, title: nt.trim(), desc: nd.trim() }); } } }} style={{ background: COLORS.copperLight, border: `1.5px solid ${COLORS.copper}`, color: COLORS.copperDark, padding: '8px 16px', borderRadius: 10, cursor: 'pointer', fontWeight: 700 }}>✏️</button>
+                <button onClick={() => { const nt = prompt("Title:", off.title); if (nt !== null) { const nd = prompt("Desc:", off.desc); if (nd !== null) { addOffer({ ...off, title: nt.trim(), desc: nd.trim() }); } } }} style={{ background: COLORS.copperLight, border: `1.5px solid ${COLORS.copper}`, color: COLORS.copperDark, padding: '8px 16px', borderRadius: 10, cursor: 'pointer', fontWeight: 700 }}>✏️</button>
                 <button onClick={() => removeOffer(off.id)} style={{ background: 'transparent', border: `1.5px solid ${COLORS.rust}`, color: COLORS.rust, padding: '8px 16px', borderRadius: 10, cursor: 'pointer', fontWeight: 800 }}>Delete</button>
               </div>
             </div>
@@ -4941,7 +5010,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
                   <td style={td}>{o.items.map((it) => `${it.qty}×${it.name}`).join(", ")}</td>
                   <td style={{ ...td, fontWeight: 700 }}>{inr(getOrderTotal(o))}</td>
                   <td style={td}>{o.payment || "cash"}<span style={{ fontSize: 11, color: o.paid ? COLORS.sage : COLORS.textLight, display: 'block' }}>{o.paid ? "✅" : "⏳"}</span></td>
-                  <td style={td}><button onClick={() => markPaid(o.id, !o.paid)} style={{ border: `1.5px solid ${o.paid ? COLORS.sage : COLORS.line}`, background: o.paid ? COLORS.sage : "transparent", color: o.paid ? "#fff" : COLORS.ink, borderRadius: 10, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>{o.paid ? "✓ Paid" : "Mark paid"}</button></td>
+                  <td style={td}><button onClick={() => markPaid(o.id, o.paid && !o.coinsClaimed ? true : !o.paid)} style={{ border: `1.5px solid ${o.paid ? COLORS.sage : COLORS.line}`, background: o.paid ? COLORS.sage : "transparent", color: o.paid ? "#fff" : COLORS.ink, borderRadius: 10, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>{o.paid ? (o.coinsClaimed ? "✓ Paid" : "🪙 Award coins") : "Mark paid"}</button></td>
                 </tr>
               ))}
             </tbody>
@@ -5469,7 +5538,7 @@ export default function App() {
   const [loyaltyRules, setLoyaltyRules] = useState({ rate: 10, rewards: [{ id: "r1", cost: 300, item: "Free French Fry" }] });
   const [loyaltyUsers, setLoyaltyUsers] = useState([]);
   const [coinHistory, setCoinHistory] = useState([]);
-  const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); return params.has("table") ? Number(params.get("table")) : 1; });
+  const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); const t = Number(params.get("table")); return Number.isInteger(t) && t >= 1 && t <= 12 ? t : 1; });
   const [menu, setMenuState] = useState(DEFAULT_MENU);
   const [orders, setOrdersState] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -5512,7 +5581,7 @@ export default function App() {
     [flashSaleItems, menu]
   );
 
-  const requestPinPrompt = (target) => { setTargetRole(target); setShowPinModal(true); setPinInput(""); };
+  const requestPinPrompt = (target) => { if (target === "customer") { setRole("customer"); return; } setTargetRole(target); setShowPinModal(true); setPinInput(""); };
 
    const handlePinSubmit = () => {
     if (pinLock.isLocked()) {
@@ -5573,6 +5642,15 @@ export default function App() {
     try { await setDoc(doc(db, "settings", "categories"), { categories: newCategories }); } catch (e) { console.error(e); }
   };
 
+  const loyaltyTimer = useRef(null);
+  const saveLoyaltyRules = (rules) => {
+    setLoyaltyRules(rules);
+    clearTimeout(loyaltyTimer.current);
+    loyaltyTimer.current = setTimeout(() => {
+      setDoc(doc(db, "settings", "loyaltyRules"), { rules }).catch((e) => { console.error(e); alert("⚠️ Loyalty rules save nahi hue."); });
+    }, 700);
+  };
+
   const savePromotions = async () => {
     try { await setDoc(doc(db, "settings", "promotions"), { flashSale: flashSaleItems, comboOffers }); alert("✅ Saved!"); } catch (e) { alert("❌ Failed: " + e.message); }
   };
@@ -5588,6 +5666,7 @@ export default function App() {
       const lq = await getDocs(collection(db, "loyaltyUsers"));
       const users = lq.docs.map(d => d.data());
       if (users.length > 0) setLoyaltyUsers(users);
+      try { const iq = await getDocs(collection(db, "inventory")); setInventory(iq.docs.map(d => d.data())); } catch (e) { console.error("inventory load:", e); }
       const hq = await getDocs(collection(db, "coinHistory"));
       const hist = hq.docs.map(d => d.data());
       if (hist.length > 0) setCoinHistory(hist);
@@ -5603,7 +5682,7 @@ export default function App() {
         // ✅ MENU — Force new menu if old
         if (ds.id === "menu") {
           menuFound = true;  // 🆕 Mark karo ki menu exists
-          if (data.items && Array.isArray(data.items) && data.items.length >= 200) {
+          if (data.items && Array.isArray(data.items) && data.items.length > 0) {
             console.log("📦 Using Firestore menu:", data.items.length, "items");
             setMenuState(data.items);
           } else {
@@ -5618,7 +5697,7 @@ export default function App() {
           const firestoreCats = data.categories || [];
           const OLD_CATS = ["Chinese Starter", "Drinks", "Chef's Special", "Fun Food", "Mughlai", 
                             "Tandoori", "Soup", "Snacks", "Chinese Mains", "Chicken, Mutton, Fish & Egg",
-                            "Paneer & Mushroom", "Indian Bread", "Pulao", "Aloo, Dal & Sides", 
+                            "Indian Bread", "Pulao", "Aloo, Dal & Sides", 
                             "Biryani & Thali", "Momo", "Tea & Coffee"];
           const hasOldCats = firestoreCats.some(c => OLD_CATS.includes(c));
           
@@ -5634,6 +5713,8 @@ export default function App() {
         
         // ✅ GALLERY
         if (ds.id === "gallery" && data.images) setGallery(data.images);
+        if (ds.id === "offers" && Array.isArray(data.items)) setOffersList(data.items);
+        if (ds.id === "loyaltyRules" && data.rules && Array.isArray(data.rules.rewards)) setLoyaltyRules(data.rules);
         
         // ✅ APP SETTINGS
         if (ds.id === "appSettings") setSettings(prev => ({ ...prev, ...data }));
@@ -5658,6 +5739,7 @@ export default function App() {
     }
   };
   
+  setTimeout(() => setLoading(false), 8000);
   fetchAllData();
 
   // ⚠️ Ye code MAT HATANA
@@ -5686,11 +5768,11 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   };
   const unsubOpen = onSnapshot(
     query(collection(db, "orders"), where("status", "in", ["new", "preparing", "ready"])),
-    (snap) => { openList = snap.docs.map(d => ({ id: d.id, ...d.data() })); mergeOrders(); },
+    (snap) => { openList = snap.docs.map(normOrder); mergeOrders(); },
     (err) => console.error("Open orders listener:", err)
   );
   const unsubOrders = onSnapshot(ordersQuery, (snap) => {
-    todayList = snap.docs.map(d => ({ id: d.id, ...d.data() })); mergeOrders();
+    todayList = snap.docs.map(normOrder); mergeOrders();
   });
   
   return () => { 
@@ -5701,9 +5783,9 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   };
 }, []);
 
-  const deleteBooking = async (id) => { if (window.confirm("Delete?")) { try { await deleteDoc(doc(db, "bookings", id)); } catch (e) { } setBookings(bookings.filter(b => b.id !== id)); } };
-  const addInventory = async (item) => { try { await setDoc(doc(db, "inventory", item.id), item); } catch (e) { } setInventory([...inventory, item]); };
-  const updateStock = async (id, ns) => { try { await updateDoc(doc(db, "inventory", id), { stock: ns }); } catch (e) { } setInventory(inventory.map(i => i.id === id ? { ...i, stock: ns } : i)); };
+  const deleteBooking = async (id) => { if (window.confirm("Delete?")) { try { await deleteDoc(doc(db, "bookings", id)); } catch (e) { console.error(e); alert("⚠️ Delete nahi hua."); } } };
+  const addInventory = async (item) => { try { await setDoc(doc(db, "inventory", item.id), item); setInventory(prev => [...prev, item]); } catch (e) { console.error(e); alert("⚠️ Inventory save nahi hua."); } };
+  const updateStock = async (id, ns) => { try { await updateDoc(doc(db, "inventory", id), { stock: ns }); setInventory(prev => prev.map(i => i.id === id ? { ...i, stock: ns } : i)); } catch (e) { console.error(e); alert("⚠️ Stock update nahi hua."); } };
 
    const requestWaiter = async (tbl) => {
     try {
@@ -5721,8 +5803,16 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
     }
   };
 
-  const addOffer = async (off) => { setOffersList([...offersList, off]); };
-  const removeOffer = async (id) => { setOffersList(offersList.filter(o => o.id !== id)); };
+  const saveOffers = async (list) => {
+    setOffersList(list);
+    try { await setDoc(doc(db, "settings", "offers"), { items: list }); }
+    catch (e) { console.error(e); alert("⚠️ Offers save nahi hue."); }
+  };
+  const addOffer = async (off) => {
+    const next = offersList.some(o => o.id === off.id) ? offersList.map(o => (o.id === off.id ? off : o)) : [...offersList, off];
+    await saveOffers(next);
+  };
+  const removeOffer = async (id) => { await saveOffers(offersList.filter(o => o.id !== id)); };
 
   const placeOrder = async (order) => {
     try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; await setDoc(doc(db, "orders", order.id), order);
@@ -5827,7 +5917,7 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   }
 };
 
-  const bookEvent = async (booking) => { try { await setDoc(doc(db, "bookings", booking.id), booking); } catch (e) { } setBookings([...bookings, booking]); };
+  const bookEvent = async (booking) => { await setDoc(doc(db, "bookings", booking.id), booking); };
 
   const cancelOrderByStaff = async (orderId) => {
     try { await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); } catch (e) { console.error(e); }
@@ -5844,11 +5934,11 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
         <div className="app-content">
   
   
-  {role === "customer" && <CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} />}
+  {role === "customer" && <ErrorBoundary key="cust"><CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} /></ErrorBoundary>}
   
-  {role === "staff" && <StaffView menu={menu} orders={orders} placeOrder={placeOrder} categories={categories} setMenuState={setMenuState} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} />}
+  {role === "staff" && <ErrorBoundary key="staff"><StaffView menu={menu} orders={orders} placeOrder={placeOrder} categories={categories} setMenuState={setMenuState} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} /></ErrorBoundary>}
   
-  {role === "admin" && <AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={setLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} />}
+  {role === "admin" && <ErrorBoundary key="admin"><AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={saveLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} /></ErrorBoundary>}
   
   {/* 🆕 FALLBACK — agar role match nahi hua toh */}
   {!["customer", "staff", "admin"].includes(role) && (
