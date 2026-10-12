@@ -1,9 +1,12 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import { getFirestore } from "firebase/firestore"; // <-- Yeh zaroori hai database ke liye
+import { isSupported, getAnalytics } from "firebase/analytics";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  getFirestore,
+} from "firebase/firestore";
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyC67vNT4nVAHm31Dohgjl4K5lJ5EQS7pe4",
   authDomain: "enpmenu.firebaseapp.com",
@@ -14,9 +17,18 @@ const firebaseConfig = {
   measurementId: "G-6VEE32JDC8"
 };
 
-// Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
 
-// <-- Yeh line add karein taaki baaki files mein db use kar sakein
-export const db = getFirestore(app);
+// Analytics kuch browsers/webview me crash karta hai, isliye check ke baad hi chalao
+isSupported().then((ok) => { if (ok) getAnalytics(app); }).catch(() => {});
+
+// Offline cache (weak internet me menu/orders turant khulte hain)
+let database;
+try {
+  database = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  });
+} catch (e) {
+  database = getFirestore(app); // purana firebase version ho to yahi chalega
+}
+export const db = database;
