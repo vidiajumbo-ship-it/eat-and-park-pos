@@ -3337,23 +3337,59 @@ function BillPOSScreen(p) {
     try { r.start(); } catch (e) { setListening(false); }
   };
 
-  const runAi = async () => {
+    const runAi = async () => {
     const text = aiText.trim();
     if (!text || aiBusy) return;
-    setAiBusy(true); setAiErr(""); setAiRes(null);
+    setAiBusy(true);
+    setAiErr("");
+    setAiRes(null);
     try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken() : "";
+      // 1. Safe Token extraction (Never pass empty Bearer header)
+      let token = null;
+      if (auth.currentUser) {
+        try {
+          token = await auth.currentUser.getIdToken();
+        } catch (tokErr) {
+          console.warn("Token fetch failed:", tokErr);
+        }
+      }
+
+      const headers = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      // 2. Fetch call
       const r = await fetch("/api/parse-order", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-        body: JSON.stringify({ text, menu: (menu || []).filter((m) => m.available).map((m) => ({ id: m.id, name: m.name, portion: m.portion || "" })) })
+        headers,
+        body: JSON.stringify({
+          text,
+          menu: (menu || [])
+            .filter((m) => m.available)
+            .map((m) => ({ id: m.id, name: m.name, portion: m.portion || "" })),
+        }),
       });
+
+      // 3. Handle non-JSON or error responses gracefully
+      const contentType = r.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(`Server error (${r.status}). Backend API route /api/parse-order check karein.`);
+      }
+
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "AI error");
+      if (!r.ok) throw new Error(data.error || "AI processing failed");
       setAiRes(data);
-    } catch (e) { setAiErr("⚠️ " + (e.message || e)); }
-    finally { setAiBusy(false); }
+    } catch (e) {
+      console.error("AI Order Error:", e);
+      setAiErr("⚠️ " + (e.message || "Failed to process order"));
+    } finally {
+      setAiBusy(false);
+    }
   };
+
 
   const applyAi = () => {
     if (!aiRes) return;
