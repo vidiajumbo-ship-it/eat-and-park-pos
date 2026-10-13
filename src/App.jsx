@@ -5710,9 +5710,56 @@ export default function App() {
       const ok = r === "admin" || (targetRole === "staff" && r === "staff");
       if (!ok) {
         await signOut(auth);
-        alert(`❌ Is account ka role '${r}' hai, '${targetRole}' nahi.`);
-        return;
-     
+             alert(`❌ Is account ka role '${r}' hai, '${targetRole}' nahi.`);
+      return;
+    }
+
+    pinLock.reset();
+    setRole(targetRole);
+    setShowPinModal(false);
+    setPinInput("");
+    setEmailInput("");
+  } catch (e) {
+    console.error("❌ Auth error:", e.code, e.message);
+    const msgs = {
+      "auth/invalid-credential": "❌ Email ya password galat hai",
+      "auth/user-not-found": "❌ Ye email registered nahi hai",
+      "auth/wrong-password": "❌ Password galat hai",
+      "auth/network-request-failed": "⚠️ Internet issue ya Auth domain galat hai",
+      "auth/operation-not-allowed": "⚠️ Firebase me Email/Password provider enable nahi hai",
+      "auth/too-many-requests": "⏳ Bahut attempts. Thodi der baad try karo",
+      "auth/invalid-email": "❌ Email format galat hai",
+    };
+    alert(msgs[e.code] || `❌ Login fail: ${e.code || e.message}`);
+    pinLock.registerFail();
+    setPinInput("");
+  }
+};
+
+  const handlePinSubmitUnused = () => {
+
+      pinLock.reset();
+      setRole(targetRole);
+      setShowPinModal(false);
+      setPinInput("");
+      setEmailInput("");
+    } catch (e) {
+      console.error("❌ Auth error:", e.code, e.message);
+      const msgs = {
+        "auth/invalid-credential": "❌ Email ya password galat hai",
+        "auth/user-not-found": "❌ Ye email registered nahi hai",
+        "auth/wrong-password": "❌ Password galat hai",
+        "auth/network-request-failed": "⚠️ Internet issue ya Auth domain galat hai",
+        "auth/operation-not-allowed": "⚠️ Firebase me Email/Password provider enable nahi hai",
+        "auth/too-many-requests": "⏳ Bahut attempts. Thodi der baad try karo",
+        "auth/invalid-email": "❌ Email format galat hai",
+      };
+      alert(msgs[e.code] || `❌ Login fail: ${e.code || e.message}`);
+      pinLock.registerFail();
+      setPinInput("");
+    }
+  };
+
   const handlePinSubmitUnused = () => {
     if (pinLock.isLocked()) {
       alert(`⏳ Bahut galat attempts. ${pinLock.secondsLeft()}s baad try karo.`);
@@ -5872,8 +5919,9 @@ export default function App() {
     }
   };
   
-  setTimeout(() => setLoading(false), 8000);
+  const loadingTimer = setTimeout(() => setLoading(false), 8000);
   authReady.then(() => fetchAllData()).catch(() => fetchAllData());
+  // cleanup ke liye neeche wale return mein `clearTimeout(loadingTimer)` add karo
 
   // ⚠️ Ye code MAT HATANA
   const qCalls = query(collection(db, "calls"), where("status", "==", "active"));
@@ -5913,7 +5961,9 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
   
   return () => { 
     unsubCalls(); 
-    unsubOpen();      clearTimeout(reloadTimer);
+    unsubOpen();
+    clearTimeout(reloadTimer);
+    clearTimeout(loadingTimer);
     unsubOrders(); 
     unsubBookings();
   };
@@ -6043,8 +6093,11 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
     });
 
     // Transaction ke baad history alag se likho (idempotent check)
+    // Note: yahan hum fresh data use kar rahe hain, aur agar `coinHistory` mein
+    // duplicate add ho raha ho to coinsClaimed flag ke through ruk jayega
     const order = orders.find(o => o.id === orderId);
-    if (paid && order && !order.coinsClaimed) {
+    const alreadyClaimed = order && order.coinsClaimed;
+    if (paid && order && !alreadyClaimed) {
       const phone = order.customer?.phone;
       const earned = order.earnedCoins || 0;
       const used = order.rewardUsedCoins || 0;
@@ -6145,4 +6198,3 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
     </ErrorBoundary>
   );
 }
-    }
