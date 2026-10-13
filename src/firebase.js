@@ -1,44 +1,34 @@
+// src/firebase.js
 import { initializeApp } from "firebase/app";
-import { isSupported, getAnalytics } from "firebase/analytics";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
-import {
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-  getFirestore,
-} from "firebase/firestore";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyC67vNT4nVAHm31Dohgjl4K5lJ5EQS7pe4",
-  authDomain: "enpmenu.firebaseapp.com",
-  projectId: "enpmenu",
-  storageBucket: "enpmenu.firebasestorage.app",
-  messagingSenderId: "942888978604",
-  appId: "1:942888978604:web:2a666ebd59ff26d0cc7709",
-  measurementId: "G-6VEE32JDC8"
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);
-
-isSupported().then((ok) => { if (ok) getAnalytics(app); }).catch(() => {});
-
-let database;
-try {
-  database = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-  });
-} catch (e) {
-  database = getFirestore(app);
-}
-export const db = database;
-
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 
-// Koi login nahi hai to anonymous login; staff login hai to wahi rahega
+// Offline persistence (optional)
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code === 'failed-precondition') {
+    console.warn("Multiple tabs open — persistence disabled");
+  } else if (err.code === 'unimplemented') {
+    console.warn("Browser persistence support nahi karta");
+  }
+});
+
+// authReady promise — App.js isko await karta hai
 export const authReady = new Promise((resolve) => {
-  onAuthStateChanged(auth, (u) => {
-    if (u) resolve(u);
-    else signInAnonymously(auth).catch((e) => { console.warn("Anonymous auth:", e.code); resolve(null); });
+  const unsub = onAuthStateChanged(auth, (user) => {
+    unsub();
+    resolve(user);
   });
-  setTimeout(() => resolve(null), 5000);
 });
