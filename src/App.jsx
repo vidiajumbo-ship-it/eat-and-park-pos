@@ -189,8 +189,11 @@ function inr(n) {
   return "₹" + num.toLocaleString("en-IN");
 }
 /* eslint-disable */
-function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
-
+const isWalkIn = (s) => /^walk-?in$/i.test(String(s || "").trim());
+const getBaseKots = (o) => (o.kots?.length ? o.kots : [{ id: uid("kot"), kotNumber: 1, items: o.items || [], createdAt: o.createdAt, status: o.status }])
+  .map(k => (k.status === "new" && o.status !== "new" ? { ...k, status: o.status } : k));
+const getNextKotNo = (o) => Math.max(...getBaseKots(o).map(k => k.kotNumber || 1)) + 1;
+function uid(prefix)
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -208,7 +211,7 @@ function getOrderTotal(o) {
 const normOrder = (d) => {
   const o = { id: d.id, ...d.data() };
   if (!Array.isArray(o.items)) o.items = [];
-  if (!o.customer) o.customer = { name: "Walk-in", phone: "" };
+  if (!o.customer) o.customer = { name: "", phone: "" };
   return o;
 };
 
@@ -622,27 +625,62 @@ if (typeof window !== 'undefined') {
 // 7. MENU ITEM HELPER
 // ==
 
+const IMG = (id) => `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=400&q=80`;
+const DEFAULT_IMG_ID = "1546069901-ba9599a7e63c";
+
+const CATEGORY_IMG = [
+  ["Thali", "1585937421612-70a008356fbe"], ["Mutton", "1604908176997-125f25cc6f3d"],
+  ["Fish", "1604908176997-125f25cc6f3d"], ["Egg", "1604908176997-125f25cc6f3d"],
+  ["Chicken", "1604908176997-125f25cc6f3d"], ["Tandoor", "1599487405702-3e28c42b9370"],
+  ["Biryani", "1589302168068-964664d93cb0"], ["Rice", "1589302168068-964664d93cb0"],
+  ["Paneer", "1631452180519-c014fe946bc0"], ["Mushroom", "1631452180519-c014fe946bc0"],
+  ["Dal", "1626082927389-6cd097cdc6ec"], ["Roti", "1626082927389-6cd097cdc6ec"],
+  ["Soya", "1626082895617-2c6ad36f568a"], ["Chinese", "1585032226651-759b368d7246"],
+  ["Momos", "1534422298391-e4f8c172dddb"], ["Pizza", "1513104890138-7c749659a591"],
+  ["Maggi", "1573080496219-bb080dd4f877"], ["Soups", "1547592180-85f173990554"],
+  ["Shakes", "1513558161293-cdaf765ed2fd"], ["Desserts", "1551024506-0bccd828d307"],
+  ["Combos", "1600891964092-4316c288032e"]
+];
+
+const DISH_IMG_RULES = [
+  [/momo/i, "1563245372-f21724e3856d"],
+  [/burger/i, "1568901346375-23c9450c58cd"],
+  [/sandwich/i, "1528735602780-2552fd46c7af"],
+  [/pizza/i, "1574071318508-1cdbab80d002"],
+  [/pasta/i, "1621996346565-e3dbc646d9a9"],
+  [/fries|potato/i, "1573080496219-bb080dd4f877"],
+  [/maggi|noodles/i, "1612929633738-8fe44f7ec841"],
+  [/mojito|nimbu|lime/i, "1551024709-8f23befc6f87"],
+  [/coffee/i, "1461023058943-07fcbe16d735"],
+  [/\btea\b/i, "1564890369478-c89ca6d9cde9"],
+  [/shake/i, "1572490122747-3968b75cc699"],
+  [/ice cream/i, "1563805042-7684c019e1cb"],
+  [/biryani/i, "1589302168068-964664d93cb0"],
+  [/fried rice|pulao/i, "1603133872878-684f208fb84b"],
+  [/butter (chicken|masala)|tikka masala/i, "1603894584373-5ac82b2ae398"],
+  [/paneer tikka|tikka|kabab|seekh|tandoori|tangdi/i, "1567188040759-fb8a883dc6d8"],
+  [/naan|roti|bhature/i, "1601050690597-df0568f70950"],
+  [/^dal /i, "1546833999-b9f581a1996d"],
+  [/fish/i, "1519708227418-c8fd9a32b7a2"],
+  [/egg|omelette|bhurji/i, "1525351484163-7529414344d8"],
+  [/salad/i, "1512621776951-a57141f2eefd"]
+];
+
+function categoryImage(category) {
+  const c = String(category || "");
+  const hit = CATEGORY_IMG.find(([k]) => c.includes(k));
+  return IMG(hit ? hit[1] : DEFAULT_IMG_ID);
+}
+function dishImage(name, category) {
+  const n = String(name || "");
+  const hit = DISH_IMG_RULES.find(([re]) => re.test(n));
+  return hit ? IMG(hit[1]) : categoryImage(category);
+}
+const GENERIC_IMAGES = new Set([IMG(DEFAULT_IMG_ID), ...CATEGORY_IMG.map(([, id]) => IMG(id))]);
+const withDishImage = (m) => (!m.image || GENERIC_IMAGES.has(m.image) ? { ...m, image: dishImage(m.name, m.category) } : m);
+
 function mi(id, name, price, category, veg, desc, portion, isBestseller = false, available = true, customImg = "") {
-  let img = customImg || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80";
-  if (!customImg) {
-    if (category.includes("Thali")) img = "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Mutton") || category.includes("Fish") || category.includes("Egg")) img = "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Chicken")) img = "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Tandoor")) img = "https://images.unsplash.com/photo-1599487405702-3e28c42b9370?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Biryani") || category.includes("Rice")) img = "https://images.unsplash.com/photo-1589302168068-964664d93cb0?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Paneer") || category.includes("Mushroom")) img = "https://images.unsplash.com/photo-1631452180519-c014fe946bc0?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Dal") || category.includes("Roti") || category.includes("Chole")) img = "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Soya")) img = "https://images.unsplash.com/photo-1626082895617-2c6ad36f568a?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Chinese")) img = "https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Momos") || category.includes("Rolls")) img = "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Pizza") || category.includes("Burgers")) img = "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Maggi") || category.includes("Corn") || category.includes("Fries")) img = "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Soups")) img = "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Shakes") || category.includes("Drinks")) img = "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Desserts")) img = "https://images.unsplash.com/photo-1551024506-0bccd828d307?auto=format&fit=crop&w=400&q=80";
-    else if (category.includes("Combos")) img = "https://images.unsplash.com/photo-1600891964092-4316c288032e?auto=format&fit=crop&w=400&q=80";
-  }
-  return { id, name, desc: desc || "Freshly prepared with premium ingredients.", price, category, veg, available, image: img, portion: portion || "", isBestseller };
+  return { id, name, desc: desc || "Freshly prepared with premium ingredients.", price, category, veg, available, image: customImg || dishImage(name, category), portion: portion || "", isBestseller };
 }
 
 // ==
@@ -1796,8 +1834,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
     items = items.filter((m) => {
       if (vegOnly && !m.veg) return false;
-      if (searchQuery.trim()) { const q = searchQuery.toLowerCase(); return m.name.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q); }
-      return true;
+if (searchQuery.trim()) { const q = searchQuery.toLowerCase(); return m.name.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q); }      return true;
     });
     return items;
   }, [menu, category, searchQuery, vegOnly]);
@@ -3239,9 +3276,9 @@ function BillPOSScreen(p) {
   const itemCount = items.reduce((s, it) => s + (it.qty || 0), 0);
 
   const addItem = (m) => setItems((prev) => {
-    const i = prev.findIndex((it) => it.itemId === m.id && it.price === m.price);
+    const i = prev.findIndex((it) => it.itemId === m.id && it.price === m.price && it._new);
     if (i >= 0) return prev.map((it, k) => (k === i ? { ...it, qty: it.qty + 1 } : it));
-    return [...prev, { itemId: m.id, name: m.name, portion: m.portion || "", price: m.price, qty: 1, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) }];
+    return [...prev, { _new: true, itemId: m.id, name: m.name, portion: m.portion || "", price: m.price, qty: 1, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) }];
   });
   const changeQty = (rowId, d) => setItems((prev) => prev.flatMap((it) => (it._rowId !== rowId ? [it] : (it.qty + d <= 0 ? [] : [{ ...it, qty: Math.round((it.qty + d) * 100) / 100 }]))));
   const [showNew, setShowNew] = useState(false);
@@ -3261,7 +3298,7 @@ function BillPOSScreen(p) {
   const addCustomOnly = () => {
     const v = checkNewItem();
     if (!v) return;
-    setItems((prev) => [...prev, { itemId: uid("c"), name: v.name, portion: newItem.portion.trim(), price: v.price, qty: 1, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) }]);
+    setItems((prev) => [...prev, { _new: true, itemId: uid("c"), name: v.name, portion: newItem.portion.trim(), price: v.price, qty: 1, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) }]);
     setNewItem(emptyNew);
     setShowNew(false);
   };
@@ -3591,7 +3628,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
     if (newOrderCount > prevCountRef.current) {
       playNotificationSound();
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('🛎️ New Order!', { body: `${newOrderCount} new waiting` });
+        safeNotify('🛎️ New Order!', { body: `${newOrderCount} new waiting` });
       }
     }
     prevCountRef.current = newOrderCount;
@@ -3655,8 +3692,8 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
     setBillDiscountPct(order.billEditedAt ? (order.billDiscountPct || 0) : (order.discount || 0));
     setBillPayMode(order.payment || "cash");
     setBillPayStatus(order.paid ? "paid" : "pending");
-    setBillCustomerName(order.customer?.name || "");
-    setBillCustomerPhone(order.customer?.phone || "");
+    setBillCustomerName(isWalkIn(order.customer?.name) ? "" : (order.customer?.name || ""));
+    setBillCustomerPhone(isWalkIn(order.customer?.phone) ? "" : (order.customer?.phone || ""));
     setBillCustomerGstin(order.customerGstin || "");
     setBillNotes(order.notes || "");
     setBillSearch("");
@@ -3694,7 +3731,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
       const w = iframe.contentWindow;
       setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 60000);
       w.document.open();
-      w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:8px;font-weight:700}h2,h3{text-align:center;margin:3px 0}.r{font-size:17px;padding:4px 0;border-bottom:1px dashed #000}.c{text-align:center;font-size:12px}</style></head><body><h2>KOT #${kot.kotNumber || 1}</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + escapeHtml(String(order.table))}</h3><div class="c">${escapeHtml(now)} · #${escapeHtml(order.id.slice(1, 5).toUpperCase())}${order.waiter ? " · " + escapeHtml(order.waiter) : ""}</div><div style="margin-top:8px">${rows}</div>${order.notes ? `<div class="c" style="margin-top:8px">Note: ${escapeHtml(order.notes)}</div>` : ""}</body></html>`);
+      w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:8px;font-weight:700}h2,h3{text-align:center;margin:3px 0}.r{font-size:17px;padding:4px 0;border-bottom:1px dashed #000}.c{text-align:center;font-size:12px}</style></head><body><h2>KOT #${kot.kotNumber || 1}${kot.isRunning ? " (RUNNING)" : ""}</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + escapeHtml(String(order.table))}</h3><div class="c">${escapeHtml(now)} · #${escapeHtml(order.id.slice(1, 5).toUpperCase())}${order.waiter ? " · " + escapeHtml(order.waiter) : ""}</div><div style="margin-top:8px">${rows}</div>${order.notes ? `<div class="c" style="margin-top:8px">Note: ${escapeHtml(order.notes)}</div>` : ""}</body></html>`);
       w.document.close();
       setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("⚠️ KOT print nahi ho paya: " + e.message); } }, 400);
     } catch (e) { console.error("KOT print error:", e); }
@@ -3713,7 +3750,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
       if (mode === "paid" && saved.status === "ready") await advanceStatus(saved.id, "ready");
       setBillOrder(null);
       let delay = 200;
-      if (wasDraft && sendKot) { setTimeout(() => printKotSlip(saved), 200); delay = 1500; }
+      if ((wasDraft && sendKot) || saved._ranKot) { setTimeout(() => printKotSlip(saved), 200); delay = 1500; }
       if (mode !== "save") setTimeout(() => printFinalBill(saved, itemsSnapshot), delay);
     } finally {
       setBillSaving(false);
@@ -3755,7 +3792,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
     try {
       const { sub, gstRate, gst, discPctAmt, discAmt, total } = billCalc;
       const updated = {
-        items: billEditItems.map(({ _rowId, ...rest }) => rest),
+        items: billEditItems.map(({ _rowId, _new, ...rest }) => (!billOrder.isDraft && _new ? { ...rest, kotNumber: getNextKotNo(billOrder) } : rest)),
         subtotal: sub,
         gstRate,
         gstAmount: gst,
@@ -3792,6 +3829,20 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
         }));
         await placeOrder(fullOrder);
         return fullOrder;
+      }
+      const addedRows = billEditItems.filter((it) => it._new && (it.qty || 0) > 0);
+      if (addedRows.length > 0) {
+        const no = getNextKotNo(billOrder);
+        const runKot = {
+          id: uid("kot"), kotNumber: no,
+          items: addedRows.map(({ _rowId, _new, ...r }) => ({ ...r, kotNumber: no })),
+          createdAt: Date.now(), status: "new", isRunning: true
+        };
+        clean.kots = JSON.parse(JSON.stringify([...getBaseKots(billOrder), runKot]));
+        clean.status = "new";
+        clean.lastKotAt = Date.now();
+        await updateDoc(doc(db, "orders", billOrder.id), clean);
+        return { ...billOrder, ...clean, _ranKot: true };
       }
       await updateDoc(doc(db, "orders", billOrder.id), clean);
       return { ...billOrder, ...updated };
@@ -3872,6 +3923,7 @@ ${RESTAURANT.gstin ? `<div class="center" style="font-size:10px">GSTIN: ${escape
   <div><b>${order.orderType === "parcel" ? "PARCEL" : "T-" + escapeHtml(String(order.table))}</b></div>
 </div>
 <div style="font-size:10px;text-align:center;margin-top:4px">${now}</div>
+${order.customer && order.customer.name && !isWalkIn(order.customer.name) ? `<div style="font-size:10px;margin-top:2px">Customer: ${escapeHtml(order.customer.name)}${order.customer.phone && !isWalkIn(order.customer.phone) ? " · " + escapeHtml(order.customer.phone) : ""}</div>` : ""}
 
 ${order.waiter ? `<div style="font-size:10px;margin-top:4px">Waiter: ${escapeHtml(order.waiter)}</div>` : ""}
 
@@ -4023,7 +4075,7 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
                         <button onClick={(e) => { e.stopPropagation(); advanceStatus(o.id, status); }} style={{ flex: 1, padding: "10px 8px", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: "pointer", background: status === "ready" ? COLORS.sage : (status === "preparing" ? COLORS.copper : COLORS.ink), color: "#fff" }}>
                           {status === "new" ? "👨‍🍳 Start Cooking" : status === "preparing" ? "✅ Mark Ready" : "🍽️ Mark Served"}
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); handlePrintReceipt(o); }} title="Print KOT (Kitchen)" style={{ background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, color: isSelected ? '#fff' : COLORS.ink, border: 'none', width: 44, height: 38, borderRadius: 12, fontSize: 18, cursor: 'pointer' }}>🍳</button>
+                        <button onClick={(e) => { e.stopPropagation(); printKotSlip(o); }} title="Print KOT (Kitchen)" style={{ background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, color: isSelected ? '#fff' : COLORS.ink, border: 'none', width: 44, height: 38, borderRadius: 12, fontSize: 18, cursor: 'pointer' }}>🍳</button>
                         <button onClick={(e) => { e.stopPropagation(); openBillEditor(o); }} title="Edit & Print Bill" style={{ background: COLORS.sage, color: '#fff', border: 'none', width: 52, height: 48, borderRadius: 12, fontSize: 18, cursor: 'pointer', fontWeight: 800 }}>🧾</button>
                         <button onClick={(e) => { e.stopPropagation(); if (window.confirm(`Cancel order #${o.id.slice(1, 5)}?`)) { cancelOrderByStaff && cancelOrderByStaff(o.id); } }} style={{ background: 'transparent', color: isSelected ? '#fff' : COLORS.error, border: `1.5px solid ${isSelected ? 'rgba(255,255,255,0.5)' : COLORS.error}`, width: 48, height: 48, borderRadius: 12, fontSize: 18, cursor: 'pointer', fontWeight: 800 }}>✕</button>
                       </div>
@@ -5682,7 +5734,7 @@ export default function App() {
           menuFound = true;  // 🆕 Mark karo ki menu exists
           if (data.items && Array.isArray(data.items) && data.items.length > 0) {
             console.log("📦 Using Firestore menu:", data.items.length, "items");
-            setMenuState(data.items);
+                        setMenuState(data.items.map(withDishImage));
           } else {
             console.log("📦 Firestore menu old/empty. Using DEFAULT_MENU:", DEFAULT_MENU.length, "items");
             setMenuState(DEFAULT_MENU);
