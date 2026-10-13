@@ -3308,7 +3308,75 @@ function BillPOSScreen(p) {
   });
   const changeQty = (rowId, d) => setItems((prev) => prev.flatMap((it) => (it._rowId !== rowId ? [it] : (it.qty + d <= 0 ? [] : [{ ...it, qty: Math.round((it.qty + d) * 100) / 100 }]))));
   const [showNew, setShowNew] = useState(false);
-  const [savingItem, setSavingItem] = useState(false);
+    const [savingItem, setSavingItem] = useState(false);
+
+  // 🤖 AI ORDER
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiText, setAiText] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiRes, setAiRes] = useState(null);
+  const [aiErr, setAiErr] = useState("");
+  const [listening, setListening] = useState(false);
+  const recRef = useRef(null);
+
+  const closeAi = () => { try { recRef.current && recRef.current.stop(); } catch (e) {} setAiOpen(false); };
+
+  const startMic = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setAiErr("Is browser me mic nahi hai. Keyboard ka 🎤 use karo."); return; }
+    if (listening && recRef.current) { recRef.current.stop(); return; }
+    const r = new SR();
+    r.lang = "hi-IN"; r.interimResults = false; r.continuous = false;
+    r.onresult = (e) => {
+      const t = Array.from(e.results).map((x) => x[0].transcript).join(" ");
+      setAiText((prev) => (prev ? prev + " " : "") + t);
+    };
+    r.onerror = () => setListening(false);
+    r.onend = () => setListening(false);
+    recRef.current = r; setListening(true); setAiErr("");
+    try { r.start(); } catch (e) { setListening(false); }
+  };
+
+  const runAi = async () => {
+    const text = aiText.trim();
+    if (!text || aiBusy) return;
+    setAiBusy(true); setAiErr(""); setAiRes(null);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : "";
+      const r = await fetch("/api/parse-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ text, menu: (menu || []).filter((m) => m.available).map((m) => ({ id: m.id, name: m.name, portion: m.portion || "" })) })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "AI error");
+      setAiRes(data);
+    } catch (e) { setAiErr("⚠️ " + (e.message || e)); }
+    finally { setAiBusy(false); }
+  };
+
+  const applyAi = () => {
+    if (!aiRes) return;
+    setItems((prev) => {
+      const next = [...prev];
+      (aiRes.items || []).forEach((line) => {
+        const m = (menu || []).find((x) => x.id === line.id);
+        if (!m) return;
+        const i = next.findIndex((it) => it.itemId === m.id && it.price === m.price && it._new);
+        if (i >= 0) next[i] = { ...next[i], qty: next[i].qty + line.qty };
+        else next.push({ _new: true, itemId: m.id, name: m.name, portion: m.portion || "", price: m.price, qty: line.qty, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) });
+      });
+      return next;
+    });
+    if (isDraft) {
+      const t = Number(aiRes.table);
+      if (aiRes.orderType === "parcel") p.setOrderType("parcel");
+      else if (t >= 1 && t <= 12) { p.setOrderType("dine_in"); p.setTable(t); }
+    }
+    if (aiRes.notes) p.setNotes(p.notes ? p.notes + ", " + aiRes.notes : aiRes.notes);
+    closeAi(); setAiText(""); setAiRes(null); setTab("bill");
+  };
+
   const emptyNew = { name: "", price: "", category: cats[0] || "Thali", veg: true, portion: "" };
   const [newItem, setNewItem] = useState(emptyNew);
 
@@ -3381,9 +3449,41 @@ function BillPOSScreen(p) {
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
       <div style={{ display: "flex", gap: 6 }}>
         <input placeholder="🔍 Item search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...inp, flex: 1, width: "auto" }} />
-        <button type="button" onClick={() => setShowNew(true)} style={{ ...chip(true, COLORS.sage), padding: "7px 12px" }}>➕ New Item</button>
+                <button type="button" onClick={() => setShowNew(true)} style={{ ...chip(true, COLORS.sage), padding: "7px 12px" }}>➕ New Item</button>
+        <button type="button" onClick={() => { setAiOpen(true); setAiErr(""); setAiRes(null); }} style={{ ...chip(true, COLORS.info), padding: "7px 12px" }}>🤖 AI</button>
+
       </div>
+            {aiOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 270, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }} onClick={closeAi}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 16, width: "100%", maxWidth: 400, maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>🤖 AI Order</div>
+            <div style={{ fontSize: 11, color: COLORS.textLight }}>Bolo ya likho: "table 5, 2 chicken biryani, paneer tikka half, ek cold coffee"</div>
+            <textarea value={aiText} onChange={(e) => setAiText(e.target.value)} rows={3} placeholder="Order yahan bolo / likho..." style={{ ...inp, resize: "none" }} />
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" onClick={startMic} style={{ ...chip(listening, COLORS.rust), flex: 1, padding: "10px 6px" }}>{listening ? "⏹️ Rukho" : "🎤 Bolo"}</button>
+              <button type="button" disabled={aiBusy || !aiText.trim()} onClick={runAi} style={{ ...chip(true, COLORS.info), flex: 1, padding: "10px 6px", opacity: aiBusy || !aiText.trim() ? 0.5 : 1 }}>{aiBusy ? "⏳ Soch raha..." : "✨ Samjho"}</button>
+            </div>
+            {aiErr && <div style={{ color: COLORS.error, fontSize: 12, fontWeight: 700 }}>{aiErr}</div>}
+            {aiRes && (
+              <div style={{ background: COLORS.paper, borderRadius: 10, padding: 10, border: `1.5px solid ${COLORS.gold}` }}>
+                <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4 }}>
+                  {aiRes.orderType === "parcel" ? "🛍️ Parcel" : aiRes.table ? `🍽️ Table ${aiRes.table}` : "🍽️ Table (nahi bola)"}
+                </div>
+                {(aiRes.items || []).map((l, i) => {
+                  const m = (menu || []).find((x) => x.id === l.id);
+                  return m ? <div key={i} style={{ fontSize: 13, fontWeight: 700 }}>{l.qty}× {m.name}{m.portion ? ` (${m.portion})` : ""} <span style={{ color: COLORS.copper }}>₹{m.price * l.qty}</span></div> : null;
+                })}
+                {aiRes.notes && <div style={{ fontSize: 12, marginTop: 4 }}>📝 {aiRes.notes}</div>}
+                {(aiRes.unmatched || []).length > 0 && <div style={{ fontSize: 12, marginTop: 4, color: COLORS.warning, fontWeight: 700 }}>⚠️ Samajh nahi aaya: {aiRes.unmatched.join(", ")}</div>}
+                <button type="button" disabled={(aiRes.items || []).length === 0} onClick={applyAi} style={{ ...chip(true, COLORS.sage), width: "100%", marginTop: 8, padding: "10px 6px" }}>✓ Bill me add karo</button>
+              </div>
+            )}
+            <button type="button" onClick={closeAi} style={{ padding: 8, border: "none", background: "transparent", color: COLORS.textLight, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
       {showNew && (
+
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 260, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }} onClick={() => setShowNew(false)}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 16, width: "100%", maxWidth: 380, display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>➕ Naya Item</div>
