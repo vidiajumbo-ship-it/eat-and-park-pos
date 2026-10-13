@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db, auth, authReady } from "./firebase";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc,
   getDocs, getDoc, addDoc, query, orderBy, serverTimestamp, where,
@@ -1316,7 +1316,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
 });
       } catch (err) {
         console.error(err);
-        alert("❌ Order send nahi hua. Internet check karke dobara try karo.");
+        alert("❌ Order send nahi hua:\n" + (err.code || err.message || err));
       }
       if (created) {
         setPlacedOrder(created);
@@ -2388,7 +2388,7 @@ const handleWaiterPinSubmitOld = () => {
     } catch (e) {
       console.error("Order error:", e);
       if (payIdRef.current) alert("⚠️ Payment ho gaya hai par order save nahi hua.\nPayment ID: " + payIdRef.current + "\nYe ID staff ko dikhao.");
-      else showToast("⚠️ Order fail hua. Internet check karke dobara try karo.", 'error');
+      else showToast("⚠️ Order fail: " + (e.code || e.message || "unknown"), 'error');
     } finally { setIsProcessingPayment(false); }
   }, [isProcessingPayment, cartItems, custName, custPhone, custAddress, orderType, table, paymentMethod, finalTotal, subtotal, discountAmount, deliveryFee, claimedReward, newEarnedCoins, isScheduled, scheduleDate, scheduleTime, appliedDiscount, loyaltyDiscount, loyaltyTier, notes, menu, placeOrder, sendPushNotification, consumeFlashStock, showToast]);
 
@@ -5603,8 +5603,11 @@ export default function App() {
   const [authUser, setAuthUser] = useState(null);
   const [staffRole, setStaffRole] = useState(null); // admin | staff | waiter
   const [emailInput, setEmailInput] = useState("");
+  const hadUserRef = useRef(false);
   useEffect(() => onAuthStateChanged(auth, async (u) => {
     setAuthUser(u);
+    if (u) hadUserRef.current = true;
+    else if (hadUserRef.current) signInAnonymously(auth).catch((e) => console.error("anon re-login:", e));
     if (u && !u.isAnonymous) {
       try {
         const s = await getDoc(doc(db, "staff", u.uid));
@@ -5664,7 +5667,12 @@ export default function App() {
   );
 
   const requestPinPrompt = (target) => {
-    if (target === "customer") { setRole("customer"); signOut(auth).catch(() => {}); return; }
+    if (target === "customer") {
+      setRole("customer");
+      setOrdersState([]); setLoyaltyUsers([]); setInventory([]); setCoinHistory([]); setBookings([]); setCalls([]);
+      signOut(auth).catch(() => {});
+      return;
+    }
     if (staffRole === "admin" || (target === "staff" && staffRole === "staff")) { setRole(target); return; }
     setTargetRole(target); setShowPinModal(true); setPinInput("");
   };
@@ -5943,7 +5951,7 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
   const removeOffer = async (id) => { await saveOffers(offersList.filter(o => o.id !== id)); };
 
   const placeOrder = async (order) => {
-    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; const _u = await authReady; if (!order.createdBy) order.createdBy = (auth.currentUser && auth.currentUser.uid) || (_u && _u.uid) || null; await Promise.race([setDoc(doc(db, "orders", order.id), order), new Promise((r) => setTimeout(r, 8000))]);
+    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; const _u = await authReady; order.createdBy = (auth.currentUser && auth.currentUser.uid) || null; if (!order.createdBy) throw new Error("Login session nahi mili — page refresh karo"); await Promise.race([setDoc(doc(db, "orders", order.id), order), new Promise((r) => setTimeout(r, 8000))]);
     setOrdersState(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]); } catch (e) {
       console.error("placeOrder failed:", e.code, e.message);
       if (e.code === "permission-denied") {
