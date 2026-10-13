@@ -193,7 +193,7 @@ const isWalkIn = (s) => /^walk-?in$/i.test(String(s || "").trim());
 const getBaseKots = (o) => (o.kots?.length ? o.kots : [{ id: uid("kot"), kotNumber: 1, items: o.items || [], createdAt: o.createdAt, status: o.status }])
   .map(k => (k.status === "new" && o.status !== "new" ? { ...k, status: o.status } : k));
 const getNextKotNo = (o) => Math.max(...getBaseKots(o).map(k => k.kotNumber || 1)) + 1;
-function uid(prefix)
+function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
