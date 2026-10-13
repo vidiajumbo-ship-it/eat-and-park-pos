@@ -3282,7 +3282,14 @@ function BillPOSScreen(p) {
   const gstList = [0, ...((presets.gstRates && presets.gstRates.length ? presets.gstRates : [5, 12, 18]).filter((r) => Number(r) > 0))];
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
-  const isDesktop = viewMode === "desktop";
+   const [wide, setWide] = useState(() => window.innerWidth >= 900);
+  useEffect(() => {
+    const f = () => setWide(window.innerWidth >= 900);
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
+  const isDesktop = viewMode === "desktop" && wide;
+
   const isDraft = !!(order && order.isDraft);
   const cats = p.categories && p.categories.length ? p.categories : Array.from(new Set((menu || []).map((m) => m.category)));
 
@@ -3361,7 +3368,8 @@ function BillPOSScreen(p) {
     ? (orders || []).find((o) => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled" && Number(o.table) === Number(p.table))
     : null;
 
-  const inp = { padding: "7px 9px", border: `1.5px solid ${COLORS.line}`, borderRadius: 8, fontSize: 13, width: "100%", boxSizing: "border-box", fontFamily: "inherit" };
+    const inp = { padding: "8px 10px", border: `1.5px solid ${COLORS.line}`, borderRadius: 8, fontSize: isDesktop ? 13 : 16, width: "100%", boxSizing: "border-box", fontFamily: "inherit", minWidth: 0, background: "#fff", color: COLORS.ink, colorScheme: "light" };
+
   const chip = (on, color = COLORS.copper) => ({ padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${on ? color : COLORS.line}`, background: on ? color : "#fff", color: on ? "#fff" : COLORS.text, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" });
   const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: 34 };
   const disabled = p.saving || items.length === 0;
@@ -3439,7 +3447,8 @@ function BillPOSScreen(p) {
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>T-{n}</option>)}
               </select>
             )}
-            <select value={p.waiter} onChange={(e) => p.setWaiter(e.target.value)} style={{ ...inp, flex: 1, minWidth: 90, width: "auto", background: "#fff" }}>
+            <select value={p.waiter} onChange={(e) => p.setWaiter(e.target.value)} style={{ ...inp, flex: isDesktop ? 1 : "1 1 100%", minWidth: 90, width: "auto", background: "#fff" }}>
+
               <option value="">🧑‍🍳 Waiter chuno</option>
               {p.waiter && !waiterNames.includes(p.waiter) && <option value={p.waiter}>{p.waiter}</option>}
               {waiterNames.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -3465,8 +3474,9 @@ function BillPOSScreen(p) {
           {(presets.customers || []).map((c, i) => <option key={i} value={i}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}
         </select>
       )}
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6 }}>
-        <input placeholder="Customer" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={inp} />
+           <div style={{ display: "grid", gridTemplateColumns: isDesktop ? "1.2fr 1fr 1fr" : "1fr 1fr", gap: 6 }}>
+        <input placeholder="Customer" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={{ ...inp, ...(isDesktop ? {} : { gridColumn: "1 / -1" }) }} />
+
         <input placeholder="Phone" value={p.custPhone} onChange={(e) => p.setCustPhone(e.target.value)} style={inp} />
         <input placeholder="GSTIN" value={p.gstin} onChange={(e) => p.setGstin(e.target.value.toUpperCase())} style={inp} />
       </div>
@@ -3569,7 +3579,8 @@ function BillPOSScreen(p) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", zIndex: 200, display: "flex", alignItems: isDesktop ? "center" : "flex-end", justifyContent: "center" }} onClick={p.onClose}>
       <div onClick={(e) => e.stopPropagation()} className="slide-up"
-        style={{ background: "#fff", width: isDesktop ? "min(1200px, 97vw)" : "100%", maxWidth: isDesktop ? 1200 : 560, height: isDesktop ? "92vh" : "96vh", borderRadius: isDesktop ? 18 : "20px 20px 0 0", padding: 12, display: "flex", flexDirection: "column", boxSizing: "border-box", gap: 8 }}>
+       style={{ background: "#fff", colorScheme: "light", width: isDesktop ? "min(1200px, 97vw)" : "100%",
+ maxWidth: isDesktop ? 1200 : 560, height: isDesktop ? "92vh" : "96vh", borderRadius: isDesktop ? 18 : "20px 20px 0 0", padding: 12, display: "flex", flexDirection: "column", boxSizing: "border-box", gap: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>🧾 {isDraft ? "New Order + Bill" : "Order Bill"}</div>
           <button type="button" onClick={p.onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 30, height: 30, fontSize: 14, cursor: "pointer" }}>✕</button>
