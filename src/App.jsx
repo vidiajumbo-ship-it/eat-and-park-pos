@@ -6145,3 +6145,4 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
     </ErrorBoundary>
   );
 }
+    }
