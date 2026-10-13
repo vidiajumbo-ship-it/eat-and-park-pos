@@ -5760,39 +5760,7 @@ export default function App() {
     }
   };
 
-  const handlePinSubmitUnused = () => {
-    if (pinLock.isLocked()) {
-      alert(`⏳ Bahut galat attempts. ${pinLock.secondsLeft()}s baad try karo.`);
-      setPinInput("");
-      return;
-    }
-    const aPin = (settings?.adminPin ?? "9876").toString().trim();
-    const sPin = (settings?.staffPin ?? "5432").toString().trim();
-    if (!pinInput) { alert("❌ PIN daalo"); return; }
-
-    if (targetRole === "admin" && pinInput === aPin) {
-      pinLock.reset(); setRole("admin"); setShowPinModal(false); setPinInput("");
-    } else if (targetRole === "staff" && (pinInput === sPin || pinInput === aPin)) {
-      pinLock.reset(); setRole("staff"); setShowPinModal(false); setPinInput("");
-      try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
-    } else if (targetRole === "customer") {
-      setRole("customer"); setShowPinModal(false); setPinInput("");
-    } else {
-      pinLock.registerFail();
-      alert("❌ Incorrect PIN!");
-      setPinInput("");
-    }
-  };
-  const handlePinSubmitOld = () => {
-    const aPin = (settings?.adminPin ?? "9876").toString().trim();
-    const sPin = (settings?.staffPin ?? "5432").toString().trim();
-    
-    console.log("🔐 PIN Submit:", { targetRole, pinInput, sPin, aPin });
-    
-    if (!pinInput) {
-      alert("❌ PIN daalo");
-      return;
-    }
+ 
     
     if (targetRole === "admin" && pinInput === aPin) {
       console.log("✅ Role → admin");
