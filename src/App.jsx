@@ -3378,7 +3378,7 @@ const handleWaiterPinSubmitOld = () => {
             {runningOrderId && orders.find(o => o.id === runningOrderId) && (
         <RunningOrderModal order={orders.find(o => o.id === runningOrderId)} menu={menu} onConfirm={(items) => addRunningItems(runningOrderId, items)} onClose={() => setRunningOrderId(null)} />
       )}
-            {showAiModal && (
+{showAiModal && (
         <AIOrderModal
           menu={menu}
           onClose={() => setShowAiModal(false)}
@@ -3412,7 +3412,9 @@ const handleWaiterPinSubmitOld = () => {
           }}
         />
       )}
-
+    </div>
+  );
+}
 
 // ==
 // 17. STAFF VIEW (V15 — TOUCH TO PROCEED)
@@ -3424,6 +3426,7 @@ const STAFF_SHORTCUTS = {
   'Ctrl+Enter': 'Advance selected',
   'Shift+?': 'Toggle help'
 };
+
 
 const KeyboardHelpModal = memo(({ onClose }) => (
   <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }} onClick={onClose}>
