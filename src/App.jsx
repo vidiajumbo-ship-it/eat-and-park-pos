@@ -5973,7 +5973,13 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
 
   const placeOrder = async (order) => {
     try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; const _u = await authReady; if (!order.createdBy) order.createdBy = (auth.currentUser && auth.currentUser.uid) || (_u && _u.uid) || null; await Promise.race([setDoc(doc(db, "orders", order.id), order), new Promise((r) => setTimeout(r, 8000))]);
-    setOrdersState(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]); } catch (e) { console.error("placeOrder failed:", e); throw e; }
+    setOrdersState(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]); } catch (e) {
+      console.error("placeOrder failed:", e.code, e.message);
+      if (e.code === "permission-denied") {
+        throw new Error("Firestore rules 'orders' collection block kar rahi hain. Firebase Console → Rules check karo.");
+      }
+      throw e;
+    }
   };
 
   const advanceStatus = async (orderId, currentStatus) => {
@@ -6071,7 +6077,7 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
     ));
   } catch (e) {
     console.error("markPaid error:", e);
-    alert("⚠️ Payment update failed. Try again.");
+    alert("⚠️ Payment update failed: " + (e.message || "unknown"));
   }
 };
 
