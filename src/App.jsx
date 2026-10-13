@@ -5735,33 +5735,8 @@ export default function App() {
     setPinInput("");
   }
 };
-
-
-
  
-    
-    if (targetRole === "admin" && pinInput === aPin) {
-      console.log("✅ Role → admin");
-      setRole("admin");
-      setShowPinModal(false);
-      setPinInput("");
-    } else if (targetRole === "staff" && (pinInput === sPin || pinInput === aPin)) {
-      console.log("✅ Role → staff");
-      setRole("staff");
-      setShowPinModal(false);
-      setPinInput("");
-    } else if (targetRole === "customer") {
-      setRole("customer");
-      setShowPinModal(false);
-      setPinInput("");
-    } else {
-      console.log("❌ Wrong PIN");
-      alert("❌ Incorrect PIN!");
-      setPinInput("");
-    }
-  };
-
-  const updateCategories = async (newCategories) => {
+ const updateCategories = async (newCategories) => {
     setCategories(newCategories);
     try { await setDoc(doc(db, "settings", "categories"), { categories: newCategories }); } catch (e) { console.error(e); }
   };
