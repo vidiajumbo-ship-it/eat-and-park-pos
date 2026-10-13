@@ -3593,9 +3593,10 @@ function BillPOSScreen(p) {
           <button type="button" onClick={p.onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 24, height: 24, fontSize: 12, cursor: "pointer" }}>✕</button>
         </div>
 
-        {(isDesktop
-
+              <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+          {/* TODO: restore menu + bill panels */}
         </div>
+
 
         {(isDesktop || tab === "bill") && (
           <div style={{ order: 99, display: "flex", gap: 6, alignItems: "center", flexShrink: 0, paddingTop: 8, borderTop: `1px solid ${COLORS.line}` }}>
