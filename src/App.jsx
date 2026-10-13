@@ -3378,27 +3378,40 @@ const handleWaiterPinSubmitOld = () => {
             {runningOrderId && orders.find(o => o.id === runningOrderId) && (
         <RunningOrderModal order={orders.find(o => o.id === runningOrderId)} menu={menu} onConfirm={(items) => addRunningItems(runningOrderId, items)} onClose={() => setRunningOrderId(null)} />
       )}
-      {showAiModal && (
+            {showAiModal && (
         <AIOrderModal
           menu={menu}
           onClose={() => setShowAiModal(false)}
           onOrderParsed={(data) => {
-            (data.items || []).forEach((line) => {
-              handleSetQty(line.id, (cart[line.id]?.qty || 0) + line.qty);
-            });
+            if (data.items && data.items.length > 0) {
+              setCart((prev) => {
+                const next = { ...prev };
+                data.items.forEach((line) => {
+                  // ID se match karein, agar naam aya ho toh naam se ID dhoondein
+                  let targetId = line.id;
+                  const found = menu.find((m) => m.id === line.id || m.name.toLowerCase() === String(line.name || line.id).toLowerCase());
+                  if (found) targetId = found.id;
+                  if (!menu.some((m) => m.id === targetId)) return;
+
+                  const curQty = getCartQty(next[targetId]);
+                  next[targetId] = { qty: curQty + (Number(line.qty) || 1) };
+                });
+                return next;
+              });
+              setCartOpen(true); // Direct bill/cart khol dega taaki gayab na lage
+              showToast("✨ Items cart me add ho gaye!", "success");
+            } else {
+              showToast("⚠️ Koi item match nahi hua", "warning");
+            }
             if (data.orderType === "parcel") setOrderType("parcel");
             else if (data.table) {
               setOrderType("dine_in");
               setTable(Number(data.table));
             }
             if (data.notes) setNotes((prev) => (prev ? prev + ", " + data.notes : data.notes));
-            showToast("✨ Items cart me add ho gaye!", "success");
           }}
         />
       )}
-    </div>
-  );
-}
 
 
 // ==
