@@ -1296,7 +1296,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
     const item = menu.find((m) => m.id === id);
     return s + getCartLineTotal(e, item);
   }, 0);
-  const setQty = (id, q) => {
+    const setQty = (id, q) => {
     setCart(prev => {
       const next = { ...prev };
       if (q <= 0) delete next[id];
@@ -1304,7 +1304,8 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
       return next;
     });
   };
-  const inputStyle = { padding: 12, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "'Plus Jakarta Sans', sans-serif" };
+  const inputStyle = { padding: 12, border: `1.5px solid ${COLORS.line}`, borderRadius: 10, fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "'Plus Jakarta Sans', sans-serif", background: "#fff", color: COLORS.ink, colorScheme: "light" };
+
 
   // 🔥 Running tables
   const runningTables = useMemo(() => {
@@ -1828,7 +1829,32 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
           <input placeholder="Customer Phone (optional)" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} style={inputStyle} />
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <SearchBar value={search} onChange={setSearch} placeholder="Search items..." />
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+          <div style={{ flex: 1 }}>
+            <SearchBar value={search} onChange={setSearch} placeholder="Search items..." />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAiModal(true)}
+            style={{
+              background: COLORS.info,
+              color: "#fff",
+              border: "none",
+              borderRadius: 12,
+              padding: "12px 14px",
+              fontWeight: 800,
+              fontSize: 14,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              whiteSpace: "nowrap"
+            }}
+          >
+            🤖 AI
+          </button>
+        </div>
+
           <button type="button" onClick={() => setShowAiModal(true)} style={{ background: COLORS.info, color: "#fff", border: "none", borderRadius: 10, padding: "12px 14px", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
             🤖 AI
           </button>
