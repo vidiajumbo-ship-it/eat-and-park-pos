@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { isSupported, getAnalytics } from "firebase/analytics";
+import { getAuth, signInAnonymously } from "firebase/auth";
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -32,3 +33,7 @@ try {
   database = getFirestore(app); // purana firebase version ho to yahi chalega
 }
 export const db = database;
+
+// Phase 2 ki taiyari: har visitor ko anonymous login (abhi koi behavior change nahi)
+export const auth = getAuth(app);
+signInAnonymously(auth).catch((e) => console.warn("Anonymous auth abhi off hai:", e.code));
