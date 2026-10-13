@@ -657,8 +657,8 @@ const DISH_IMG_RULES = [
   [/ice cream/i, "1563805042-7684c019e1cb"],
   [/biryani/i, "1589302168068-964664d93cb0"],
   [/fried rice|pulao/i, "1603133872878-684f208fb84b"],
-  [/butter (chicken|masala)|tikka masala/i, "1603894584373-5ac82b2ae398"],
-  [/paneer tikka|tikka|kabab|seekh|tandoori|tangdi/i, "1567188040759-fb8a883dc6d8"],
+  [/chicken.*butter|butter chicken/i, "1603894584373-5ac82b2ae398"],
+  [/tikka|kabab|seekh|tangdi|murgh/i, "1567188040759-fb8a883dc6d8"],
   [/naan|roti|bhature/i, "1601050690597-df0568f70950"],
   [/^dal /i, "1546833999-b9f581a1996d"],
   [/fish/i, "1519708227418-c8fd9a32b7a2"],
@@ -1834,7 +1834,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
     let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
     items = items.filter((m) => {
       if (vegOnly && !m.veg) return false;
-if (searchQuery.trim()) { const q = searchQuery.toLowerCase(); return m.name.toLowerCase().includes(q) || m.desc.toLowerCase().includes(q); }      return true;
+if (searchQuery.trim()) { const q = searchQuery.toLowerCase(); return (m.name || "").toLowerCase().includes(q) || (m.desc || "").toLowerCase().includes(q); }      return true;
     });
     return items;
   }, [menu, category, searchQuery, vegOnly]);
