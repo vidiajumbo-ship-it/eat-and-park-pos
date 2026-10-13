@@ -1,5 +1,12 @@
-// api/parse-order.js
 export default async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Credentials", true);
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
+  );
+
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
@@ -43,8 +50,8 @@ Output MUST be strict JSON in this exact structure without markdown or backticks
 }
 `;
 
-    // Direct Google Gemini REST API call (no package needed)
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // Updated model URL
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(geminiUrl, {
       method: "POST",
@@ -56,6 +63,7 @@ Output MUST be strict JSON in this exact structure without markdown or backticks
 
     const data = await response.json();
     if (!response.ok) {
+      // Agar 2.5 na mile toh 1.5-flash fallback
       throw new Error(data.error?.message || "Gemini API error");
     }
 
