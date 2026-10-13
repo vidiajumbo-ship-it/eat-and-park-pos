@@ -193,7 +193,7 @@ const isWalkIn = (s) => /^walk-?in$/i.test(String(s || "").trim());
 const getBaseKots = (o) => (o.kots?.length ? o.kots : [{ id: uid("kot"), kotNumber: 1, items: o.items || [], createdAt: o.createdAt, status: o.status }])
   .map(k => (k.status === "new" && o.status !== "new" ? { ...k, status: o.status } : k));
 const getNextKotNo = (o) => Math.max(...getBaseKots(o).map(k => k.kotNumber || 1)) + 1;
-function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
+function uid(prefix) { return prefix + Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 8); }
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -221,7 +221,7 @@ const runningPatch = (o, added) => {
   const p = {};
   if (o.billEditedAt) {
     const g = Number(o.gstRate) || 0;
-    p.finalTotal = Math.round((Number(o.finalTotal) || 0) + addT * (1 + g / 100));
+    p.finalTotal = Math.round((Number(o.finalTotal) || 0) + addT * (1 - (Number(o.billDiscountPct) || 0) / 100) * (1 + g / 100));
     p.subtotal = (Number(o.subtotal) || 0) + addT;
   }
   if (o.paid) { p.paid = false; p.paymentStatus = "pending"; }
@@ -973,8 +973,8 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, onEmptyTable
   const tableData = useMemo(() => {
     const activeOrders = (orders || []).filter(o =>
       o.orderType === "dine_in" &&
-      o.status !== "served" &&
-      o.status !== "cancelled"
+      o.status !== "cancelled" &&
+      (o.status !== "served" || (!o.paid && o.payment !== "due"))
     );
 
     const map = {};
@@ -982,11 +982,11 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, onEmptyTable
       map[i] = { table: i, order: null, status: "empty" };
     }
 
-    activeOrders.forEach(o => {
+    [...activeOrders].sort((a, b) => a.createdAt - b.createdAt).forEach(o => {
       const t = Number(o.table);
       if (map[t]) {
-        map[t].order = o;
-        if (o.status === "ready" || o.status === "served") map[t].status = "billing";
+        map[t].all = [...(map[t].all || []), o]; map[t].order = o;
+        if (!map[t].all.some(x => x.status === "new" || x.status === "preparing")) map[t].status = "billing";
         else map[t].status = "occupied";
       }
     });
@@ -996,7 +996,7 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, onEmptyTable
 
   const stats = useMemo(() => {
     const active = tableData.filter(t => t.order);
-    const totalAmount = active.reduce((sum, t) => sum + getOrderTotal(t.order), 0);
+    const totalAmount = active.reduce((sum, t) => sum + (t.all || [t.order]).reduce((s, x) => s + getOrderTotal(x), 0), 0);
     return {
       occupied: active.length,
       empty: tables - active.length,
@@ -1101,8 +1101,8 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, onEmptyTable
         {tableData.map(t => {
           const c = statusColors[t.status];
           const o = t.order;
-          const total = o ? getOrderTotal(o) : 0;
-          const itemCount = o ? o.items.reduce((sum, i) => sum + i.qty, 0) : 0;
+          const total = o ? (t.all || [o]).reduce((s, x) => s + getOrderTotal(x), 0) : 0;
+const itemCount = o ? (t.all || [o]).reduce((n, x) => n + x.items.reduce((sum, i) => sum + i.qty, 0), 0) : 0;
 
           return (
             <button
@@ -1856,7 +1856,7 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
   const currentCoins = activeUser ? activeUser.coins : 0;
   const loyaltyTier = getLoyaltyTier(currentCoins);
-  const loyaltyDiscount = activeUser ? Math.round(loyaltyTier.discount * subtotal) : 0;
+  const loyaltyDiscount = activeUser && appliedDiscount === 0 ? Math.round(loyaltyTier.discount * subtotal) : 0;
   const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDiscount) + deliveryFee;
 const newEarnedCoins = Math.floor(finalTotal / (Number(loyaltyRules?.rate) || 10));
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served" && o.status !== "cancelled");
@@ -1908,7 +1908,7 @@ if (savedCart) {
 }
     const savedOrders = localStorage.getItem('eatpark_orders');
     if (savedOrders) { try { const ordersData = JSON.parse(savedOrders); setMyOrderIds(ordersData.map(o => o.id)); } catch (e) { } }
-    if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+    /* permission ab staff login par maangi jati hai */
   }, []);
 
   useEffect(() => {
@@ -3749,6 +3749,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
       const itemsSnapshot = billEditItems;
       if (mode === "paid" && saved.status === "ready") await advanceStatus(saved.id, "ready");
       setBillOrder(null);
+      addDoc(collection(db, "auditLogs"), { orderId: saved.id, action: mode, before: getOrderTotal(billOrder), after: saved.finalTotal, at: Date.now() }).catch(() => {});
       let delay = 200;
       if ((wasDraft && sendKot) || saved._ranKot) { setTimeout(() => printKotSlip(saved), 200); delay = 1500; }
       if (mode !== "save") setTimeout(() => printFinalBill(saved, itemsSnapshot), delay);
@@ -5647,6 +5648,7 @@ export default function App() {
       pinLock.reset(); setRole("admin"); setShowPinModal(false); setPinInput("");
     } else if (targetRole === "staff" && (pinInput === sPin || pinInput === aPin)) {
       pinLock.reset(); setRole("staff"); setShowPinModal(false); setPinInput("");
+      try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch (e) {}
     } else if (targetRole === "customer") {
       setRole("customer"); setShowPinModal(false); setPinInput("");
     } else {
@@ -5707,7 +5709,7 @@ export default function App() {
 
   useEffect(() => {
       // 🔔 Notification permission maango
-  if ('Notification' in window && Notification.permission === 'default') {
+  if (false) {
     Notification.requestPermission();
   }
 
@@ -5749,7 +5751,7 @@ export default function App() {
                             "Tandoori", "Soup", "Snacks", "Chinese Mains", "Chicken, Mutton, Fish & Egg",
                             "Indian Bread", "Pulao", "Aloo, Dal & Sides", 
                             "Biryani & Thali", "Momo", "Tea & Coffee"];
-          const hasOldCats = firestoreCats.some(c => OLD_CATS.includes(c));
+          const hasOldCats = false; // migration ho chuka, ab admin ki categories reset nahi hongi
           
           if (hasOldCats || firestoreCats.length === 0) {
             console.log("📂 Firestore has OLD categories. Using new CATEGORIES.");
@@ -5804,6 +5806,9 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
+  const reloadAt = new Date(); reloadAt.setHours(5, 0, 0, 0);
+  if (reloadAt <= new Date()) reloadAt.setDate(reloadAt.getDate() + 1);
+  const reloadTimer = setTimeout(() => window.location.reload(), reloadAt - new Date());
   const ordersQuery = query(
     collection(db, "orders"),
     where("createdAt", ">=", startOfToday.getTime())
@@ -5827,7 +5832,7 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   
   return () => { 
     unsubCalls(); 
-    unsubOpen();      // ← ye missing tha
+    unsubOpen();      clearTimeout(reloadTimer);
     unsubOrders(); 
     unsubBookings();
   };
@@ -5865,7 +5870,7 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   const removeOffer = async (id) => { await saveOffers(offersList.filter(o => o.id !== id)); };
 
   const placeOrder = async (order) => {
-    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; await setDoc(doc(db, "orders", order.id), order);
+    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; await Promise.race([setDoc(doc(db, "orders", order.id), order), new Promise((r) => setTimeout(r, 8000))]);
     setOrdersState(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]); } catch (e) { console.error("placeOrder failed:", e); throw e; }
   };
 
@@ -5896,6 +5901,7 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
       const orderRef = doc(db, "orders", orderId);
       const orderSnap = await tx.get(orderRef);
       if (!orderSnap.exists()) throw new Error("Order not found");
+      if (orderSnap.data().status === "cancelled") throw new Error("Order cancelled hai");
 
       const order = orderSnap.data();
 
@@ -5970,7 +5976,7 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   const bookEvent = async (booking) => { await setDoc(doc(db, "bookings", booking.id), booking); };
 
   const cancelOrderByStaff = async (orderId) => {
-    try { await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); } catch (e) { console.error(e); }
+    try { await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); } catch (e) { console.error(e); }
   };
 
   if (loading) {
