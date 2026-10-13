@@ -2,7 +2,8 @@
 /* eslint-disable */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
-import { db } from "./firebase";
+import { db, auth, authReady } from "./firebase";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc,
   getDocs, getDoc, addDoc, query, orderBy, serverTimestamp, where,
@@ -1828,6 +1829,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [showWaiterMode, setShowWaiterMode] = useState(false);
     const [showWaiterPinModal, setShowWaiterPinModal] = useState(false);
   const [waiterPinInput, setWaiterPinInput] = useState("");
+  const [waiterEmail, setWaiterEmail] = useState("");
   const [waiterUnlocked, setWaiterUnlocked] = useState(false);
 
   const filteredItems = useMemo(() => {
@@ -1853,7 +1855,14 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   useEffect(() => { if (appliedDiscount > 0 && subtotal < couponMin) setAppliedDiscount(0); }, [appliedDiscount, couponMin, subtotal]);
   const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
   const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
-  const activeUser = loyaltyUsers.find(u => u.phone === custPhone);
+  const [myLoyalty, setMyLoyalty] = useState(null);
+  useEffect(() => {
+    if (!custPhone || custPhone.length < 10) { setMyLoyalty(null); return; }
+    let off = false;
+    getDoc(doc(db, "loyaltyUsers", custPhone)).then((s) => { if (!off) setMyLoyalty(s.exists() ? s.data() : null); }).catch(() => {});
+    return () => { off = true; };
+  }, [custPhone]);
+  const activeUser = loyaltyUsers.find(u => u.phone === custPhone) || myLoyalty;
   const currentCoins = activeUser ? activeUser.coins : 0;
   const loyaltyTier = getLoyaltyTier(currentCoins);
   const loyaltyDiscount = activeUser && appliedDiscount === 0 ? Math.round(loyaltyTier.discount * subtotal) : 0;
@@ -2128,7 +2137,17 @@ if (savedCart) {
        return order;
   }, [placeOrder, showToast]);
 
-const handleWaiterPinSubmit = () => {
+const handleWaiterPinSubmit = async () => {
+  if (!waiterEmail.trim() || !waiterPinInput) { showToast("⚠️ Email aur password daalo", "error"); return; }
+  try {
+    const cred = await signInWithEmailAndPassword(auth, waiterEmail.trim(), waiterPinInput);
+    const s = await getDoc(doc(db, "staff", cred.user.uid));
+    if (!s.exists()) { await signOut(auth); showToast("❌ Ye account staff/waiter ka nahi hai", "error"); setWaiterPinInput(""); return; }
+    setWaiterUnlocked(true); setShowWaiterPinModal(false); setWaiterPinInput(""); setShowWaiterMode(true);
+    showToast("🔓 Waiter Mode Unlocked!", "success");
+  } catch (e) { showToast("❌ Login fail", "error"); setWaiterPinInput(""); }
+};
+const handleWaiterPinSubmitUnused = () => {
   if (waiterLock.isLocked()) {
     showToast(`⏳ Bahut galat attempts. ${waiterLock.secondsLeft()}s ruko`, "error");
     setWaiterPinInput("");
@@ -2330,7 +2349,7 @@ const handleWaiterPinSubmitOld = () => {
         deliveryFee, subtotal, finalTotal,
         notes, payment: paymentMethod,
         paymentStatus: paymentInfo.status, paymentId: paymentInfo.paymentId,
-        status: "new", paid: paymentInfo.paid,
+        status: "new", paid: false,
         createdAt: Date.now(),
         scheduledDate: isScheduled ? scheduleDate : null,
         scheduledTime: isScheduled ? scheduleTime : null,
@@ -3202,7 +3221,8 @@ const handleWaiterPinSubmitOld = () => {
           <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center" }} className="slide-up">
             <div style={{ fontSize: 40, marginBottom: 12 }}>🧑‍🍳</div>
             <h3 style={{ margin: "0 0 8px", fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 800 }}>Waiter Access</h3>
-            <div style={{ fontSize: 13, color: COLORS.textLight, marginBottom: 20 }}>Enter waiter PIN to continue</div>
+            <div style={{ fontSize: 13, color: COLORS.textLight, marginBottom: 12 }}>Waiter email + password se login karo</div>
+            <input type="email" placeholder="Email" value={waiterEmail} onChange={(e) => setWaiterEmail(e.target.value)} style={{ padding: "12px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, width: "100%", boxSizing: "border-box", marginBottom: 12 }} />
             <input type="password" placeholder="••••" autoFocus value={waiterPinInput}
               onChange={(e) => setWaiterPinInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleWaiterPinSubmit(); }}
@@ -3749,7 +3769,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
       const itemsSnapshot = billEditItems;
       if (mode === "paid" && saved.status === "ready") await advanceStatus(saved.id, "ready");
       setBillOrder(null);
-      addDoc(collection(db, "auditLogs"), { orderId: saved.id, action: mode, before: getOrderTotal(billOrder), after: saved.finalTotal, at: Date.now() }).catch(() => {});
+      addDoc(collection(db, "auditLogs"), { orderId: saved.id, action: mode, by: (auth.currentUser && auth.currentUser.email) || "?", before: getOrderTotal(billOrder), after: saved.finalTotal, at: Date.now() }).catch(() => {});
       let delay = 200;
       if ((wasDraft && sendKot) || saved._ranKot) { setTimeout(() => printKotSlip(saved), 200); delay = 1500; }
       if (mode !== "save") setTimeout(() => printFinalBill(saved, itemsSnapshot), delay);
@@ -3812,7 +3832,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
         customerGstin: billCustomerGstin || "",
         notes: billNotes,
         billEditedAt: Date.now(),
-        billEditedBy: "staff",
+        billEditedBy: (auth.currentUser && auth.currentUser.email) || "staff",
       };
       const clean = JSON.parse(JSON.stringify(updated)); // undefined values hata deta hai (Firestore error fix)
       if (billOrder.isDraft) {
@@ -4733,7 +4753,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           )}
 
           {/* 🔐 SECURITY PINs */}
-          <div style={{ borderTop: `1px solid ${COLORS.line}`, marginTop: 28, paddingTop: 24 }}>
+          <div style={{ display: "none", borderTop: `1px solid ${COLORS.line}`, marginTop: 28, paddingTop: 24 }}>
             <h3 style={{ marginTop: 0, marginBottom: 8 }}>🔐 Security PINs</h3>
             <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 18 }}>
               Manage PINs for Waiter, Staff, and Admin access. Changes apply instantly.
@@ -5581,6 +5601,18 @@ const OrderTimer = memo(({ createdAt, estimatedTime }) => {
 
 export default function App() {
   const [role, setRole] = useState("customer");
+  const [authUser, setAuthUser] = useState(null);
+  const [staffRole, setStaffRole] = useState(null); // admin | staff | waiter
+  const [emailInput, setEmailInput] = useState("");
+  useEffect(() => onAuthStateChanged(auth, async (u) => {
+    setAuthUser(u);
+    if (u && !u.isAnonymous) {
+      try {
+        const s = await getDoc(doc(db, "staff", u.uid));
+        setStaffRole(s.exists() ? (s.data().role || "staff") : null);
+      } catch (e) { setStaffRole(null); }
+    } else setStaffRole(null);
+  }), []);
   const [isDark, setIsDark] = useState(false);
   const [calls, setCalls] = useState([]);
   const [inventory, setInventory] = useState([]);
@@ -5593,7 +5625,7 @@ export default function App() {
   const [menu, setMenuState] = useState(DEFAULT_MENU);
   const [orders, setOrdersState] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80", adminPin: "9876", staffPin: "5432", waiterPin: "1234" });
+  const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80" });
   const [loading, setLoading] = useState(true);
   const [showPinModal, setShowPinModal] = useState(false);
   const [targetRole, setTargetRole] = useState("staff");
@@ -5632,9 +5664,24 @@ export default function App() {
     [flashSaleItems, menu]
   );
 
-  const requestPinPrompt = (target) => { if (target === "customer") { setRole("customer"); return; } setTargetRole(target); setShowPinModal(true); setPinInput(""); };
+  const requestPinPrompt = (target) => {
+    if (target === "customer") { setRole("customer"); signOut(auth).catch(() => {}); return; }
+    if (staffRole === "admin" || (target === "staff" && staffRole === "staff")) { setRole(target); return; }
+    setTargetRole(target); setShowPinModal(true); setPinInput("");
+  };
 
-   const handlePinSubmit = () => {
+   const handlePinSubmit = async () => {
+    if (!emailInput.trim() || !pinInput) { alert("❌ Email aur password daalo"); return; }
+    try {
+      const cred = await signInWithEmailAndPassword(auth, emailInput.trim(), pinInput);
+      const s = await getDoc(doc(db, "staff", cred.user.uid));
+      const r = s.exists() ? (s.data().role || "staff") : null;
+      const ok = r === "admin" || (targetRole === "staff" && r === "staff");
+      if (!ok) { await signOut(auth); alert("❌ Is account ko is screen ka access nahi hai"); setPinInput(""); return; }
+      setRole(targetRole); setShowPinModal(false); setPinInput("");
+    } catch (e) { alert("❌ Login fail — email/password check karo"); setPinInput(""); }
+  };
+  const handlePinSubmitUnused = () => {
     if (pinLock.isLocked()) {
       alert(`⏳ Bahut galat attempts. ${pinLock.secondsLeft()}s baad try karo.`);
       setPinInput("");
@@ -5715,15 +5762,17 @@ export default function App() {
 
   const fetchAllData = async () => {
     try {
-      const lq = await getDocs(collection(db, "loyaltyUsers"));
+      const lq = { docs: [] };
       const users = lq.docs.map(d => d.data());
       if (users.length > 0) setLoyaltyUsers(users);
-      try { const iq = await getDocs(collection(db, "inventory")); setInventory(iq.docs.map(d => d.data())); } catch (e) { console.error("inventory load:", e); }
-      const hq = await getDocs(collection(db, "coinHistory"));
+      /* inventory ab sirf staff login ke baad load hoti hai */
+      const hq = { docs: [] };
       const hist = hq.docs.map(d => d.data());
       if (hist.length > 0) setCoinHistory(hist);
       
-      const ms = await getDocs(collection(db, "settings"));
+      const ms = (await Promise.all(
+        ["menu", "categories", "gallery", "offers", "loyaltyRules", "appSettings", "promotions"].map((n) => getDoc(doc(db, "settings", n)).catch(() => null))
+      )).filter((s) => s && s.exists());
       
       // 🆕 menuFound flag — track karo ki Firestore mein menu hai ya nahi
       let menuFound = false;
@@ -5769,7 +5818,7 @@ export default function App() {
         if (ds.id === "loyaltyRules" && data.rules && Array.isArray(data.rules.rewards)) setLoyaltyRules(data.rules);
         
         // ✅ APP SETTINGS
-        if (ds.id === "appSettings") setSettings(prev => ({ ...prev, ...data }));
+        if (ds.id === "appSettings") { const { adminPin, staffPin, waiterPin, ...safe } = data; setSettings(prev => ({ ...prev, ...safe })); }
         
         // ✅ PROMOTIONS
         if (ds.id === "promotions") {
@@ -5792,15 +5841,15 @@ export default function App() {
   };
   
   setTimeout(() => setLoading(false), 8000);
-  fetchAllData();
+  authReady.then(() => fetchAllData()).catch(() => fetchAllData());
 
   // ⚠️ Ye code MAT HATANA
   const qCalls = query(collection(db, "calls"), where("status", "==", "active"));
-  const unsubCalls = onSnapshot(qCalls, (snap) => { 
+  const unsubCalls = !staffRole ? () => {} : onSnapshot(qCalls, (snap) => { 
     setCalls(snap.docs.map(d => ({ ...d.data(), id: d.id }))); 
   });
    // 📅 Bookings live listener
-const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
+const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "bookings"), (snap) => {
   setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() })));
 });
   
@@ -5821,12 +5870,12 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
     todayList.forEach(o => map.set(o.id, o));
     setOrdersState(Array.from(map.values()));
   };
-  const unsubOpen = onSnapshot(
+  const unsubOpen = !staffRole ? () => {} : onSnapshot(
     query(collection(db, "orders"), where("status", "in", ["new", "preparing", "ready"])),
     (snap) => { openList = snap.docs.map(normOrder); mergeOrders(); },
     (err) => console.error("Open orders listener:", err)
   );
-  const unsubOrders = onSnapshot(ordersQuery, (snap) => {
+  const unsubOrders = !staffRole ? () => {} : onSnapshot(ordersQuery, (snap) => {
     todayList = snap.docs.map(normOrder); mergeOrders();
   });
   
@@ -5836,7 +5885,28 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
     unsubOrders(); 
     unsubBookings();
   };
-}, []);
+}, [staffRole]);
+
+  // Customer: sirf apne orders
+  useEffect(() => {
+    if (staffRole || !authUser) return;
+    const un = onSnapshot(
+      query(collection(db, "orders"), where("createdBy", "==", authUser.uid)),
+      (snap) => setOrdersState(snap.docs.map(normOrder)),
+      (e) => console.error("my orders:", e)
+    );
+    return () => un();
+  }, [staffRole, authUser && authUser.uid]);
+
+  // Staff: loyalty, inventory, coin history
+  useEffect(() => {
+    if (!staffRole) return;
+    (async () => {
+      try { const q1 = await getDocs(collection(db, "loyaltyUsers")); setLoyaltyUsers(q1.docs.map(d => d.data())); } catch (e) { console.error(e); }
+      try { const q2 = await getDocs(collection(db, "inventory")); setInventory(q2.docs.map(d => d.data())); } catch (e) { console.error(e); }
+      try { const q3 = await getDocs(collection(db, "coinHistory")); setCoinHistory(q3.docs.map(d => d.data())); } catch (e) { console.error(e); }
+    })();
+  }, [staffRole]);
 
   const deleteBooking = async (id) => { if (window.confirm("Delete?")) { try { await deleteDoc(doc(db, "bookings", id)); } catch (e) { console.error(e); alert("⚠️ Delete nahi hua."); } } };
   const addInventory = async (item) => { try { await setDoc(doc(db, "inventory", item.id), item); setInventory(prev => [...prev, item]); } catch (e) { console.error(e); alert("⚠️ Inventory save nahi hua."); } };
@@ -5870,7 +5940,7 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   const removeOffer = async (id) => { await saveOffers(offersList.filter(o => o.id !== id)); };
 
   const placeOrder = async (order) => {
-    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; await Promise.race([setDoc(doc(db, "orders", order.id), order), new Promise((r) => setTimeout(r, 8000))]);
+    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; const _u = await authReady; if (!order.createdBy) order.createdBy = (auth.currentUser && auth.currentUser.uid) || (_u && _u.uid) || null; await Promise.race([setDoc(doc(db, "orders", order.id), order), new Promise((r) => setTimeout(r, 8000))]);
     setOrdersState(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]); } catch (e) { console.error("placeOrder failed:", e); throw e; }
   };
 
@@ -5912,8 +5982,8 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
       }
 
       if (paid) {
-        const earned = order.earnedCoins || 0;
-        const used = order.rewardUsedCoins || 0;
+        const earned = Math.floor((Number(order.finalTotal) || 0) / (Number(loyaltyRules?.rate) || 10));
+        const used = Math.max(0, Number(order.rewardUsedCoins) || 0);
         const phone = order.customer?.phone;
 
         if (phone && phone.length >= 10) {
@@ -5976,7 +6046,7 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
   const bookEvent = async (booking) => { await setDoc(doc(db, "bookings", booking.id), booking); };
 
   const cancelOrderByStaff = async (orderId) => {
-    try { await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); } catch (e) { console.error(e); }
+    try { await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", by: (auth.currentUser && auth.currentUser.email) || "?", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); } catch (e) { console.error(e); }
   };
 
   if (loading) {
@@ -6022,7 +6092,8 @@ const unsubBookings = onSnapshot(collection(db, "bookings"), (snap) => {
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowPinModal(false)}>
             <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", padding: "28px", borderRadius: 20, width: "90%", maxWidth: 340, textAlign: "center" }} className="slide-up">
               <div style={{ fontSize: 36, marginBottom: 16 }}>🔒</div>
-              <h3 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 700 }}>PIN ({targetRole.toUpperCase()})</h3>
+              <h3 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 700 }}>Login ({targetRole.toUpperCase()})</h3>
+              <input type="email" placeholder="Email" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} style={{ padding: "14px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, width: "100%", boxSizing: "border-box", marginBottom: 12 }} />
               <input type="password" placeholder="••••" autoFocus value={pinInput} onChange={(e) => setPinInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handlePinSubmit(); }} style={{ padding: "16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 32, width: "100%", boxSizing: "border-box", textAlign: "center", letterSpacing: 12, marginBottom: 24, fontWeight: 800 }} />
               <div style={{ display: "flex", gap: 12 }}>
                 <button onClick={() => { setShowPinModal(false); setPinInput(""); }} style={{ flex: 1, padding: "14px", borderRadius: 12, border: `2px solid ${COLORS.line}`, background: "transparent", fontWeight: 700, cursor: "pointer" }}>Cancel</button>
