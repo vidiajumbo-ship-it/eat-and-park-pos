@@ -1884,9 +1884,6 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
     </div>
   );
 });
-
-  );
-});
 // ==
 // 16. CUSTOMER VIEW
 // ==
