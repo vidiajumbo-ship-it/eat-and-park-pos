@@ -923,40 +923,88 @@ function AIOrderModal({ menu, onOrderParsed, onClose }) {
 
   const startMic = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { setAiErr("Is browser me mic nahi hai. Keyboard ka mic use karo."); return; }
-    if (listening && recRef.current) { recRef.current.stop(); return; }
-    const r = new SR();
-    r.lang = "hi-IN"; r.interimResults = false; r.continuous = false;
-    r.onresult = (e) => {
-      const t = Array.from(e.results).map((x) => x[0].transcript).join(" ");
-      setAiText((prev) => (prev ? prev + " " : "") + t);
-    };
-    r.onerror = () => setListening(false);
-    r.onend = () => setListening(false);
-    recRef.current = r; setListening(true); setAiErr("");
-    try { r.start(); } catch (e) { setListening(false); }
+    if (!SR) {
+      setAiErr("⚠️ Is browser me mic support nahi hai. Keyboard ka mic use karein.");
+      return;
+    }
+
+    // Agar pehle se sun raha hai toh stop karein
+    if (listening && recRef.current) {
+      try {
+        recRef.current.stop();
+      } catch (err) {}
+      setListening(false);
+      return;
+    }
+
+    try {
+      const r = new SR();
+      r.lang = "hi-IN";
+      r.interimResults = false;
+      r.continuous = false;
+
+      r.onstart = () => {
+        setListening(true);
+        setAiErr("");
+      };
+
+      r.onresult = (e) => {
+        const transcript = Array.from(e.results)
+          .map((res) => res[0].transcript)
+          .join(" ");
+        setAiText((prev) => (prev ? prev + " " : "") + transcript);
+      };
+
+      r.onerror = (e) => {
+        setListening(false);
+        if (e.error === "not-allowed") {
+          setAiErr("⚠️ Mic permission blocked hai. Settings me allow karein.");
+        } else if (e.error === "no-speech") {
+          setAiErr("⚠️ Koi aawaz nahi suni gayi. Dobara bolein.");
+        } else {
+          setAiErr(`⚠️ Mic error: ${e.error || "Aawaz capture nahi hui"}`);
+        }
+      };
+
+      r.onend = () => {
+        setListening(false);
+      };
+
+      recRef.current = r;
+      r.start();
+    } catch (err) {
+      setListening(false);
+      setAiErr("⚠️ Mic start nahi ho paya. Dobara tap karein.");
+    }
   };
 
   const runAi = async () => {
     const text = aiText.trim();
     if (!text || aiBusy) return;
-    setAiBusy(true); setAiErr("");
+    setAiBusy(true);
+    setAiErr("");
     try {
       const r = await fetch("/api/parse-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text,
-          menu: (menu || []).filter((m) => m.available).map((m) => ({ id: m.id, name: m.name, portion: m.portion || "" }))
-        })
+          menu: (menu || [])
+            .filter((m) => m.available)
+            .map((m) => ({ id: m.id, name: m.name, portion: m.portion || "" })),
+        }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "AI error");
+      if (!r.ok) throw new Error(data.error || "AI processing fail ho gayi");
       onOrderParsed(data);
       onClose();
-    } catch (e) { setAiErr("⚠️ " + (e.message || e)); }
-    finally { setAiBusy(false); }
+    } catch (e) {
+      setAiErr("⚠️ " + (e.message || e));
+    } finally {
+      setAiBusy(false);
+    }
   };
+
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 280, display: "flex", alignItems: "center", justifyContent: "center", padding: 14 }} onClick={onClose}>
