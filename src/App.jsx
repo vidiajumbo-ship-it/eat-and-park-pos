@@ -7,7 +7,7 @@ import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebas
 import {
   collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc,
   getDocs, getDoc, addDoc, query, orderBy, serverTimestamp, where,
-  runTransaction  // 👈 ADD THIS
+  runTransaction  //  ADD THIS
 } from "firebase/firestore";
 import { QRCodeSVG } from 'qrcode.react';
 function ImageUploadButton({ currentImage, onUploaded, label }) {
