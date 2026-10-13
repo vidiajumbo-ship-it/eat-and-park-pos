@@ -910,7 +910,87 @@ const KitchenNotificationColumn = memo(({ orders, selectedOrderId, onSelect }) =
 });
 
 // ==
+// ==
+// 13.5 AI ORDER MODAL (VOICE & TEXT)
+// ==
+
+function AIOrderModal({ menu, onOrderParsed, onClose }) {
+  const [aiText, setAiText] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState("");
+  const [listening, setListening] = useState(false);
+  const recRef = useRef(null);
+
+  const startMic = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setAiErr("Is browser me mic nahi hai. Keyboard ka mic use karo."); return; }
+    if (listening && recRef.current) { recRef.current.stop(); return; }
+    const r = new SR();
+    r.lang = "hi-IN"; r.interimResults = false; r.continuous = false;
+    r.onresult = (e) => {
+      const t = Array.from(e.results).map((x) => x[0].transcript).join(" ");
+      setAiText((prev) => (prev ? prev + " " : "") + t);
+    };
+    r.onerror = () => setListening(false);
+    r.onend = () => setListening(false);
+    recRef.current = r; setListening(true); setAiErr("");
+    try { r.start(); } catch (e) { setListening(false); }
+  };
+
+  const runAi = async () => {
+    const text = aiText.trim();
+    if (!text || aiBusy) return;
+    setAiBusy(true); setAiErr("");
+    try {
+      const r = await fetch("/api/parse-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          menu: (menu || []).filter((m) => m.available).map((m) => ({ id: m.id, name: m.name, portion: m.portion || "" }))
+        })
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "AI error");
+      onOrderParsed(data);
+      onClose();
+    } catch (e) { setAiErr("⚠️ " + (e.message || e)); }
+    finally { setAiBusy(false); }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 280, display: "flex", alignItems: "center", justifyContent: "center", padding: 14 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 18, padding: 18, width: "100%", maxWidth: 390, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontWeight: 800, fontSize: 18, fontFamily: "'Outfit', sans-serif" }}>🤖 AI Order</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer" }}>✕</button>
+        </div>
+        <div style={{ fontSize: 12, color: "#8A8375" }}>Bolo ya likho: "2 veg roll, 1 cold coffee"</div>
+        <textarea
+          rows={3}
+          value={aiText}
+          onChange={(e) => setAiText(e.target.value)}
+          placeholder="Order yahan likhein ya mic se bolein..."
+          style={{ width: "100%", padding: 10, borderRadius: 10, border: "1.5px solid #E8E6DC", boxSizing: "border-box", fontSize: 14, resize: "none" }}
+        />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" onClick={startMic} style={{ flex: 1, padding: 10, borderRadius: 10, background: listening ? "#C0392B" : "#FAFAF8", border: "1.5px solid #E8E6DC", fontWeight: 800, color: listening ? "#fff" : "#1A1A1A", cursor: "pointer" }}>
+            {listening ? "⏹️ Ruko" : "🎤 Bolo"}
+          </button>
+          <button type="button" onClick={runAi} disabled={aiBusy || !aiText.trim()} style={{ flex: 1, padding: 10, borderRadius: 10, background: "#3B82F6", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer", opacity: (aiBusy || !aiText.trim()) ? 0.6 : 1 }}>
+            {aiBusy ? "⏳ Soch raha..." : "✨ Samjho"}
+          </button>
+        </div>
+        {aiErr && <div style={{ color: "#EF4444", fontSize: 12, fontWeight: 700 }}>{aiErr}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ==
 // 14. RUNNING ORDER MODAL (V15 NEW)
+// ==
+
 // ==
 
 const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
@@ -1192,6 +1272,8 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   const [orderMode, setOrderMode] = useState("dine_in"); 
   const [placedOrder, setPlacedOrder] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
+
 
   // 🆕 Add Menu Item State
   const [showAddItem, setShowAddItem] = useState(false);
@@ -1741,11 +1823,17 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
     </select>
   )}
 </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
           <input placeholder="Customer Name (optional)" value={customerName} onChange={e => setCustomerName(e.target.value)} style={inputStyle} />
           <input placeholder="Customer Phone (optional)" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} style={inputStyle} />
         </div>
-        <SearchBar value={search} onChange={setSearch} placeholder="Search items..." />
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <SearchBar value={search} onChange={setSearch} placeholder="Search items..." />
+          <button type="button" onClick={() => setShowAiModal(true)} style={{ background: COLORS.info, color: "#fff", border: "none", borderRadius: 10, padding: "12px 14px", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
+            🤖 AI
+          </button>
+        </div>
+
         <div style={{ marginTop: 16, maxHeight: "32vh", overflowY: "auto" }}>
           {filtered.map(item => {
             const qty = getCartQty(cart[item.id]);
@@ -1766,14 +1854,37 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
             <span>{cartItems.length} items · Total</span>
             <span style={{ color: COLORS.copper, fontFamily: "'JetBrains Mono', monospace" }}>{inr(subtotal)}</span>
           </div>
-          <button disabled={cartItems.length === 0 || isSubmitting}
+                    <button disabled={cartItems.length === 0 || isSubmitting}
             onClick={handleSubmit}
             style={{ width: "100%", padding: 16, border: "none", borderRadius: 14, background: cartItems.length ? COLORS.sage : COLORS.paper2, color: cartItems.length ? "#fff" : COLORS.textLight, fontWeight: 800, fontSize: 16, cursor: cartItems.length && !isSubmitting ? "pointer" : "not-allowed" }}>
             {isSubmitting ? "⏳ Sending..." : "🍳 Send Order to Kitchen"}
           </button>
         </div>
       </div>
+      {showAiModal && (
+        <AIOrderModal
+          menu={menu}
+          onClose={() => setShowAiModal(false)}
+          onOrderParsed={(data) => {
+            (data.items || []).forEach((line) => {
+              setQty(line.id, (cart[line.id]?.qty || 0) + line.qty);
+            });
+            if (data.orderType === "parcel") {
+              setOrderMode("parcel");
+            } else if (data.table) {
+              setOrderMode("dine_in");
+              setTable(Number(data.table));
+            }
+            if (data.notes) {
+              setNotes((prev) => (prev ? prev + ", " + data.notes : data.notes));
+            }
+          }}
+        />
+      )}
     </div>
+  );
+});
+
   );
 });
 // ==
@@ -1788,6 +1899,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const payIdRef = useRef(null);
   const aiTimerRef = useRef(null);
   const waiterLock = usePinLockout();  const [cart, setCart] = useState({});
+  const [showAiModal, setShowAiModal] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [activeModal, setActiveModal] = useState(null);
@@ -2687,13 +2799,17 @@ const handleWaiterPinSubmitOld = () => {
     })}
   </div>
 )}
-      <div className={viewMode === "desktop" ? "desktop-menu" : ""} style={{ padding: "16px" }}>
-        <div style={{ display: "flex", gap: 10, marginBottom: 8, alignItems: "center" }}>
+            <div className={viewMode === "desktop" ? "desktop-menu" : ""} style={{ padding: "16px" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
           <SearchBar value={searchQuery} onChange={setSearchQuery} />
-          <button onClick={() => setVegOnly(!vegOnly)} style={{ padding: "12px 14px", borderRadius: 10, border: `1.5px solid ${vegOnly ? COLORS.sage : COLORS.line}`, background: vegOnly ? COLORS.sageLight : "transparent", color: vegOnly ? COLORS.sageDark : COLORS.textLight, fontWeight: 700, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+          <button type="button" onClick={() => setShowAiModal(true)} style={{ padding: "12px 12px", borderRadius: 10, background: COLORS.info, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
+            🤖 AI
+          </button>
+          <button onClick={() => setVegOnly(!vegOnly)} style={{ padding: "12px 12px", borderRadius: 10, border: `1.5px solid ${vegOnly ? COLORS.sage : COLORS.line}`, background: vegOnly ? COLORS.sageLight : "transparent", color: vegOnly ? COLORS.sageDark : COLORS.textLight, fontWeight: 700, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
             <VegDot veg={true} /><span style={{ fontSize: 13 }}>{vegOnly ? "Veg" : "All"}</span>
           </button>
         </div>
+
         {!searchQuery.trim() && filteredItems.length > 0 && (
     <div style={{ marginBottom: 16, marginTop: 8 }}>
       <h2 style={{ 
@@ -3236,12 +3352,31 @@ const handleWaiterPinSubmitOld = () => {
           </div>
         </div>
       )}
-      {runningOrderId && orders.find(o => o.id === runningOrderId) && (
+            {runningOrderId && orders.find(o => o.id === runningOrderId) && (
         <RunningOrderModal order={orders.find(o => o.id === runningOrderId)} menu={menu} onConfirm={(items) => addRunningItems(runningOrderId, items)} onClose={() => setRunningOrderId(null)} />
+      )}
+      {showAiModal && (
+        <AIOrderModal
+          menu={menu}
+          onClose={() => setShowAiModal(false)}
+          onOrderParsed={(data) => {
+            (data.items || []).forEach((line) => {
+              handleSetQty(line.id, (cart[line.id]?.qty || 0) + line.qty);
+            });
+            if (data.orderType === "parcel") setOrderType("parcel");
+            else if (data.table) {
+              setOrderType("dine_in");
+              setTable(Number(data.table));
+            }
+            if (data.notes) setNotes((prev) => (prev ? prev + ", " + data.notes : data.notes));
+            showToast("✨ Items cart me add ho gaye!", "success");
+          }}
+        />
       )}
     </div>
   );
 }
+
 
 // ==
 // 17. STAFF VIEW (V15 — TOUCH TO PROCEED)
