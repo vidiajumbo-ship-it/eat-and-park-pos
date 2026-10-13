@@ -3371,7 +3371,9 @@ function BillPOSScreen(p) {
     const inp = { padding: "8px 10px", border: `1.5px solid ${COLORS.line}`, borderRadius: 8, fontSize: isDesktop ? 13 : 16, width: "100%", boxSizing: "border-box", fontFamily: "inherit", minWidth: 0, background: "#fff", color: COLORS.ink, colorScheme: "light" };
 
   const chip = (on, color = COLORS.copper) => ({ padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${on ? color : COLORS.line}`, background: on ? color : "#fff", color: on ? "#fff" : COLORS.text, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" });
-  const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: 34 };
+    const inpS = { ...inp, padding: "4px 8px", fontSize: isDesktop ? 12 : 13, borderRadius: 7 };
+  const lbl = {
+ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: 34 };
   const disabled = p.saving || items.length === 0;
   const footBtn = (bg, color, border) => ({ flex: 1, padding: "12px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 14, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
   const actBtn = (bg, color, border) => ({ display: "none", flex: 1, padding: "11px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
@@ -3440,14 +3442,17 @@ function BillPOSScreen(p) {
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         {isDraft ? (
           <>
-            <button type="button" onClick={() => p.setOrderType("dine_in")} style={chip(p.orderType === "dine_in")}>🍽️ Table</button>
+            <button type="button" onClick={() => p.setOrderType("dine_in")} style={chipS(p.orderType === "dine_in")}>
+🍽️ Table</button>
             <button type="button" onClick={() => p.setOrderType("parcel")} style={chip(p.orderType === "parcel")}>🛍️ Parcel</button>
             {p.orderType === "dine_in" && (
-              <select value={p.table} onChange={(e) => p.setTable(Number(e.target.value))} style={{ ...inp, width: 84 }}>
+              <select value={p.table} onChange={(e) => p.setTable(Number(e.target.value))} style={{ ...inpS, width: 66 }}>
+
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>T-{n}</option>)}
               </select>
             )}
-            <select value={p.waiter} onChange={(e) => p.setWaiter(e.target.value)} style={{ ...inp, flex: isDesktop ? 1 : "1 1 100%", minWidth: 90, width: "auto", background: "#fff" }}>
+            <select value={p.waiter} onChange={(e) => p.setWaiter(e.target.value)} style={{ ...inpS, flex: 1, minWidth: 90, width: "auto", background: "#fff" }}>
+
 
               <option value="">🧑‍🍳 Waiter chuno</option>
               {p.waiter && !waiterNames.includes(p.waiter) && <option value={p.waiter}>{p.waiter}</option>}
@@ -3469,17 +3474,18 @@ function BillPOSScreen(p) {
       )}
 
       {(presets.customers || []).length > 0 && (
-        <select value="" onChange={(e) => { const c = (presets.customers || [])[Number(e.target.value)]; if (c) { p.setCustName(c.name); p.setCustPhone(c.phone || ""); } }} style={{ ...inp, background: "#fff" }}>
+        <select value="" onChange={(e) => { const c = (presets.customers || [])[Number(e.target.value)]; if (c) { p.setCustName(c.name); p.setCustPhone(c.phone || ""); } }} style={{ ...inpS, background: "#fff" }}>
           <option value="">👤 Saved customer chuno...</option>
+
           {(presets.customers || []).map((c, i) => <option key={i} value={i}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}
         </select>
       )}
-           <div style={{ display: "grid", gridTemplateColumns: isDesktop ? "1.2fr 1fr 1fr" : "1fr 1fr", gap: 6 }}>
-        <input placeholder="Customer" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={{ ...inp, ...(isDesktop ? {} : { gridColumn: "1 / -1" }) }} />
-
-        <input placeholder="Phone" value={p.custPhone} onChange={(e) => p.setCustPhone(e.target.value)} style={inp} />
-        <input placeholder="GSTIN" value={p.gstin} onChange={(e) => p.setGstin(e.target.value.toUpperCase())} style={inp} />
+               <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 0.8fr", gap: 4 }}>
+        <input placeholder="Customer" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={inpS} />
+        <input placeholder="Phone" value={p.custPhone} onChange={(e) => p.setCustPhone(e.target.value)} style={inpS} />
+        <input placeholder="GSTIN" value={p.gstin} onChange={(e) => p.setGstin(e.target.value.toUpperCase())} style={inpS} />
       </div>
+
 
       <div style={{ flex: 1, minHeight: 80, overflowY: "auto", border: `1px solid ${COLORS.line}`, borderRadius: 10, background: "#fff" }}>
         {items.length === 0 && <div style={{ textAlign: "center", padding: 16, color: COLORS.textLight, fontSize: 12 }}>Menu se item tap karo ➕</div>}
@@ -3582,8 +3588,13 @@ function BillPOSScreen(p) {
        style={{ background: "#fff", colorScheme: "light", width: isDesktop ? "min(1200px, 97vw)" : "100%",
  maxWidth: isDesktop ? 1200 : 560, height: isDesktop ? "92vh" : "96vh", borderRadius: isDesktop ? 18 : "20px 20px 0 0", padding: 12, display: "flex", flexDirection: "column", boxSizing: "border-box", gap: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>🧾 {isDraft ? "New Order + Bill" : "Order Bill"}</div>
-          <button type="button" onClick={p.onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 30, height: 30, fontSize: 14, cursor: "pointer" }}>✕</button>
+          <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 15, fontWeight: 800 }}>🧾 {isDraft
+ ? "New Order + Bill" : "Order Bill"}</div>
+          <button type="button" onClick={p.onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 24, height: 24, fontSize: 12, cursor: "pointer" }}>✕</button>
+        </div>
+
+        {(isDesktop
+
         </div>
 
         {(isDesktop || tab === "bill") && (
@@ -3605,8 +3616,10 @@ function BillPOSScreen(p) {
         ) : (
           <>
             <div style={{ display: "flex", gap: 6 }}>
-              <button type="button" onClick={() => setTab("menu")} style={{ ...chip(tab === "menu", COLORS.ink), flex: 1, padding: "8px 6px" }}>🍽️ Menu</button>
-              <button type="button" onClick={() => setTab("bill")} style={{ ...chip(tab === "bill", COLORS.ink), flex: 1, padding: "8px 6px" }}>🧾 Bill ({itemCount}) · ₹{calc.total}</button>
+              <button type="button" onClick={() => setTab("menu")} style={{ ...chipS(tab === "menu", COLORS.ink), flex: 1, padding: "5px 6px", fontSize: 12 }}>
+🍽️ Menu</button>
+              <button type="button" onClick={() => setTab("bill")} style={{ ...chipS(tab === "bill", COLORS.ink), flex: 1, padding: "5px 6px", fontSize: 12 }}>
+🧾 Bill ({itemCount}) · ₹{calc.total}</button>
             </div>
             <div style={{ flex: 1, minHeight: 0, overflowY: tab === "bill" ? "auto" : "hidden" }}>
               {tab === "menu" ? menuPane : billPane}
