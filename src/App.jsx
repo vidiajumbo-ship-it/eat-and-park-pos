@@ -1,5 +1,5 @@
 
-/* eslint-disable */
+/* eslint-disable react-hooks/exhaustive-deps, no-unused-vars */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db, auth, authReady } from "./firebase";
@@ -184,20 +184,19 @@ function getLoyaltyTier(points) {
 // 3. UTILITY FUNCTIONS
 // ==
 
+function uid(prefix) { return prefix + Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 8); }
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
 function inr(n) {
   const num = Number(n);
   if (!Number.isFinite(num)) return "₹0";
   return "₹" + num.toLocaleString("en-IN");
 }
-/* eslint-disable */
 const isWalkIn = (s) => /^walk-?in$/i.test(String(s || "").trim());
 const getBaseKots = (o) => (o.kots?.length ? o.kots : [{ id: uid("kot"), kotNumber: 1, items: o.items || [], createdAt: o.createdAt, status: o.status }])
   .map(k => (k.status === "new" && o.status !== "new" ? { ...k, status: o.status } : k));
 const getNextKotNo = (o) => Math.max(...getBaseKots(o).map(k => k.kotNumber || 1)) + 1;
-function uid(prefix) { return prefix + Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 8); }
-function escapeHtml(s) {
-  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
 
 // Ek hi jagah se order total (coupon + loyalty + delivery sab included)
 function getOrderTotal(o) {
@@ -5670,17 +5669,50 @@ export default function App() {
     setTargetRole(target); setShowPinModal(true); setPinInput("");
   };
 
-   const handlePinSubmit = async () => {
+  const handlePinSubmit = async () => {
     if (!emailInput.trim() || !pinInput) { alert("❌ Email aur password daalo"); return; }
+
+    if (pinLock.isLocked()) {
+      alert(`⏳ Bahut galat attempts. ${pinLock.secondsLeft()}s baad try karo.`);
+      return;
+    }
+
     try {
       const cred = await signInWithEmailAndPassword(auth, emailInput.trim(), pinInput);
-      const s = await getDoc(doc(db, "staff", cred.user.uid));
-      const r = s.exists() ? (s.data().role || "staff") : null;
+      console.log("✅ Auth success, UID:", cred.user.uid);
+
+      let s;
+      try {
+        s = await getDoc(doc(db, "staff", cred.user.uid));
+      } catch (fsErr) {
+        console.error("❌ Firestore error:", fsErr.code, fsErr.message);
+        await signOut(auth);
+        if (fsErr.code === "permission-denied") {
+          alert("⚠️ Firestore rules staff collection ko block kar rahi hain.\nFirebase Console → Firestore → Rules check karo.");
+        } else {
+          alert("⚠️ Firestore error: " + fsErr.message);
+        }
+        return;
+      }
+
+      if (!s.exists()) {
+        await signOut(auth);
+        alert(
+          "❌ Ye account staff nahi hai.\n\n" +
+          "Firebase Console me 'staff' collection banao:\n" +
+          "Document ID: " + cred.user.uid + "\n" +
+          "Field: role = 'admin' ya 'staff'"
+        );
+        return;
+      }
+
+      const r = s.data().role || "staff";
       const ok = r === "admin" || (targetRole === "staff" && r === "staff");
-      if (!ok) { await signOut(auth); alert("❌ Is account ko is screen ka access nahi hai"); setPinInput(""); return; }
-      setRole(targetRole); setShowPinModal(false); setPinInput("");
-    } catch (e) { alert("❌ Login fail — email/password check karo"); setPinInput(""); }
-  };
+      if (!ok) {
+        await signOut(auth);
+        alert(`❌ Is account ka role '${r}' hai, '${targetRole}' nahi.`);
+        return;
+     
   const handlePinSubmitUnused = () => {
     if (pinLock.isLocked()) {
       alert(`⏳ Bahut galat attempts. ${pinLock.secondsLeft()}s baad try karo.`);
@@ -6046,7 +6078,7 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
   const bookEvent = async (booking) => { await setDoc(doc(db, "bookings", booking.id), booking); };
 
   const cancelOrderByStaff = async (orderId) => {
-    try { await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", by: (auth.currentUser && auth.currentUser.email) || "?", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", at: Date.now() }).catch(() => {}); } catch (e) { console.error(e); }
+    try { await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); addDoc(collection(db, "auditLogs"), { orderId, action: "cancel", by: (auth.currentUser && auth.currentUser.email) || "?", at: Date.now() }).catch(() => {});  } catch (e) { console.error(e); }
   };
 
   if (loading) {
