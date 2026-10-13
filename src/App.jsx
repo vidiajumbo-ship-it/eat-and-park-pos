@@ -5708,18 +5708,18 @@ export default function App() {
 
       const r = s.data().role || "staff";
       const ok = r === "admin" || (targetRole === "staff" && r === "staff");
-      if (!ok) {
+           if (!ok) {
         await signOut(auth);
-             alert(`❌ Is account ka role '${r}' hai, '${targetRole}' nahi.`);
-      return;
-    }
+        alert(`❌ Is account ka role '${r}' hai, '${targetRole}' nahi.`);
+        return;
+      }
 
-    pinLock.reset();
-    setRole(targetRole);
-    setShowPinModal(false);
-    setPinInput("");
-    setEmailInput("");
-  } catch (e) {
+      pinLock.reset();
+      setRole(targetRole);
+      setShowPinModal(false);
+      setPinInput("");
+      setEmailInput("");
+    } catch (e) {
     console.error("❌ Auth error:", e.code, e.message);
     const msgs = {
       "auth/invalid-credential": "❌ Email ya password galat hai",
@@ -5736,29 +5736,7 @@ export default function App() {
   }
 };
 
-  const handlePinSubmitUnused = () => {
 
-      pinLock.reset();
-      setRole(targetRole);
-      setShowPinModal(false);
-      setPinInput("");
-      setEmailInput("");
-    } catch (e) {
-      console.error("❌ Auth error:", e.code, e.message);
-      const msgs = {
-        "auth/invalid-credential": "❌ Email ya password galat hai",
-        "auth/user-not-found": "❌ Ye email registered nahi hai",
-        "auth/wrong-password": "❌ Password galat hai",
-        "auth/network-request-failed": "⚠️ Internet issue ya Auth domain galat hai",
-        "auth/operation-not-allowed": "⚠️ Firebase me Email/Password provider enable nahi hai",
-        "auth/too-many-requests": "⏳ Bahut attempts. Thodi der baad try karo",
-        "auth/invalid-email": "❌ Email format galat hai",
-      };
-      alert(msgs[e.code] || `❌ Login fail: ${e.code || e.message}`);
-      pinLock.registerFail();
-      setPinInput("");
-    }
-  };
 
  
     
