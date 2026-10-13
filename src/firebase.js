@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { isSupported, getAnalytics } from "firebase/analytics";
-import { getAuth, signInAnonymously } from "firebase/auth";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import {
   initializeFirestore,
   persistentLocalCache,
@@ -20,20 +20,25 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-// Analytics kuch browsers/webview me crash karta hai, isliye check ke baad hi chalao
 isSupported().then((ok) => { if (ok) getAnalytics(app); }).catch(() => {});
 
-// Offline cache (weak internet me menu/orders turant khulte hain)
 let database;
 try {
   database = initializeFirestore(app, {
     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
   });
 } catch (e) {
-  database = getFirestore(app); // purana firebase version ho to yahi chalega
+  database = getFirestore(app);
 }
 export const db = database;
 
-// Phase 2 ki taiyari: har visitor ko anonymous login (abhi koi behavior change nahi)
 export const auth = getAuth(app);
-signInAnonymously(auth).catch((e) => console.warn("Anonymous auth abhi off hai:", e.code));
+
+// Koi login nahi hai to anonymous login; staff login hai to wahi rahega
+export const authReady = new Promise((resolve) => {
+  onAuthStateChanged(auth, (u) => {
+    if (u) resolve(u);
+    else signInAnonymously(auth).catch((e) => { console.warn("Anonymous auth:", e.code); resolve(null); });
+  });
+  setTimeout(() => resolve(null), 5000);
+});
