@@ -1,9 +1,9 @@
-const MODEL = "claude-haiku-5-5";
+const MODEL = "gemini-2.5-flash-lite";
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
   try {
-    // sirf logged-in staff (anonymous customer nahi)
+    // sirf logged-in staff
     const h = req.headers.authorization || "";
     const idToken = h.startsWith("Bearer ") ? h.slice(7) : "";
     if (!idToken) return res.status(401).json({ error: "Login chahiye" });
@@ -28,42 +28,43 @@ module.exports = async (req, res) => {
       "Rules:\n" +
       "- ek=1, do=2, teen=3, char=4, paanch=5, chhe=6, saat=7, aath=8, nau=9, das=10. Qty na bole to 1.\n" +
       "- half/full/quarter/aadha/poora ko menu ke portion se match karo.\n" +
-      "- Agar dish ke multiple portion hain aur waiter ne portion nahi bola, us dish ko unmatched me daalo (jaise 'Chicken Masala - portion batao').\n" +
+      "- Agar dish ke multiple portion hain aur waiter ne portion nahi bola, us dish ko unmatched me daalo.\n" +
       "- 'table 5', 'T5', 'paanch number table' => table=5. 'parcel/pack/takeaway' => orderType=parcel, warna dine_in.\n" +
       "- Special instruction (kam teekha, bina pyaaz) => notes me chhota sa likho.\n" +
       "- Jo samajh na aaye wo unmatched me daalo.\n\nMENU:\n" + menuText;
 
-    const tool = {
-      name: "create_order",
-      description: "Parsed restaurant order",
-      input_schema: {
-        type: "object",
-        properties: {
-          table: { type: "integer" },
-          orderType: { type: "string", enum: ["dine_in", "parcel"] },
-          items: { type: "array", items: { type: "object", properties: { id: { type: "string" }, qty: { type: "number" } }, required: ["id", "qty"] } },
-          notes: { type: "string" },
-          unmatched: { type: "array", items: { type: "string" } }
-        },
-        required: ["orderType", "items"]
-      }
+    const schema = {
+      type: "OBJECT",
+      properties: {
+        table: { type: "INTEGER" },
+        orderType: { type: "STRING", enum: ["dine_in", "parcel"] },
+        items: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "STRING" }, qty: { type: "NUMBER" } }, required: ["id", "qty"] } },
+        notes: { type: "STRING" },
+        unmatched: { type: "ARRAY", items: { type: "STRING" } }
+      },
+      required: ["orderType", "items"]
     };
 
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({
-        model: MODEL, max_tokens: 800, system,
-        tools: [tool], tool_choice: { type: "tool", name: "create_order" },
-        messages: [{ role: "user", content: text }]
-      })
-    });
+    const r = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: "user", parts: [{ text }] }],
+          generationConfig: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.1, maxOutputTokens: 800 }
+        })
+      }
+    );
     const data = await r.json();
-    if (!r.ok) { console.error("Anthropic error:", data); return res.status(502).json({ error: "AI service error" }); }
-    const block = (data.content || []).find((b) => b.type === "tool_use");
-    if (!block) return res.status(502).json({ error: "AI order samajh nahi paya" });
+    if (!r.ok) { console.error("Gemini error:", data); return res.status(502).json({ error: "AI service error" }); }
+    const raw = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+    if (!raw) return res.status(502).json({ error: "AI order samajh nahi paya" });
 
-    const o = block.input || {};
+    let o = {};
+    try { o = JSON.parse(raw); } catch (e) { return res.status(502).json({ error: "AI ka jawab padh nahi paya" }); }
+
     const items = (o.items || [])
       .filter((i) => ids.has(i.id) && Number(i.qty) > 0)
       .map((i) => ({ id: i.id, qty: Math.min(50, Number(i.qty)) }));
