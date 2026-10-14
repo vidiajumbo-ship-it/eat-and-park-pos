@@ -201,7 +201,10 @@ const getNextKotNo = (o) => Math.max(...getBaseKots(o).map(k => k.kotNumber || 1
 // Ek hi jagah se order total (coupon + loyalty + delivery sab included)
 function getOrderTotal(o) {
   const hasRunning = (o?.kots || []).some(k => k.isRunning);
+  // If finalTotal is trusted (no running KOT or bill was manually edited), use it.
   if (Number.isFinite(o?.finalTotal) && (!hasRunning || o?.billEditedAt)) return o.finalTotal;
+  // Otherwise compute from items. NOTE: items array already includes running KOT items,
+  // and runningPatch() updates finalTotal only when billEditedAt is set — so no double count.
   const sub = (o?.items || []).reduce((s, it) => s + it.price * it.qty, 0);
   const coupon = Math.round((sub * (o?.discount || 0)) / 100);
   return Math.max(0, sub - coupon - (o?.loyaltyDiscount || 0)) + (o?.deliveryFee || 0);
@@ -477,6 +480,8 @@ function useLiveNow(intervalMs = 30000) {
     const t = setInterval(() => forceTick(x => x + 1), intervalMs);
     return () => clearInterval(t);
   }, [intervalMs]);
+  // Returns nothing on purpose — just forces a re-render every intervalMs.
+  // Callers use this to refresh relative timestamps like timeAgo().
 }
 const useLocalStorage = (key, initialValue) => {
   const [storedValue, setStoredValue] = useState(() => {
@@ -1754,10 +1759,12 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
               style={{ padding: 14, borderRadius: 12, border: `2px solid ${COLORS.ink}`, background: 'transparent', color: COLORS.ink, fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               🖨️ Print KOT
             </button>
-            <button onClick={() => onAddMoreItems(placedOrder.id)}
-              style={{ padding: 14, borderRadius: 12, border: 'none', background: COLORS.info, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              ➕ Add More Items
-            </button>
+            {onAddMoreItems && (
+              <button onClick={() => onAddMoreItems(placedOrder.id)}
+                style={{ padding: 14, borderRadius: 12, border: 'none', background: COLORS.info, color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                ➕ Add More Items
+              </button>
+            )}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
             <button onClick={() => { setPlacedOrder(null); setWaiterName(""); setCustomerName(""); setCustomerPhone(""); }}
@@ -1876,8 +1883,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
           <input placeholder="Customer Name (optional)" value={customerName} onChange={e => setCustomerName(e.target.value)} style={inputStyle} />
           <input placeholder="Customer Phone (optional)" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} style={inputStyle} />
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
           <div style={{ flex: 1 }}>
             <SearchBar value={search} onChange={setSearch} placeholder="Search items..." />
           </div>
@@ -1899,11 +1905,6 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
               whiteSpace: "nowrap"
             }}
           >
-            🤖 AI
-          </button>
-        </div>
-
-          <button type="button" onClick={() => setShowAiModal(true)} style={{ background: COLORS.info, color: "#fff", border: "none", borderRadius: 10, padding: "12px 14px", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
             🤖 AI
           </button>
         </div>
@@ -5404,7 +5405,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
             <StatCard label="Avg Order" value={inr(avgOrderValue)} icon="📈" color={COLORS.gold} />
           </div>
           <KitchenMetrics filteredOrders={filteredOrders} />
-                   <div id="report-content" style={{ position: 'absolute', left: -9999, top: 0, width: 700, background: '#fff' }}>
+                   <div id="report-content" style={{ position: 'absolute', left: 0, top: 0, width: 700, background: '#fff', zIndex: -1, opacity: 0.01, pointerEvents: 'none' }}>
             <div style={{ padding: 20 }}>
               <h2>{RESTAURANT.name} - Report</h2>
               <p>Date: {filterDate}</p>
@@ -5952,7 +5953,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
           <button onClick={savePromotions} style={{ ...primaryBtn, width: '100%' }}>💾 Save All</button>
         </>
       )}
-      {false && (
+      {false /* legacy promotions UI removed */ && (
         <>
           <h3 style={{ marginBottom: 16 }}>⚡ Flash Sale</h3>
           {flashSaleItems.map((item, idx) => (
@@ -6652,6 +6653,8 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
   const reloadAt = new Date(); reloadAt.setHours(5, 0, 0, 0);
   if (reloadAt <= new Date()) reloadAt.setDate(reloadAt.getDate() + 1);
   const reloadTimer = setTimeout(() => window.location.reload(), reloadAt - new Date());
+  // NOTE: createdAt must be stored as a Number (Date.now()) — not serverTimestamp().
+  // If any code writes serverTimestamp(), this query will miss those orders.
   const ordersQuery = query(
     collection(db, "orders"),
     where("createdAt", ">=", startOfToday.getTime())
@@ -6871,27 +6874,7 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
   
   {role === "admin" && <ErrorBoundary key="admin"><AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={saveLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} /></ErrorBoundary>}
   
-  {/* 🆕 FALLBACK — agar role match nahi hua toh */}
-  {!["customer", "staff", "admin"].includes(role) && (
-    <div style={{ padding: 40, textAlign: "center", minHeight: "100vh" }}>
-      <div style={{ fontSize: 64, marginBottom: 20 }}>⚠️</div>
-      <h2 style={{ fontSize: 24, marginBottom: 12 }}>Role Error</h2>
-      <p style={{ fontSize: 14, color: "#8A8375", marginBottom: 20 }}>
-        Current role: <strong style={{ color: "#E25938" }}>{String(role)}</strong>
-      </p>
-      <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-        <button onClick={() => setRole("customer")} style={{ padding: "12px 24px", borderRadius: 12, background: "#E25938", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>
-          Customer View
-        </button>
-        <button onClick={() => setRole("staff")} style={{ padding: "12px 24px", borderRadius: 12, background: "#4A7C59", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>
-          Staff View
-        </button>
-        <button onClick={() => setRole("admin")} style={{ padding: "12px 24px", borderRadius: 12, background: "#1A1A1A", color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>
-          Admin View
-        </button>
-      </div>
-    </div>
-  )}
+  {/* (Removed unreachable fallback — role is always one of customer/staff/admin) */}
 </div>
         {showPinModal && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowPinModal(false)}>
