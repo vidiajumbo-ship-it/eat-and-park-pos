@@ -2154,17 +2154,11 @@ function POSController({ initialOrder, orders, menu, categories, viewMode, place
     setSaving(true);
     try {
       const wasDraft = !!billOrder.isDraft;
-      const saved = await saveBill(mode === "paid" ? { payStatus: "paid" } : {});
+      // Waiter mode: koi print nahi — sirf save / KOT kitchen ko
+      const saved = await saveBill({});
       if (!saved) return;
-      const snapshot = items;
-      const calcSnap = calc;
-      const opt = { payMode, showBillNo, notes, discPct };
-      if (mode === "paid" && saved.status === "ready") await advanceStatus(saved.id, "ready");
-      addDoc(collection(db, "auditLogs"), { orderId: saved.id, action: mode, by: (auth.currentUser && auth.currentUser.email) || "?", before: getOrderTotal(billOrder), after: saved.finalTotal, at: Date.now() }).catch(() => {});
+      addDoc(collection(db, "auditLogs"), { orderId: saved.id, action: "save", by: (auth.currentUser && auth.currentUser.email) || "?", before: getOrderTotal(billOrder), after: saved.finalTotal, at: Date.now() }).catch(() => {});
       onClose();
-      let delay = 200;
-      if ((wasDraft && sendKot) || saved._ranKot) { setTimeout(() => printKotSlipGlobal(saved), 200); delay = 1500; }
-      if (mode !== "save") setTimeout(() => printBillSlip(saved, snapshot, calcSnap, opt), delay);
     } finally { setSaving(false); }
   };
 
@@ -2180,6 +2174,7 @@ function POSController({ initialOrder, orders, menu, categories, viewMode, place
       discPct={discPct} setDiscPct={setDiscPct} payMode={payMode} setPayMode={setPayMode}
       payStatus={payStatus} setPayStatus={setPayStatus} notes={notes} setNotes={setNotes}
       showBillNo={showBillNo} setShowBillNo={setShowBillNo} saving={saving}
+      hidePrint
       onClose={onClose} onOpenOrder={load} onAction={onAction}
     />
   );
@@ -4218,9 +4213,11 @@ function BillPOSScreen(p) {
           )}
           <input placeholder="Notes..." value={p.notes} onChange={(e) => p.setNotes(e.target.value)} style={inp} />
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-          <input type="checkbox" checked={p.showBillNo} onChange={(e) => p.setShowBillNo(e.target.checked)} /> Bill #
-        </label>
+        {!p.hidePrint && (
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            <input type="checkbox" checked={p.showBillNo} onChange={(e) => p.setShowBillNo(e.target.checked)} /> Bill #
+          </label>
+        )}
         {isDraft && (
           <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
             <input type="checkbox" checked={p.sendKot} onChange={(e) => p.setSendKot(e.target.checked)} /> 🍳 Kitchen ko bhejo
@@ -4265,8 +4262,12 @@ function BillPOSScreen(p) {
             <button type="button" disabled={disabled} onClick={() => p.onAction("save")} style={footBtn("transparent", COLORS.sage, `2px solid ${COLORS.sage}`)}>
               {p.saving ? "⏳..." : (isDraft && p.sendKot ? "🍳 KOT" : "💾 Save")}
             </button>
-            <button type="button" disabled={disabled} onClick={() => p.onAction("print")} style={footBtn(COLORS.info, "#fff")}>🖨️ Print</button>
-            <button type="button" disabled={disabled} onClick={() => p.onAction("paid")} style={footBtn(COLORS.sage, "#fff")}>✓ Paid + Print</button>
+            {!p.hidePrint && (
+              <>
+                <button type="button" disabled={disabled} onClick={() => p.onAction("print")} style={footBtn(COLORS.info, "#fff")}>🖨️ Print</button>
+                <button type="button" disabled={disabled} onClick={() => p.onAction("paid")} style={footBtn(COLORS.sage, "#fff")}>✓ Paid + Print</button>
+              </>
+            )}
           </div>
         )}
 
