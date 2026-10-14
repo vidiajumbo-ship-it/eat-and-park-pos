@@ -2014,6 +2014,14 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [waiterEmail, setWaiterEmail] = useState("");
   const [waiterUnlocked, setWaiterUnlocked] = useState(false);
 
+useEffect(() => {
+  if (!showWaiterMode) return;
+  window.history.pushState({ w: 1 }, "");
+  const onPop = () => window.history.pushState({ w: 1 }, "");
+  window.addEventListener("popstate", onPop);
+  return () => window.removeEventListener("popstate", onPop);
+}, [showWaiterMode]);
+
   const filteredItems = useMemo(() => {
     let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
     items = items.filter((m) => {
