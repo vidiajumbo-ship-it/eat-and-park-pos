@@ -6369,7 +6369,25 @@ const OrderTimer = memo(({ createdAt, estimatedTime }) => {
 // 21. MAIN APP
 // ==
 
+let _anonInFlight = null;
+async function ensureUser() {
+  try { await Promise.race([authReady, new Promise((r) => setTimeout(r, 4000))]); } catch (e) {}
+  if (auth.currentUser) return auth.currentUser;
+  if (!_anonInFlight) {
+    _anonInFlight = (async () => {
+      let lastErr;
+      for (let i = 0; i < 3; i++) {
+        try { return (await signInAnonymously(auth)).user; }
+        catch (e) { lastErr = e; await new Promise((r) => setTimeout(r, 600 * (i + 1))); }
+      }
+      throw lastErr;
+    })().finally(() => { _anonInFlight = null; });
+  }
+  return _anonInFlight;
+}
+
 export default function App() {
+
   const [role, setRole] = useState("customer");
   const [authUser, setAuthUser] = useState(null);
   const [staffRole, setStaffRole] = useState(null); // admin | staff | waiter
@@ -6739,7 +6757,8 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
   const removeOffer = async (id) => { await saveOffers(offersList.filter(o => o.id !== id)); };
 
   const placeOrder = async (order) => {
-    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; const _u = await authReady; order.createdBy = (auth.currentUser && auth.currentUser.uid) || null; if (!order.createdBy) throw new Error("Login session nahi mili — page refresh karo"); await Promise.race([setDoc(doc(db, "orders", order.id), order), new Promise((r) => setTimeout(r, 8000))]);
+    try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; const _u = await ensureUser(); order.createdBy = _u.uid;
+ await Promise.race([setDoc(doc(db, "orders", order.id), order), new Promise((r) => setTimeout(r, 8000))]);
     setOrdersState(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]); } catch (e) {
       console.error("placeOrder failed:", e.code, e.message);
       if (e.code === "permission-denied") {
