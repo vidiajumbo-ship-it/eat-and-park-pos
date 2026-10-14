@@ -233,6 +233,21 @@ const runningPatch = (o, added) => {
 
 const patchAt = (list, idx, patch) => list.map((x, i) => (i === idx ? { ...x, ...patch } : x));
 
+// Agar bill khulne ke baad order me naya KOT/item aa gaya to save rok do
+async function guardedOrderUpdate(base, patch) {
+  const ref = doc(db, "orders", base.id);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Order nahi mila");
+    const cur = snap.data();
+    if ((cur.items || []).length !== (base.items || []).length || (cur.kots || []).length !== (base.kots || []).length) {
+      throw new Error("Ye order kisi aur ne abhi badla hai (naya KOT/item). Bill band karke dobara kholo.");
+    }
+    tx.update(ref, patch);
+  });
+}
+
+
 const DEMO_OTP = process.env.REACT_APP_DEMO_OTP === "true";
 function timeAgo(ts) { const s = Math.floor((Date.now() - ts) / 1000); if (s < 60) return s + "s ago"; const m = Math.floor(s / 60); if (m < 60) return m + "m ago"; return Math.floor(m / 60) + "h ago"; }
 function toLocalISODate(timestamp) { const d = new Date(timestamp); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]; }
@@ -991,7 +1006,8 @@ function AIOrderModal({ menu, onOrderParsed, onClose }) {
     try {
       const r = await fetch("/api/parse-order", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(auth.currentUser ? { Authorization: "Bearer " + (await auth.currentUser.getIdToken()) } : {}) },
+
         body: JSON.stringify({
           text,
           menu: (menu || [])
@@ -2137,7 +2153,8 @@ function POSController({ initialOrder, orders, menu, categories, viewMode, place
         clean.kots = JSON.parse(JSON.stringify([...getBaseKots(billOrder), runKot]));
         clean.status = "new";
         clean.lastKotAt = Date.now();
-        await updateDoc(doc(db, "orders", billOrder.id), clean);
+await guardedOrderUpdate(billOrder, clean);
+
         return { ...billOrder, ...clean, _ranKot: true };
       }
       await updateDoc(doc(db, "orders", billOrder.id), clean);
@@ -2373,7 +2390,8 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
     getDoc(doc(db, "loyaltyUsers", custPhone)).then((s) => { if (!off) setMyLoyalty(s.exists() ? s.data() : null); }).catch(() => {});
     return () => { off = true; };
   }, [custPhone]);
-  const activeUser = loyaltyUsers.find(u => u.phone === custPhone) || myLoyalty;
+  const activeUser = isLoggedIn ? (loyaltyUsers.find(u => u.phone === custPhone) || myLoyalty) : null;
+
   const currentCoins = activeUser ? activeUser.coins : 0;
   const loyaltyTier = getLoyaltyTier(currentCoins);
   const loyaltyDiscount = activeUser && appliedDiscount === 0 ? Math.round(loyaltyTier.discount * subtotal) : 0;
@@ -2415,7 +2433,8 @@ useEffect(() => {
     const _g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
     const savedCustomer = _g('eatpark_customer');
 
-    if (savedCustomer) { try { const data = JSON.parse(savedCustomer); if (data.name) setCustName(data.name); if (data.phone) setCustPhone(data.phone); if (data.address) setCustAddress(data.address); if (data.isLoggedIn) setIsLoggedIn(true); } catch (e) { } }
+    if (savedCustomer) { try { const data = JSON.parse(savedCustomer); if (data.name) setCustName(data.name); if (data.phone) setCustPhone(data.phone); if (data.address) setCustAddress(data.address); /* isLoggedIn localStorage se restore nahi hoga */
+ } catch (e) { } }
     const savedCart = _g('eatpark_cart');
 if (savedCart) {
   try {
@@ -2761,8 +2780,10 @@ const handleWaiterPinSubmitOld = () => {
         const userSnap = await getDoc(doc(db, "customers", phone));
         if (userSnap.exists()) {
           const data = userSnap.data();
-          setCustName(data.name || ""); setCustAddress(data.address || ""); setIsLoggedIn(true);
-          showToast(`👋 Welcome back ${data.name || 'Guest'}!`, 'success');
+          /* privacy: phone type karne se auto-fill / auto-login band */
+
+          /* welcome toast hata diya (naam leak hota tha) */
+
         }
       } catch (e) { }
     }
@@ -3530,7 +3551,8 @@ const handleWaiterPinSubmitOld = () => {
                 <QRCodeSVG value={window.location.href} size={100} />
                 <p style={{ fontSize: 11, color: COLORS.textLight, marginTop: 6 }}>📲 Scan to order</p>
               </div>
-              <SidebarBtn icon="💬" text="Chat with Restaurant" onClick={() => { setShowSidebar(false); setActiveOrderIdForChat(myActiveOrders[0]?.id || 'general'); setActiveModal('chat'); }} />
+              <SidebarBtn icon="💬" text="Chat with Restaurant" onClick={() => { setShowSidebar(false); setActiveOrderIdForChat(myActiveOrders[0]?.id || ('general_' + (custPhone || 'guest')));
+ setActiveModal('chat'); }} />
             </div>
           </div>
           <div style={{ flex: 1, background: "rgba(0,0,0,0.6)" }} onClick={() => setShowSidebar(false)} />
@@ -6851,7 +6873,8 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
       }
 
       if (paid) {
-        const earned = Math.floor((Number(order.finalTotal) || 0) / (Number(loyaltyRules?.rate) || 10));
+const earned = Math.floor(getOrderTotal(order) / (Number(loyaltyRules?.rate) || 10));
+
         const used = Math.max(0, Number(order.rewardUsedCoins) || 0);
         const phone = order.customer?.phone;
 
