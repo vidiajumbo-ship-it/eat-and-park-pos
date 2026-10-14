@@ -2311,6 +2311,15 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [runningOrderId, setRunningOrderId] = useState(null);
 
   cartRef.current = cart;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const visibleCategories = useMemo(
+    () => categories.filter((c) => !(settings?.hiddenCategories || []).includes(c)),
+    [categories, settings?.hiddenCategories]
+  );
+  useEffect(() => {
+    if (visibleCategories.length > 0 && !visibleCategories.includes(category)) setCategory(visibleCategories[0]);
+  }, [visibleCategories, category]);
   useEffect(() => () => clearTimeout(aiTimerRef.current), []);
  
   const [showWaiterMode, setShowWaiterMode] = useState(wasWaiterOpen);
@@ -2331,13 +2340,16 @@ useEffect(() => {
 }, [showWaiterMode]);
 
   const filteredItems = useMemo(() => {
-    let items = searchQuery.trim() ? menu : menu.filter((m) => m.category === category);
+    const _hid = settings?.hiddenCategories || [];
+    const _veg = !!settings?.vegMode;
+    const _vis = (m) => (!_veg || m.veg) && [m.category, ...(m.alsoIn || [])].some((c) => !_hid.includes(c));
+    let items = (searchQuery.trim() ? menu : menu.filter((m) => m.category === category || (m.alsoIn || []).includes(category))).filter(_vis);
     items = items.filter((m) => {
       if (vegOnly && !m.veg) return false;
 if (searchQuery.trim()) { const q = searchQuery.toLowerCase(); return (m.name || "").toLowerCase().includes(q) || (m.desc || "").toLowerCase().includes(q); }      return true;
     });
     return items;
-  }, [menu, category, searchQuery, vegOnly]);
+  }, [menu, category, searchQuery, vegOnly, settings]);
 
   let emptyReason = 'category_empty';
   if (vegOnly) emptyReason = 'veg_filtered';
@@ -2451,7 +2463,8 @@ if (savedCart) {
     const flashRow = flashSaleItems.find(f => f.active && f.id === id && f.stock != null && prevCart[id]?.priceOverride === f.discountPrice);
     if (flashRow && q > flashRow.stock) { showToast(`⚠️ Sirf ${flashRow.stock} bache hain`, 'warning'); return; }
     if (q > oldQty && q === 1) {
-      const options = getSmartSuggestionPool(menu, prevCart);
+      const _s = settingsRef.current || {};
+      const options = getSmartSuggestionPool(menu.filter((m) => (!_s.vegMode || m.veg) && !(_s.hiddenCategories || []).includes(m.category)), prevCart);
       if (options.length > 0) {
         setAiSuggestion(options[Math.floor(Math.random() * options.length)]);
         clearTimeout(aiTimerRef.current);
@@ -3160,7 +3173,7 @@ const handleWaiterPinSubmitOld = () => {
     borderBottom: `1px solid ${COLORS.line}`,
     scrollbarWidth: 'none'
   }}>
-    {categories.map((c) => {
+    {visibleCategories.map((c) => {
       const isActive = category === c;
       return (
         <button 
@@ -3827,7 +3840,7 @@ function BillPOSScreen(p) {
 
   const list = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (menu || []).filter((m) => m.available && (cat === "all" || m.category === cat) && (!q || String(m.name).toLowerCase().includes(q)));
+    return (menu || []).filter((m) => m.available && (cat === "all" || m.category === cat || (m.alsoIn || []).includes(cat)) && (!q || String(m.name).toLowerCase().includes(q)));
   }, [menu, cat, search]);
 
   const qtyOf = (id) => items.filter((it) => it.itemId === id).reduce((s, it) => s + (it.qty || 0), 0);
@@ -5249,6 +5262,29 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
   const [heroImgInput, setHeroImgInput] = useState(settings?.heroImage || "");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [newCategoryInput, setNewCategoryInput] = useState('');
+  const [manageCat, setManageCat] = useState(null);
+  const [manageSearch, setManageSearch] = useState("");
+  const hiddenCats = settings?.hiddenCategories || [];
+
+  const saveAppSetting = async (patch) => {
+    setSettings((prev) => ({ ...prev, ...patch }));
+    try { await setDoc(doc(db, "settings", "appSettings"), patch, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet check karo."); }
+  };
+  const toggleVegMode = () => saveAppSetting({ vegMode: !settings?.vegMode });
+  const toggleCategory = (c) => saveAppSetting({
+    hiddenCategories: hiddenCats.includes(c) ? hiddenCats.filter((x) => x !== c) : [...hiddenCats, c]
+  });
+  const toggleItemInCategory = async (itemId, cat) => {
+    const updatedMenu = menu.map((m) => {
+      if (m.id !== itemId || m.category === cat) return m;
+      const also = m.alsoIn || [];
+      return { ...m, alsoIn: also.includes(cat) ? also.filter((x) => x !== cat) : [...also, cat] };
+    });
+    setMenuState(updatedMenu);
+    try { await setDoc(doc(db, "settings", "menu"), { items: updatedMenu }); }
+    catch (e) { console.error(e); alert("⚠️ Menu save nahi hua. Internet check karo."); }
+  };
 
   const [histOrders, setHistOrders] = useState([]);
   useEffect(() => {
@@ -5611,6 +5647,15 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
       {tab === "menu" && (
         <>
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.vegMode ? COLORS.sageLight : '#fff', border: `1.5px solid ${settings?.vegMode ? COLORS.sage : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>🟢 Veg Mode</div>
+                <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>ON karne par customers ko sirf Veg items dikhenge (Staff / Waiter ko poora menu)</div>
+              </div>
+              <button onClick={toggleVegMode} style={{ background: settings?.vegMode ? COLORS.sage : COLORS.paper2, color: settings?.vegMode ? '#fff' : COLORS.ink, border: 'none', borderRadius: 20, padding: '10px 20px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                {settings?.vegMode ? '✅ ON' : '⚪ OFF'}
+              </button>
+            </div>
             <h3 style={{ marginTop: 0, marginBottom: 16 }}>📂 Categories</h3>
             <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
               <input type="text" placeholder="New category name" value={newCategoryInput} onChange={(e) => setNewCategoryInput(e.target.value)} style={inputStyle} />
@@ -5618,7 +5663,15 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
             </div>
             {categories.map((cat, index) => (
               <div key={cat} style={{ display: 'flex', justifyContent: 'space-between', background: '#fff', padding: '10px 16px', borderRadius: 10, marginBottom: 6 }}>
-                <span style={{ fontWeight: 700 }}>{index + 1}. {cat}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, opacity: hiddenCats.includes(cat) ? 0.5 : 1 }}>{index + 1}. {cat}</span>
+                  <button onClick={() => toggleCategory(cat)} style={{ padding: '4px 10px', borderRadius: 8, border: 'none', fontWeight: 800, fontSize: 12, cursor: 'pointer', background: hiddenCats.includes(cat) ? COLORS.error : COLORS.sage, color: '#fff' }}>
+                    {hiddenCats.includes(cat) ? '❌ OFF' : '✅ ON'}
+                  </button>
+                  <button onClick={() => { setManageCat(cat); setManageSearch(""); }} style={{ padding: '4px 10px', borderRadius: 8, border: `1.5px solid ${COLORS.info}`, background: 'transparent', color: COLORS.info, fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                    📋 Items ({menu.filter((m) => m.category === cat || (m.alsoIn || []).includes(cat)).length})
+                  </button>
+                </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button onClick={() => handleMoveCategory(index, -1)} disabled={index === 0} style={{ padding: '4px 10px', opacity: index === 0 ? 0.4 : 1 }}>⬆️</button>
                   <button onClick={() => handleMoveCategory(index, 1)} disabled={index === categories.length - 1} style={{ padding: '4px 10px', opacity: index === categories.length - 1 ? 0.4 : 1 }}>⬇️</button>
@@ -5652,6 +5705,38 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
               </div>
             </div>
           ))}
+
+          {manageCat && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99 }} onClick={() => setManageCat(null)}>
+              <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', padding: 20, borderRadius: 20, width: '92%', maxWidth: 480, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <h3 style={{ margin: 0 }}>📋 {manageCat}</h3>
+                  <button onClick={() => setManageCat(null)} style={{ background: 'rgba(0,0,0,0.05)', border: 'none', borderRadius: '50%', width: 32, height: 32, cursor: 'pointer', fontSize: 16 }}>✕</button>
+                </div>
+                <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 10 }}>Tick karo = item is category me bhi dikhega (original category me bhi rahega)</div>
+                <input placeholder="🔍 Menu me search..." value={manageSearch} onChange={(e) => setManageSearch(e.target.value)} style={{ ...inputStyle, marginBottom: 10, padding: '10px 14px', fontSize: 14 }} />
+                <div style={{ overflowY: 'auto', flex: 1, border: `1px solid ${COLORS.line}`, borderRadius: 12 }}>
+                  {menu
+                    .filter((m) => !manageSearch.trim() || m.name.toLowerCase().includes(manageSearch.toLowerCase()))
+                    .map((m) => {
+                      const own = m.category === manageCat;
+                      const checked = own || (m.alsoIn || []).includes(manageCat);
+                      return (
+                        <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderBottom: `1px solid ${COLORS.line}`, cursor: own ? 'default' : 'pointer', opacity: own ? 0.6 : 1 }}>
+                          <input type="checkbox" checked={checked} disabled={own} onChange={() => toggleItemInCategory(m.id, manageCat)} style={{ width: 18, height: 18 }} />
+                          <VegDot veg={m.veg} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700 }}>{m.name}{m.portion ? ` (${m.portion})` : ""}</div>
+                            <div style={{ fontSize: 11, color: COLORS.textLight }}>{m.category} · ₹{m.price}{own ? " · yahi original category" : ""}</div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                </div>
+                <button onClick={() => setManageCat(null)} style={{ ...primaryBtn, marginTop: 12, width: '100%' }}>✓ Done</button>
+              </div>
+            </div>
+          )}
 
           {editingItem && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99 }}>
@@ -6343,12 +6428,12 @@ export default function App() {
 
   const pinLock = usePinLockout();
   const validComboOffers = useMemo(
-    () => comboOffers.filter(c => c.items?.length && c.items.every(it => menu.some(m => m.id === it.id))),
-    [comboOffers, menu]
+    () => comboOffers.filter(c => c.items?.length && c.items.every(it => menu.some(m => m.id === it.id && (!settings.vegMode || m.veg)))),
+    [comboOffers, menu, settings.vegMode]
   );
   const validFlashSaleItems = useMemo(
-    () => flashSaleItems.filter(f => menu.some(m => m.id === f.id)),
-    [flashSaleItems, menu]
+    () => flashSaleItems.filter(f => menu.some(m => m.id === f.id && (!settings.vegMode || m.veg))),
+    [flashSaleItems, menu, settings.vegMode]
   );
 
   const requestPinPrompt = (target) => {
@@ -6433,6 +6518,21 @@ export default function App() {
     setCategories(newCategories);
     try { await setDoc(doc(db, "settings", "categories"), { categories: newCategories }); } catch (e) { console.error(e); }
   };
+
+  // 🟢 Live: Veg Mode / hidden categories turant customers ko dikhein
+  useEffect(() => {
+    let off = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (off) return;
+      unsub = onSnapshot(doc(db, "settings", "appSettings"), (snap) => {
+        if (!snap.exists()) return;
+        const { adminPin, staffPin, waiterPin, ...safe } = snap.data();
+        setSettings((prev) => ({ ...prev, ...safe }));
+      }, (e) => console.error("appSettings listener:", e));
+    }).catch(() => {});
+    return () => { off = true; unsub(); };
+  }, []);
 
   const loyaltyTimer = useRef(null);
   const saveLoyaltyRules = (rules) => {
