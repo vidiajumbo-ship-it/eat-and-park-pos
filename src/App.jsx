@@ -4344,6 +4344,22 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
   const [billSendKot, setBillSendKot] = useState(true);
   const [billSaving, setBillSaving] = useState(false);
 
+  // 📵 Kitchen screen band na ho
+  useEffect(() => {
+    let lock = null;
+    const getLock = async () => {
+      try { if ("wakeLock" in navigator) lock = await navigator.wakeLock.request("screen"); } catch (e) {}
+    };
+    getLock();
+    const onVis = () => { if (document.visibilityState === "visible") getLock(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      try { lock && lock.release(); } catch (e) {}
+    };
+  }, []);
+
+
   useEffect(() => {
     if (newOrderCount > prevCountRef.current) {
       playNotificationSound();
@@ -6402,7 +6418,13 @@ export default function App() {
     if (u && !u.isAnonymous) {
       try {
         const s = await getDoc(doc(db, "staff", u.uid));
-        setStaffRole(s.exists() ? (s.data().role || "staff") : null);
+        const _r = s.exists() ? (s.data().role || "staff") : null;
+        setStaffRole(_r);
+        try {
+          const saved = localStorage.getItem("eatpark_role");
+          if (_r && (saved === "staff" || (saved === "admin" && _r === "admin"))) setRole(saved);
+        } catch (e) {}
+
       } catch (e) { setStaffRole(null); }
     } else setStaffRole(null);
   }), []);
@@ -6459,12 +6481,14 @@ export default function App() {
 
   const requestPinPrompt = (target) => {
     if (target === "customer") {
-      setRole("customer");
+      setRole("customer"); try { localStorage.removeItem("eatpark_role"); } catch (e) {}
+
       setOrdersState([]); setLoyaltyUsers([]); setInventory([]); setCoinHistory([]); setBookings([]); setCalls([]);
       signOut(auth).catch(() => {});
       return;
     }
-    if (staffRole === "admin" || (target === "staff" && staffRole === "staff")) { setRole(target); return; }
+    if (staffRole === "admin" || (target === "staff" && staffRole === "staff")) { setRole(target); try { localStorage.setItem("eatpark_role", target); } catch (e) {} return; }
+
     setTargetRole(target); setShowPinModal(true); setPinInput("");
   };
 
@@ -6514,7 +6538,8 @@ export default function App() {
       }
 
       pinLock.reset();
-      setRole(targetRole);
+      setRole(targetRole); try { localStorage.setItem("eatpark_role", targetRole); } catch (e) {}
+
       setShowPinModal(false);
       setPinInput("");
       setEmailInput("");
@@ -6555,7 +6580,23 @@ export default function App() {
     return () => { off = true; unsub(); };
   }, []);
 
+  // 🟢 Live menu: rate / out-of-stock turant sabko dikhe
+  useEffect(() => {
+    let off = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (off) return;
+      unsub = onSnapshot(doc(db, "settings", "menu"), (snap) => {
+        if (!snap.exists()) return;
+        const items = snap.data().items;
+        if (Array.isArray(items) && items.length > 0) setMenuState(items.map(withDishImage));
+      }, (e) => console.error("menu listener:", e));
+    }).catch(() => {});
+    return () => { off = true; unsub(); };
+  }, []);
+
   const loyaltyTimer = useRef(null);
+
   const saveLoyaltyRules = (rules) => {
     setLoyaltyRules(rules);
     clearTimeout(loyaltyTimer.current);
