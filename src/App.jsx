@@ -2412,9 +2412,11 @@ useEffect(() => {
 }, []);
 
   useEffect(() => {
-    const savedCustomer = localStorage.getItem('eatpark_customer');
+    const _g = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const savedCustomer = _g('eatpark_customer');
+
     if (savedCustomer) { try { const data = JSON.parse(savedCustomer); if (data.name) setCustName(data.name); if (data.phone) setCustPhone(data.phone); if (data.address) setCustAddress(data.address); if (data.isLoggedIn) setIsLoggedIn(true); } catch (e) { } }
-    const savedCart = localStorage.getItem('eatpark_cart');
+    const savedCart = _g('eatpark_cart');
 if (savedCart) {
   try {
     const parsed = JSON.parse(savedCart);
@@ -2426,13 +2428,13 @@ if (savedCart) {
     setCart(migrated);
   } catch (e) {}
 }
-    const savedOrders = localStorage.getItem('eatpark_orders');
+    const savedOrders = _g('eatpark_orders');
     if (savedOrders) { try { const ordersData = JSON.parse(savedOrders); setMyOrderIds(ordersData.map(o => o.id)); } catch (e) { } }
     /* permission ab staff login par maangi jati hai */
   }, []);
 
   useEffect(() => {
-    if (custName || custPhone) localStorage.setItem('eatpark_customer', JSON.stringify({ name: custName, phone: custPhone, address: custAddress, isLoggedIn }));
+    if (custName || custPhone) safeSet('eatpark_customer', { name: custName, phone: custPhone, address: custAddress, isLoggedIn });
   }, [custName, custPhone, custAddress, isLoggedIn]);
 
   useEffect(() => {
@@ -3202,7 +3204,7 @@ const handleWaiterPinSubmitOld = () => {
             <div className={viewMode === "desktop" ? "desktop-menu" : ""} style={{ padding: "16px" }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
           <SearchBar value={searchQuery} onChange={setSearchQuery} />
-          <button type="button" onClick={() => setShowAiModal(true)} style={{ padding: "12px 12px", borderRadius: 10, background: COLORS.info, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
+          <button type="button" onClick={() => setShowAiModal(true)} style={{ display: "none", padding: "12px 12px", borderRadius: 10, background: COLORS.info, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
             🤖 AI
           </button>
           <button onClick={() => setVegOnly(!vegOnly)} style={{ padding: "12px 12px", borderRadius: 10, border: `1.5px solid ${vegOnly ? COLORS.sage : COLORS.line}`, background: vegOnly ? COLORS.sageLight : "transparent", color: vegOnly ? COLORS.sageDark : COLORS.textLight, fontWeight: 700, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
@@ -6640,7 +6642,8 @@ export default function App() {
       });
       
       // 🆕 Agar menu Firestore mein exist nahi karta
-      if (!menuFound) {
+      if (false && !menuFound) {
+
         console.log("📦 No menu in Firestore. Saving DEFAULT_MENU:", DEFAULT_MENU.length, "items");
         setDoc(doc(db, "settings", "menu"), { items: DEFAULT_MENU }).catch(console.error);
       }
@@ -6758,7 +6761,8 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
 
   const placeOrder = async (order) => {
     try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; const _u = await ensureUser(); order.createdBy = _u.uid;
- await Promise.race([setDoc(doc(db, "orders", order.id), order), new Promise((r) => setTimeout(r, 8000))]);
+ await Promise.race([setDoc(doc(db, "orders", order.id), order), new Promise((_, rej) => setTimeout(() => rej(new Error("Internet slow hai, order confirm nahi hua. Dobara try karo")), 15000))
+]);
     setOrdersState(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]); } catch (e) {
       console.error("placeOrder failed:", e.code, e.message);
       if (e.code === "permission-denied") {
