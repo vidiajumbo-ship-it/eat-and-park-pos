@@ -2554,7 +2554,7 @@ if (savedCart) {
       });
       const addedTotal = taggedItems.reduce((s, it) => s + it.price * it.qty, 0);
       const waText = `🍳 *RUNNING KOT* — Order #${orderId.slice(1, 5).toUpperCase()}\nTable ${tableNo}\n` + taggedItems.map(i => `• ${i.qty}x ${i.name}`).join("\n") + `\n\nAdditional: ₹${addedTotal}`;
-      window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
+      /* WhatsApp band */
       setRunningOrderId(null);
       showToast("🍳 New KOT sent to kitchen!", "success");
     } catch (e) { console.error(e); showToast("⚠️ Failed to add items", "error"); }
@@ -2575,8 +2575,7 @@ if (savedCart) {
       const addedTotal = taggedItems.reduce((s, it) => s + it.price * it.qty, 0);
       await updateDoc(doc(db, "orders", orderId), { kots: updatedKots, items: updatedItems, status: "new", lastKotAt: Date.now() });
       const waText = `🍳 *RUNNING KOT* — Order #${orderId.slice(1, 5).toUpperCase()}\nTable ${order.table}\n` + taggedItems.map(i => `• ${i.qty}x ${i.name}`).join("\n") + `\n\nAdditional: ₹${addedTotal}`;
-      window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
-      setRunningOrderId(null);
+/* WhatsApp band */      setRunningOrderId(null);
       showToast("🍳 New KOT sent to kitchen!", "success");
     } catch (e) { console.error(e); showToast("⚠️ Failed to add items", "error"); }
   }, [orders, showToast]);
@@ -2880,7 +2879,7 @@ const handleWaiterPinSubmitOld = () => {
       const waText = `🚨 *NEW ORDER* (#${orderId.slice(1, 5).toUpperCase()})\n\n*Type:* ${orderType === 'parcel' ? '🛍️ Parcel' : `🍽️ Table ${table}`}\n*Customer:* ${custName} (${custPhone})\n` + (orderType === 'parcel' ? `*Address:* ${custAddress}\n\n` : `\n`) + `*Items:* ${itemStrings}${claimedText}\n` + (appliedDiscount > 0 ? `*Coupon:* ${appliedDiscount}%\n` : ``) + (loyaltyDiscount > 0 ? `*Loyalty:* ${loyaltyTier.name}\n` : ``) + `*Total:* ₹${finalTotal}\n*Payment:* ${paymentMethod} (${paymentInfo.paid ? "PAID" : "PENDING"})\n` + scheduleText + (notes ? `\n*Notes:* ${notes}` : ``);
       const link = document.createElement('a');
       link.href = `https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`;
-      link.target = '_blank'; document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      /* WhatsApp band */
 
       playNotificationSound();
       sendPushNotification("🛎️ New Order", `Order #${orderId.slice(1, 5)} - ₹${finalTotal}`);
