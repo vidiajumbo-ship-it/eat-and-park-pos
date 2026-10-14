@@ -1959,10 +1959,320 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   );
 });
 // ==
+// 15.5 WAITER MODE (staff jaisa POS)
+// ==
+
+const WAITER_FLAG = "eatpark_waiter_open";
+const wasWaiterOpen = () => { try { return sessionStorage.getItem(WAITER_FLAG) === "1"; } catch (e) { return false; } };
+
+// KOT slip print (hidden iframe)
+function printKotSlipGlobal(order) {
+  try {
+    const kot = (order.kots && order.kots.length ? order.kots[order.kots.length - 1] : null) || { kotNumber: 1, items: order.items || [] };
+    const rows = (kot.items || []).map((it) => `<div class="r"><span>${it.qty} x ${escapeHtml(it.name)}${it.portion ? " (" + escapeHtml(it.portion) + ")" : ""}</span></div>`).join("");
+    const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+    document.body.appendChild(iframe);
+    const w = iframe.contentWindow;
+    setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 60000);
+    w.document.open();
+    w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:8px;font-weight:700}h2,h3{text-align:center;margin:3px 0}.r{font-size:17px;padding:4px 0;border-bottom:1px dashed #000}.c{text-align:center;font-size:12px}</style></head><body><h2>KOT #${kot.kotNumber || 1}${kot.isRunning ? " (RUNNING)" : ""}</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + escapeHtml(String(order.table))}</h3><div class="c">${escapeHtml(now)} · #${escapeHtml(order.id.slice(1, 5).toUpperCase())}${order.waiter ? " · " + escapeHtml(order.waiter) : ""}</div><div style="margin-top:8px">${rows}</div>${order.notes ? `<div class="c" style="margin-top:8px">Note: ${escapeHtml(order.notes)}</div>` : ""}</body></html>`);
+    w.document.close();
+    setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("⚠️ KOT print nahi ho paya: " + e.message); } }, 400);
+  } catch (e) { console.error("KOT print error:", e); }
+}
+
+// Final bill print
+function printBillSlip(order, items, calc, opt) {
+  if (!order) return;
+  const { sub, gstRate, gst, discPctAmt, discAmt, total } = calc;
+  const { payMode, showBillNo, notes, discPct } = opt;
+  const payLabel = { cash: "Cash", upi: "UPI", card: "Card", razorpay: "Razorpay", due: "Due (Udhaar)" }[payMode] || payMode;
+  const billNo = order.id.slice(1, 9).toUpperCase();
+  const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const itemsHtml = items.map((it) => `<tr><td style="text-align:left">${escapeHtml(it.name)}${it.portion ? ` <small>(${escapeHtml(it.portion)})</small>` : ""}</td><td style="text-align:center">${it.qty}</td><td style="text-align:right">₹${it.price}</td><td style="text-align:right">₹${Math.round(it.price * it.qty * 100) / 100}</td></tr>`).join("");
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  document.body.appendChild(iframe);
+  const w = iframe.contentWindow;
+  setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 60000);
+  w.document.open();
+  w.document.write(`<!doctype html><html><head><title>Bill ${billNo}</title><style>
+*{box-sizing:border-box;color:#000 !important}
+@page{margin:0}
+body{font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;padding:8px;width:290px;margin:0 auto}
+h2{text-align:center;margin:4px 0;font-size:24px;font-weight:900}
+.line{border-top:2px dashed #000;margin:8px 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:4px 2px}
+th{border-bottom:2px solid #000;text-align:left;font-size:13px}
+.grand td{font-size:20px;font-weight:900;border-top:3px solid #000;padding-top:8px}
+.center{text-align:center}
+.badge{display:inline-block;padding:3px 10px;border:2px solid #000;border-radius:10px;font-size:13px;margin:2px}
+</style></head><body>
+<h2>${escapeHtml(RESTAURANT.name)}</h2>
+<div class="center" style="font-size:10px">${escapeHtml(RESTAURANT.address)}</div>
+<div class="center" style="font-size:10px">Ph: ${RESTAURANT.phones.join(" / ")}</div>
+${RESTAURANT.gstin ? `<div class="center" style="font-size:10px">GSTIN: ${escapeHtml(RESTAURANT.gstin)}</div>` : ""}
+<div class="line"></div>
+<div style="display:flex;justify-content:space-between;font-size:11px">${showBillNo ? `<div>Bill #: ${billNo}</div>` : `<div>&nbsp;</div>`}<div>${order.orderType === "parcel" ? "PARCEL" : "T-" + escapeHtml(String(order.table))}</div></div>
+<div style="font-size:10px;text-align:center;margin-top:4px">${now}</div>
+${order.customer && order.customer.name && !isWalkIn(order.customer.name) ? `<div style="font-size:10px;margin-top:2px">Customer: ${escapeHtml(order.customer.name)}${order.customer.phone && !isWalkIn(order.customer.phone) ? " · " + escapeHtml(order.customer.phone) : ""}</div>` : ""}
+${order.waiter ? `<div style="font-size:10px;margin-top:4px">Waiter: ${escapeHtml(order.waiter)}</div>` : ""}
+<div class="line"></div>
+<table><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>${itemsHtml}</tbody></table>
+<div class="line"></div>
+<table>
+<tr><td>Subtotal</td><td style="text-align:right">₹${sub}</td></tr>
+${discPct > 0 ? `<tr><td>Discount (${discPct}%)</td><td style="text-align:right">-₹${discPctAmt}</td></tr>` : ""}
+${discAmt > 0 ? `<tr><td>Extra Discount</td><td style="text-align:right">-₹${discAmt}</td></tr>` : ""}
+${gstRate > 0 ? `<tr><td>CGST @ ${gstRate / 2}%</td><td style="text-align:right">+₹${Math.round(gst / 2)}</td></tr><tr><td>SGST @ ${gstRate / 2}%</td><td style="text-align:right">+₹${gst - Math.round(gst / 2)}</td></tr>` : ""}
+${calc.delivery > 0 ? `<tr><td>Delivery</td><td style="text-align:right">+₹${calc.delivery}</td></tr>` : ""}
+<tr class="grand"><td>GRAND TOTAL</td><td style="text-align:right">₹${total}</td></tr>
+</table>
+<div class="line"></div>
+<div class="center"><span class="badge">${payLabel}</span><span class="badge">${order.paymentStatus === "paid" ? "PAID" : "PENDING"}</span></div>
+${notes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #000;padding-top:6px"><b>Notes:</b> ${escapeHtml(notes)}</div>` : ""}
+<div class="center" style="font-size:10px;margin-top:10px">** Thank you! Visit again **<br/>${escapeHtml(RESTAURANT.tagline)}</div>
+</body></html>`);
+  w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("⚠️ Print nahi ho paya: " + e.message); } }, 400);
+}
+
+const deriveBill = (o) => ({
+  items: (o.items || []).map((it, i) => ({ ...it, _rowId: i + "_" + Math.random().toString(36).slice(2, 6) })),
+  gstRate: o.gstRate ?? 0,
+  disc: o.billEditedAt ? (o.billDiscount || 0) : (o.loyaltyDiscount || 0),
+  discPct: o.billEditedAt ? (o.billDiscountPct || 0) : (o.discount || 0),
+  payMode: o.payment || "cash",
+  payStatus: o.paid ? "paid" : "pending",
+  custName: isWalkIn(o.customer?.name) ? "" : (o.customer?.name || ""),
+  custPhone: isWalkIn(o.customer?.phone) ? "" : (o.customer?.phone || ""),
+  gstin: o.customerGstin || "",
+  notes: o.notes || "",
+  table: Number(o.table) || 1,
+  orderType: o.orderType || "dine_in",
+  waiter: o.waiter || "",
+  sendKot: !!o.isDraft
+});
+
+// Staff wale POS ka hi logic — waiter ke liye
+function POSController({ initialOrder, orders, menu, categories, viewMode, placeOrder, advanceStatus, setMenuState, onClose }) {
+  const [init] = useState(() => deriveBill(initialOrder));
+  const [billOrder, setBillOrder] = useState(initialOrder);
+  const [items, setItems] = useState(init.items);
+  const [gstRate, setGstRate] = useState(init.gstRate);
+  const [gstCustom, setGstCustom] = useState("");
+  const [disc, setDisc] = useState(init.disc);
+  const [discPct, setDiscPct] = useState(init.discPct);
+  const [payMode, setPayMode] = useState(init.payMode);
+  const [payStatus, setPayStatus] = useState(init.payStatus);
+  const [custName, setCustName] = useState(init.custName);
+  const [custPhone, setCustPhone] = useState(init.custPhone);
+  const [gstin, setGstin] = useState(init.gstin);
+  const [notes, setNotes] = useState(init.notes);
+  const [showBillNo, setShowBillNo] = useState(true);
+  const [table, setTable] = useState(init.table);
+  const [orderType, setOrderType] = useState(init.orderType);
+  const [waiter, setWaiter] = useState(init.waiter);
+  const [sendKot, setSendKot] = useState(init.sendKot);
+  const [saving, setSaving] = useState(false);
+
+  // Dusra order kholna ho (table clash pe "Wahi kholo")
+  const load = (o) => {
+    const d = deriveBill(o);
+    setBillOrder(o); setItems(d.items); setGstRate(d.gstRate); setGstCustom("");
+    setDisc(d.disc); setDiscPct(d.discPct); setPayMode(d.payMode); setPayStatus(d.payStatus);
+    setCustName(d.custName); setCustPhone(d.custPhone); setGstin(d.gstin); setNotes(d.notes);
+    setTable(d.table); setOrderType(d.orderType); setWaiter(d.waiter); setSendKot(d.sendKot);
+  };
+
+  const calc = useMemo(() => {
+    const sub = Math.round(items.reduce((s, it) => s + (it.price || 0) * (it.qty || 0), 0));
+    const gr = gstRate === "custom" ? Number(gstCustom) || 0 : Number(gstRate) || 0;
+    const discPctAmt = Math.round((sub * discPct) / 100);
+    const afterPct = sub - discPctAmt;
+    const gst = Math.round((afterPct * gr) / 100);
+    const delivery = Number(billOrder.deliveryFee) || 0;
+    const total = Math.max(0, afterPct - disc) + gst + delivery;
+    return { sub, gstRate: gr, gst, discPctAmt, discAmt: disc, total, delivery };
+  }, [billOrder, items, gstRate, gstCustom, disc, discPct]);
+
+  const saveBill = async (override = {}) => {
+    try {
+      const { sub, gstRate: gr, gst, discPctAmt, discAmt, total } = calc;
+      const updated = {
+        items: items.map(({ _rowId, _new, ...rest }) => (!billOrder.isDraft && _new ? { ...rest, kotNumber: getNextKotNo(billOrder) } : rest)),
+        subtotal: sub, gstRate: gr, gstAmount: gst,
+        billDiscount: discAmt, billDiscountPct: discPct, billDiscountAmt: discPctAmt,
+        finalTotal: total, payment: payMode,
+        paid: (override.payStatus ?? payStatus) === "paid",
+        paymentStatus: override.payStatus ?? payStatus,
+        customer: { ...(billOrder.customer || {}), name: custName || "Walk-in", phone: custPhone || "WALK-IN" },
+        customerGstin: gstin || "", notes,
+        billEditedAt: Date.now(),
+        billEditedBy: (auth.currentUser && auth.currentUser.email) || "waiter"
+      };
+      const clean = JSON.parse(JSON.stringify(updated));
+      if (billOrder.isDraft) {
+        const { isDraft, ...base } = billOrder;
+        const kotItems = clean.items.map((it) => ({ ...it, kotNumber: 1 }));
+        const fullOrder = JSON.parse(JSON.stringify({
+          ...base, ...clean,
+          table: orderType === "parcel" ? 0 : table,
+          orderType, waiter: waiter || "Staff", items: kotItems,
+          kots: sendKot ? [{ id: uid("kot"), kotNumber: 1, items: kotItems, createdAt: Date.now(), status: "new", isRunning: false }] : [],
+          status: sendKot ? "new" : "served",
+          ...(sendKot ? {} : { servedAt: Date.now() })
+        }));
+        await placeOrder(fullOrder);
+        return fullOrder;
+      }
+      const addedRows = items.filter((it) => it._new && (it.qty || 0) > 0);
+      if (addedRows.length > 0) {
+        const no = getNextKotNo(billOrder);
+        const runKot = { id: uid("kot"), kotNumber: no, items: addedRows.map(({ _rowId, _new, ...r }) => ({ ...r, kotNumber: no })), createdAt: Date.now(), status: "new", isRunning: true };
+        clean.kots = JSON.parse(JSON.stringify([...getBaseKots(billOrder), runKot]));
+        clean.status = "new";
+        clean.lastKotAt = Date.now();
+        await updateDoc(doc(db, "orders", billOrder.id), clean);
+        return { ...billOrder, ...clean, _ranKot: true };
+      }
+      await updateDoc(doc(db, "orders", billOrder.id), clean);
+      return { ...billOrder, ...updated };
+    } catch (e) {
+      console.error("waiter saveBill error:", e);
+      alert("⚠️ Save fail: " + e.message);
+      return null;
+    }
+  };
+
+  const onAction = async (mode) => {
+    if (saving) return;
+    if (items.length === 0) { alert("⚠️ Pehle items add karo"); return; }
+    setSaving(true);
+    try {
+      const wasDraft = !!billOrder.isDraft;
+      const saved = await saveBill(mode === "paid" ? { payStatus: "paid" } : {});
+      if (!saved) return;
+      const snapshot = items;
+      const calcSnap = calc;
+      const opt = { payMode, showBillNo, notes, discPct };
+      if (mode === "paid" && saved.status === "ready") await advanceStatus(saved.id, "ready");
+      addDoc(collection(db, "auditLogs"), { orderId: saved.id, action: mode, by: (auth.currentUser && auth.currentUser.email) || "?", before: getOrderTotal(billOrder), after: saved.finalTotal, at: Date.now() }).catch(() => {});
+      onClose();
+      let delay = 200;
+      if ((wasDraft && sendKot) || saved._ranKot) { setTimeout(() => printKotSlipGlobal(saved), 200); delay = 1500; }
+      if (mode !== "save") setTimeout(() => printBillSlip(saved, snapshot, calcSnap, opt), delay);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <BillPOSScreen
+      order={billOrder} orders={orders} menu={menu} categories={categories} viewMode={viewMode} setMenuState={setMenuState}
+      items={items} setItems={setItems} calc={calc}
+      orderType={orderType} setOrderType={setOrderType} table={table} setTable={setTable}
+      waiter={waiter} setWaiter={setWaiter} sendKot={sendKot} setSendKot={setSendKot}
+      custName={custName} setCustName={setCustName} custPhone={custPhone} setCustPhone={setCustPhone}
+      gstin={gstin} setGstin={setGstin} gstRate={gstRate} setGstRate={setGstRate}
+      gstCustom={gstCustom} setGstCustom={setGstCustom} disc={disc} setDisc={setDisc}
+      discPct={discPct} setDiscPct={setDiscPct} payMode={payMode} setPayMode={setPayMode}
+      payStatus={payStatus} setPayStatus={setPayStatus} notes={notes} setNotes={setNotes}
+      showBillNo={showBillNo} setShowBillNo={setShowBillNo} saving={saving}
+      onClose={onClose} onOpenOrder={load} onAction={onAction}
+    />
+  );
+}
+
+// 🧑‍🍳 Waiter Mode — fullscreen, back dabane pe band nahi hota
+function WaiterMode({ orders, menu, categories, setMenuState, placeOrder, advanceStatus, onClose }) {
+  useLiveNow(30000);
+  const [viewMode] = useViewMode();
+  const [target, setTarget] = useState(null);
+
+  // 🔙 Back button block — sirf ✕ Exit se band hoga
+  useEffect(() => {
+    window.history.pushState({ eatparkWaiter: true }, "");
+    const onPop = () => window.history.pushState({ eatparkWaiter: true }, "");
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const active = useMemo(
+    () => (orders || []).filter((o) => o.status !== "cancelled" && o.status !== "served").sort((a, b) => b.createdAt - a.createdAt),
+    [orders]
+  );
+
+  const openNew = (t) => setTarget({
+    id: uid("o"), isDraft: true,
+    table: Number(t) || 1, orderType: "dine_in",
+    customer: { name: "Walk-in", phone: "WALK-IN", address: "" },
+    items: [], kots: [], waiter: "", takenBy: "waiter",
+    notes: "", payment: "cash", paymentStatus: "pending", paid: false,
+    status: "new", createdAt: Date.now(),
+    coinsClaimed: true, earnedCoins: 0, rewardUsedCoins: 0,
+    deliveryFee: 0, loyaltyDiscount: 0, discount: 0
+  });
+
+  const exit = () => { if (window.confirm("Waiter Mode band karna hai?")) onClose(); };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 85, background: COLORS.paper, overflowY: "auto", colorScheme: "light" }}>
+      <div style={{ maxWidth: viewMode === "desktop" ? 1100 : 560, margin: "0 auto", padding: "0 12px 40px" }}>
+        <div style={{ position: "sticky", top: 0, zIndex: 5, background: COLORS.paper, padding: "12px 0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, borderBottom: `1px solid ${COLORS.line}`, marginBottom: 12 }}>
+          <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800 }}>🧑‍🍳 Waiter Mode</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => openNew()} style={{ background: COLORS.sage, color: "#fff", border: "none", borderRadius: 12, padding: "10px 14px", fontWeight: 800, cursor: "pointer", fontSize: 14 }}>➕ New Order</button>
+            <button onClick={exit} style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 12, padding: "10px 14px", fontWeight: 800, cursor: "pointer", fontSize: 14 }}>✕ Exit</button>
+          </div>
+        </div>
+
+        <div style={{ fontSize: 12, color: COLORS.textLight, fontWeight: 600, marginBottom: 8 }}>👆 Table pe tap = uska bill / aur items · Khali table pe tap = naya order</div>
+        <TableStatusBoard orders={orders} tables={12} compact showStats onTableClick={(o) => setTarget(o)} onEmptyTableClick={(t) => openNew(t)} />
+
+        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 16, fontWeight: 800, margin: "18px 0 10px" }}>🔥 Chal rahe orders ({active.length})</div>
+        {active.length === 0 && <div style={{ textAlign: "center", padding: 24, color: COLORS.textLight, fontSize: 13 }}>Koi active order nahi</div>}
+        <div style={{ display: "grid", gridTemplateColumns: viewMode === "desktop" ? "repeat(2, 1fr)" : "1fr", gap: 10 }}>
+          {active.map((o) => (
+            <button key={o.id} onClick={() => setTarget(o)} style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 14, padding: 12, textAlign: "left", cursor: "pointer", fontFamily: "inherit", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>
+                  {o.orderType === "parcel" ? "🛍️ Parcel" : `🍽️ Table ${o.table}`}
+                  <span style={{ marginLeft: 6, fontSize: 11, color: COLORS.textLight, fontWeight: 600 }}>#{o.id.slice(1, 5).toUpperCase()}</span>
+                  <KotBadge kots={o.kots} />
+                </div>
+                <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 3 }}>
+                  {o.waiter ? `🧑‍🍳 ${o.waiter} · ` : ""}{o.items.length} item{o.items.length !== 1 ? "s" : ""} · {timeAgo(o.createdAt)}
+                </div>
+                <div style={{ fontSize: 11, marginTop: 3, fontWeight: 800, color: STATUS_COLOR[o.status] }}>{STATUS_LABEL[o.status]}</div>
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, color: COLORS.copper, fontSize: 16 }}>{inr(getOrderTotal(o))}</div>
+                <div style={{ marginTop: 4, background: COLORS.info, color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 800 }}>🧾 Bill / ➕</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {target && (
+        <POSController
+          key={target.id}
+          initialOrder={target}
+          orders={orders} menu={menu} categories={categories} viewMode={viewMode}
+          placeOrder={placeOrder} advanceStatus={advanceStatus} setMenuState={setMenuState}
+          onClose={() => setTarget(null)}
+        />
+      )}
+    </div>
+  );
+}
+// ==
 // 16. CUSTOMER VIEW
 // ==
 
-function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState, setLoyaltyRules }) {
+function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState, setLoyaltyRules, advanceStatus }) {
   const [category, setCategory] = useState(categories[0] || "Thali");
   const [viewMode, setViewMode] = useViewMode();
   const cartRef = useRef({});
@@ -2008,11 +2318,14 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   cartRef.current = cart;
   useEffect(() => () => clearTimeout(aiTimerRef.current), []);
  
-  const [showWaiterMode, setShowWaiterMode] = useState(false);
+  const [showWaiterMode, setShowWaiterMode] = useState(wasWaiterOpen);
     const [showWaiterPinModal, setShowWaiterPinModal] = useState(false);
   const [waiterPinInput, setWaiterPinInput] = useState("");
   const [waiterEmail, setWaiterEmail] = useState("");
-  const [waiterUnlocked, setWaiterUnlocked] = useState(false);
+  useEffect(() => {
+  try { sessionStorage.setItem(WAITER_FLAG, showWaiterMode ? "1" : "0"); } catch (e) {}
+}, [showWaiterMode]);
+  const [waiterUnlocked, setWaiterUnlocked] = useState(wasWaiterOpen);
 
 useEffect(() => {
   if (!showWaiterMode) return;
@@ -3395,19 +3708,14 @@ const handleWaiterPinSubmitOld = () => {
       )}
 
             {showWaiterMode && (
-  <WaiterOrderPanel
-    menu={menu}
+  <WaiterMode
     orders={orders}
-    table={table}
-    setTable={setTable}
-    onSubmit={handleWaiterOrder}
-    onClose={() => setShowWaiterMode(false)}
-    onAddMoreItems={(orderId) => {
-      setShowWaiterMode(false);
-      setRunningOrderId(orderId);
-    }}
-    setMenuState={setMenuState}
+    menu={menu}
     categories={categories}
+    setMenuState={setMenuState}
+    placeOrder={placeOrder}
+    advanceStatus={advanceStatus}
+    onClose={() => setShowWaiterMode(false)}
   />
 )}
       {showWaiterPinModal && (
@@ -3702,21 +4010,21 @@ function BillPOSScreen(p) {
     ? (orders || []).find((o) => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled" && Number(o.table) === Number(p.table))
     : null;
 
-    const inp = { padding: "8px 10px", border: `1.5px solid ${COLORS.line}`, borderRadius: 8, fontSize: isDesktop ? 13 : 16, width: "100%", boxSizing: "border-box", fontFamily: "inherit", minWidth: 0, background: "#fff", color: COLORS.ink, colorScheme: "light" };
+    const inp = { padding: isDesktop ? "8px 10px" : "11px 12px", border: `1.5px solid ${COLORS.line}`, borderRadius: 8, fontSize: isDesktop ? 13 : 16, width: "100%", boxSizing: "border-box", fontFamily: "inherit", minWidth: 0, background: "#fff", color: COLORS.ink, colorScheme: "light" };
 
-  const chip = (on, color = COLORS.copper) => ({ padding: "5px 10px", borderRadius: 8, border: `1.5px solid ${on ? color : COLORS.line}`, background: on ? color : "#fff", color: on ? "#fff" : COLORS.text, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" });
-  const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: 34 };
+  const chip = (on, color = COLORS.copper) => ({ padding: isDesktop ? "5px 10px" : "9px 13px", borderRadius: 8, border: `1.5px solid ${on ? color : COLORS.line}`, background: on ? color : "#fff", color: on ? "#fff" : COLORS.text, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" });
+  const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: isDesktop ? 34 : "100%" };
   const disabled = p.saving || items.length === 0;
-  const footBtn = (bg, color, border) => ({ flex: 1, padding: "12px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 14, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
+  const footBtn = (bg, color, border) => ({ flex: 1, padding: isDesktop ? "12px 6px" : "14px 4px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 14, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
   const actBtn = (bg, color, border) => ({ display: "none", flex: 1, padding: "11px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
-  const qtyBtn = { width: 24, height: 24, border: "none", background: "transparent", color: COLORS.sage, fontSize: 16, fontWeight: 800, cursor: "pointer", padding: 0 };
+  const qtyBtn = { width: isDesktop ? 24 : 28, height: isDesktop ? 24 : 28, border: "none", background: "transparent", color: COLORS.sage, fontSize: 16, fontWeight: 800, cursor: "pointer", padding: 0 };
 
   const menuPane = (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
       <div style={{ display: "flex", gap: 6 }}>
         <input placeholder="🔍 Item search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...inp, flex: 1, width: "auto" }} />
-                <button type="button" onClick={() => setShowNew(true)} style={{ ...chip(true, COLORS.sage), padding: "7px 12px" }}>➕ New Item</button>
-        <button type="button" onClick={() => { setAiOpen(true); setAiErr(""); setAiRes(null); }} style={{ ...chip(true, COLORS.info), padding: "7px 12px" }}>🤖 AI</button>
+                <button type="button" onClick={() => setShowNew(true)} style={{ ...chip(true, COLORS.sage), padding: "9px 12px" }}>{isDesktop ? "➕ New Item" : "➕ Item"}</button>
+        <button type="button" onClick={() => { setAiOpen(true); setAiErr(""); setAiRes(null); }} style={{ ...chip(true, COLORS.info), padding: "9px 12px" }}>{isDesktop ? "🤖 AI" : "🤖"}</button>
 
       </div>
             {aiOpen && (
@@ -3785,7 +4093,7 @@ function BillPOSScreen(p) {
         {list.map((m) => {
           const q = qtyOf(m.id);
           return (
-            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "6px 8px", borderRadius: 8, border: `1.5px solid ${q > 0 ? COLORS.sage : COLORS.line}`, background: q > 0 ? COLORS.sageLight : "#fff", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: 52 }}>
+            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "6px 8px", borderRadius: 8, border: `1.5px solid ${q > 0 ? COLORS.sage : COLORS.line}`, background: q > 0 ? COLORS.sageLight : "#fff", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isDesktop ? 52 : 68 }}>
               <div style={{ display: "flex", gap: 5, alignItems: "flex-start" }}>
                 <VegDot veg={m.veg} />
                 <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2, color: COLORS.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{m.name}</span>
@@ -3802,7 +4110,7 @@ function BillPOSScreen(p) {
   );
 
   const billPane = (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%", overflowY: isDesktop ? "auto" : "visible" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, height: isDesktop ? "100%" : "auto", overflowY: isDesktop ? "auto" : "visible" }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         {isDraft ? (
           <>
@@ -3847,7 +4155,7 @@ function BillPOSScreen(p) {
         <input placeholder="GSTIN" value={p.gstin} onChange={(e) => p.setGstin(e.target.value.toUpperCase())} style={inp} />
       </div>
 
-      <div style={{ flex: 1, minHeight: 80, overflowY: "auto", border: `1px solid ${COLORS.line}`, borderRadius: 10, background: "#fff" }}>
+      <div style={{ flex: isDesktop ? 1 : "none", minHeight: 80, overflowY: isDesktop ? "auto" : "visible", border: `1px solid ${COLORS.line}`, borderRadius: 10, background: "#fff" }}>
         {items.length === 0 && <div style={{ textAlign: "center", padding: 16, color: COLORS.textLight, fontSize: 12 }}>Menu se item tap karo ➕</div>}
         {items.map((it) => (
           <div key={it._rowId} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderBottom: `1px solid ${COLORS.line}` }}>
@@ -3946,7 +4254,7 @@ function BillPOSScreen(p) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", zIndex: 200, display: "flex", alignItems: isDesktop ? "center" : "flex-end", justifyContent: "center" }} onClick={p.onClose}>
       <div onClick={(e) => e.stopPropagation()} className="slide-up"
        style={{ background: "#fff", colorScheme: "light", width: isDesktop ? "min(1200px, 97vw)" : "100%",
- maxWidth: isDesktop ? 1200 : 560, height: isDesktop ? "92vh" : "96vh", borderRadius: isDesktop ? 18 : "20px 20px 0 0", padding: 12, display: "flex", flexDirection: "column", boxSizing: "border-box", gap: 8 }}>
+ maxWidth: isDesktop ? 1200 : 560, height: isDesktop ? "92vh" : "95dvh", borderRadius: isDesktop ? 18 : "20px 20px 0 0", padding: isDesktop ? 12 : "10px 10px calc(10px + env(safe-area-inset-bottom, 0px))", display: "flex", flexDirection: "column", boxSizing: "border-box", gap: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>🧾 {isDraft ? "New Order + Bill" : "Order Bill"}</div>
           <button type="button" onClick={p.onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 30, height: 30, fontSize: 14, cursor: "pointer" }}>✕</button>
@@ -6457,7 +6765,7 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
         <div className="app-content">
   
   
-  {role === "customer" && <ErrorBoundary key="cust"><CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} setLoyaltyRules={saveLoyaltyRules} /></ErrorBoundary>}
+  {role === "customer" && <ErrorBoundary key="cust"><CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} setLoyaltyRules={saveLoyaltyRules} advanceStatus={advanceStatus} /></ErrorBoundary>}
   
   {role === "staff" && <ErrorBoundary key="staff"><StaffView menu={menu} orders={orders} placeOrder={placeOrder} categories={categories} setMenuState={setMenuState} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} /></ErrorBoundary>}
   
