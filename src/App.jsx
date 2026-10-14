@@ -4010,12 +4010,12 @@ function BillPOSScreen(p) {
     ? (orders || []).find((o) => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled" && Number(o.table) === Number(p.table))
     : null;
 
-    const inp = { padding: isDesktop ? "8px 10px" : "11px 12px", border: `1.5px solid ${COLORS.line}`, borderRadius: 8, fontSize: isDesktop ? 13 : 16, width: "100%", boxSizing: "border-box", fontFamily: "inherit", minWidth: 0, background: "#fff", color: COLORS.ink, colorScheme: "light" };
+    const inp = { padding: isDesktop ? "8px 10px" : "8px 8px", border: `1.5px solid ${COLORS.line}`, borderRadius: 8, fontSize: isDesktop ? 13 : 16, width: "100%", boxSizing: "border-box", fontFamily: "inherit", minWidth: 0, background: "#fff", color: COLORS.ink, colorScheme: "light" };
 
-  const chip = (on, color = COLORS.copper) => ({ padding: isDesktop ? "5px 10px" : "9px 13px", borderRadius: 8, border: `1.5px solid ${on ? color : COLORS.line}`, background: on ? color : "#fff", color: on ? "#fff" : COLORS.text, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" });
-  const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: isDesktop ? 34 : "100%" };
+  const chip = (on, color = COLORS.copper) => ({ padding: isDesktop ? "5px 10px" : "6px 9px", borderRadius: 8, border: `1.5px solid ${on ? color : COLORS.line}`, background: on ? color : "#fff", color: on ? "#fff" : COLORS.text, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" });
+  const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: isDesktop ? 34 : 30 };
   const disabled = p.saving || items.length === 0;
-  const footBtn = (bg, color, border) => ({ flex: 1, padding: isDesktop ? "12px 6px" : "14px 4px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 14, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
+  const footBtn = (bg, color, border) => ({ flex: 1, padding: isDesktop ? "12px 6px" : "9px 4px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 14, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
   const actBtn = (bg, color, border) => ({ display: "none", flex: 1, padding: "11px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
   const qtyBtn = { width: isDesktop ? 24 : 28, height: isDesktop ? 24 : 28, border: "none", background: "transparent", color: COLORS.sage, fontSize: 16, fontWeight: 800, cursor: "pointer", padding: 0 };
 
@@ -4110,7 +4110,7 @@ function BillPOSScreen(p) {
   );
 
   const billPane = (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, height: isDesktop ? "100%" : "auto", overflowY: isDesktop ? "auto" : "visible" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: isDesktop ? 8 : 6, minHeight: 0, height: isDesktop ? "100%" : "auto", overflowY: isDesktop ? "auto" : "visible" }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         {isDraft ? (
           <>
@@ -4121,7 +4121,7 @@ function BillPOSScreen(p) {
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>T-{n}</option>)}
               </select>
             )}
-            <select value={p.waiter} onChange={(e) => p.setWaiter(e.target.value)} style={{ ...inp, flex: isDesktop ? 1 : "1 1 100%", minWidth: 90, width: "auto", background: "#fff" }}>
+            <select value={p.waiter} onChange={(e) => p.setWaiter(e.target.value)} style={{ ...inp, flex: 1, minWidth: 90, width: "auto", background: "#fff" }}>
 
               <option value="">🧑‍🍳 Waiter chuno</option>
               {p.waiter && !waiterNames.includes(p.waiter) && <option value={p.waiter}>{p.waiter}</option>}
@@ -4148,14 +4148,14 @@ function BillPOSScreen(p) {
           {(presets.customers || []).map((c, i) => <option key={i} value={i}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}
         </select>
       )}
-           <div style={{ display: "grid", gridTemplateColumns: isDesktop ? "1.2fr 1fr 1fr" : "1fr 1fr", gap: 6 }}>
-        <input placeholder="Customer" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={{ ...inp, ...(isDesktop ? {} : { gridColumn: "1 / -1" }) }} />
+           <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6 }}>
+        <input placeholder="Customer" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={inp} />
 
         <input placeholder="Phone" value={p.custPhone} onChange={(e) => p.setCustPhone(e.target.value)} style={inp} />
         <input placeholder="GSTIN" value={p.gstin} onChange={(e) => p.setGstin(e.target.value.toUpperCase())} style={inp} />
       </div>
 
-      <div style={{ flex: isDesktop ? 1 : "none", minHeight: 80, overflowY: isDesktop ? "auto" : "visible", border: `1px solid ${COLORS.line}`, borderRadius: 10, background: "#fff" }}>
+      <div style={{ flex: isDesktop ? 1 : "none", minHeight: 80, maxHeight: isDesktop ? "none" : "34dvh", overflowY: "auto", border: `1px solid ${COLORS.line}`, borderRadius: 10, background: "#fff" }}>
         {items.length === 0 && <div style={{ textAlign: "center", padding: 16, color: COLORS.textLight, fontSize: 12 }}>Menu se item tap karo ➕</div>}
         {items.map((it) => (
           <div key={it._rowId} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", borderBottom: `1px solid ${COLORS.line}` }}>
@@ -4200,7 +4200,7 @@ function BillPOSScreen(p) {
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         <span style={lbl}>Pay</span>
-        {[["cash", "💵 Cash"], ["upi", "📱 UPI"], ["card", "💳 Card"], ["razorpay", "⚡ Razorpay"], ["due", "⏳ Due"]].map(([id, label]) => (
+        {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["razorpay", "Razor"], ["due", "Due"]].map(([id, label]) => (
           <button key={id} type="button" onClick={() => p.setPayMode(id)} style={chip(p.payMode === id)}>{label}</button>
         ))}
         <button type="button" onClick={() => p.setPayStatus(p.payStatus === "paid" ? "pending" : "paid")} style={chip(true, p.payStatus === "paid" ? COLORS.success : COLORS.warning)}>
