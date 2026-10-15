@@ -4441,6 +4441,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
     setBillEditItems(
       order.items.map((it, i) => ({
         ...it,
+        _origQty: it.qty,
         _rowId: i + "_" + Math.random().toString(36).slice(2, 6),
       }))
     );
@@ -4551,7 +4552,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
     try {
       const { sub, gstRate, gst, discPctAmt, discAmt, total } = billCalc;
       const updated = {
-        items: billEditItems.map(({ _rowId, _new, ...rest }) => (!billOrder.isDraft && _new ? { ...rest, kotNumber: getNextKotNo(billOrder) } : rest)),
+        items: billEditItems.map(({ _rowId, _new, _origQty, ...rest }) => (!billOrder.isDraft && _new ? { ...rest, kotNumber: getNextKotNo(billOrder) } : rest)),
         subtotal: sub,
         gstRate,
         gstAmount: gst,
@@ -4589,12 +4590,16 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
         await placeOrder(fullOrder);
         return fullOrder;
       }
-      const addedRows = billEditItems.filter((it) => it._new && (it.qty || 0) > 0);
+      const addedRows = billEditItems.map((it) => {
+        if (it._new) return (it.qty || 0) > 0 ? it : null;
+        const extra = (it.qty || 0) - (it._origQty ?? it.qty);
+        return extra > 0 ? { ...it, qty: extra } : null;
+      }).filter(Boolean);
       if (addedRows.length > 0) {
         const no = getNextKotNo(billOrder);
         const runKot = {
           id: uid("kot"), kotNumber: no,
-          items: addedRows.map(({ _rowId, _new, ...r }) => ({ ...r, kotNumber: no })),
+          items: addedRows.map(({ _rowId, _new, _origQty, ...r }) => ({ ...r, kotNumber: no })),
           createdAt: Date.now(), status: "new", isRunning: true
         };
         clean.kots = JSON.parse(JSON.stringify([...getBaseKots(billOrder), runKot]));
