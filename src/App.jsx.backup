@@ -4161,7 +4161,7 @@ function BillPOSScreenInner(p) {
         {list.map((m) => {
           const q = qtyOf(m.id);
           return (
-            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "10px 12px", borderRadius: 8, border: `1px solid ${q > 0 ? "#DC2626" : "#E5E7EB"}`, background: q > 0 ? "#FEF2F2" : "#fff", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isDesktop ? 56 : 72, transition: "all 0.15s ease", boxShadow: q > 0 ? "0 1px 3px rgba(220,38,38,0.15)" : "0 1px 2px rgba(0,0,0,0.03)" }} className="smooth-transition hover-lift">
+            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "8px 10px", borderRadius: 6, border: `1px solid ${q > 0 ? "#16A34A" : "#E5E7EB"}`, background: "#fff", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isDesktop ? 44 : 56, transition: "all 0.15s ease", boxShadow: q > 0 ? "0 1px 3px rgba(22,163,74,0.15)" : "0 1px 2px rgba(0,0,0,0.03)" }} className="smooth-transition hover-lift">
               <div style={{ display: "flex", gap: 5, alignItems: "flex-start" }}>
                 <VegDot veg={m.veg} />
                 <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2, color: COLORS.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{m.name}</span>
@@ -4225,26 +4225,26 @@ function BillPOSScreenInner(p) {
         </div>
       </div>
 
-      <div style={{ flex: isDesktop ? "1 1 auto" : "none", minHeight: isDesktop ? 180 : 120, maxHeight: isDesktop ? "none" : "38dvh", overflowY: "auto", border: `1px solid #E5E7EB`, borderRadius: 8, background: "#fff" }}>
+      <div style={{ flex: isDesktop ? "1 1 auto" : "none", minHeight: isDesktop ? 220 : 140, maxHeight: isDesktop ? "none" : "42dvh", overflowY: "auto", border: `1px solid #E5E7EB`, borderRadius: 6, background: "#fff" }}>
         {items.length === 0 && <div style={{ textAlign: "center", padding: "30px 16px", color: "#9CA3AF", fontSize: 13, fontWeight: 600 }}>👈 Menu se item tap karo</div>}
         {items.map((it) => (
-          <div key={it._rowId} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderBottom: `1px solid #F3F4F6`, transition: "background 0.15s ease", minHeight: 34 }} onMouseEnter={(e) => e.currentTarget.style.background = "#F9FAFB"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+          <div key={it._rowId} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", borderBottom: `1px solid #F3F4F6`, transition: "background 0.15s ease", minHeight: 28 }} onMouseEnter={(e) => e.currentTarget.style.background = "#F9FAFB"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
             <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#111827" }}>{it.name}{it.portion ? <span style={{ color: "#9CA3AF", fontWeight: 500 }}> · {it.portion}</span> : ""}</span>
               <input key={it._rowId + "_p_" + it.price} type="number" inputMode="decimal" min={0} step="any" defaultValue={it.price}
                 onBlur={(e) => { if (!commitPrice(it._rowId, e.target.value)) e.target.value = it.price; }}
                 onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
-                style={{ width: 52, padding: "1px 4px", border: `1px solid #E5E7EB`, borderRadius: 4, fontSize: 11, fontWeight: 700, textAlign: "center", color: "#6B7280" }} />
+                style={{ width: 42, padding: "1px 3px", border: `1px solid #E5E7EB`, borderRadius: 3, fontSize: 10, fontWeight: 700, textAlign: "center", color: "#9CA3AF" }} />
             </div>
-            <div style={{ display: "flex", alignItems: "center", border: `1px solid #DC2626`, borderRadius: 6, background: "#FEF2F2" }}>
-              <button type="button" onClick={() => changeQty(it._rowId, -1)} style={{ width: 22, height: 24, border: "none", background: "transparent", color: "#DC2626", fontSize: 14, fontWeight: 800, cursor: "pointer", padding: 0 }}>−</button>
+            <div style={{ display: "flex", alignItems: "center", border: `1px solid #DC2626`, borderRadius: 4, background: "#FEF2F2" }}>
+              <button type="button" onClick={() => changeQty(it._rowId, -1)} style={{ width: 18, height: 20, border: "none", background: "transparent", color: "#DC2626", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0 }}>−</button>
               <input key={it._rowId + "_q_" + it.qty} type="number" inputMode="decimal" min={0} step="any" defaultValue={it.qty}
                 onBlur={(e) => { if (!commitQty(it._rowId, e.target.value)) e.target.value = it.qty; }}
                 onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
-                style={{ width: 32, textAlign: "center", border: "none", background: "transparent", fontWeight: 800, fontSize: 12, color: "#DC2626" }} />
-              <button type="button" onClick={() => changeQty(it._rowId, 1)} style={{ width: 22, height: 24, border: "none", background: "transparent", color: "#DC2626", fontSize: 14, fontWeight: 800, cursor: "pointer", padding: 0 }}>+</button>
+                style={{ width: 26, textAlign: "center", border: "none", background: "transparent", fontWeight: 800, fontSize: 11, color: "#DC2626" }} />
+              <button type="button" onClick={() => changeQty(it._rowId, 1)} style={{ width: 18, height: 20, border: "none", background: "transparent", color: "#DC2626", fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0 }}>+</button>
             </div>
-            <div style={{ width: 58, textAlign: "right", fontWeight: 800, fontSize: 12, fontFamily: "'JetBrains Mono', monospace", color: "#111827" }}>₹{Math.round(it.price * it.qty * 100) / 100}</div>
+            <div style={{ width: 50, textAlign: "right", fontWeight: 800, fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "#111827" }}>₹{Math.round(it.price * it.qty * 100) / 100}</div>
             <button type="button" onClick={() => removeRow(it._rowId)} style={{ background: "transparent", border: "none", color: "#9CA3AF", width: 20, height: 20, borderRadius: 4, fontSize: 12, cursor: "pointer", fontWeight: 800, padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
           </div>
         ))}
