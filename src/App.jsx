@@ -4216,11 +4216,13 @@ function BillPOSScreenInner(p) {
           {(presets.customers || []).map((c, i) => <option key={i} value={i}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}
         </select>
       )}
-           <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6 }}>
-        <input placeholder="Customer" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={inp} />
-
-        <input placeholder="Phone" value={p.custPhone} onChange={(e) => p.setCustPhone(e.target.value)} style={inp} />
-        <input placeholder="GSTIN" value={p.gstin} onChange={(e) => p.setGstin(e.target.value.toUpperCase())} style={inp} />
+           <div style={{ background: "linear-gradient(135deg, #FDFCFA 0%, #F7F5F0 100%)", borderRadius: 12, padding: 10, border: `1px solid #E8E6DC` }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: COLORS.textLight, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>👤 Customer</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6 }}>
+          <input placeholder="Name" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={inp} />
+          <input placeholder="Phone" value={p.custPhone} onChange={(e) => p.setCustPhone(e.target.value)} style={inp} />
+          <input placeholder="GSTIN" value={p.gstin} onChange={(e) => p.setGstin(e.target.value.toUpperCase())} style={inp} />
+        </div>
       </div>
 
       <div style={{ flex: isDesktop ? 1 : "none", minHeight: 80, maxHeight: isDesktop ? "none" : "34dvh", overflowY: "auto", border: `1.5px solid #E8E6DC`, borderRadius: 14, background: "#fff", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.03)" }}>
