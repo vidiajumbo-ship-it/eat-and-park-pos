@@ -6,7 +6,7 @@ import { db, auth, authReady } from "./firebase";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc,
-  getDocs, getDoc, addDoc, query, orderBy, serverTimestamp, where, limit, arrayUnion, arrayRemove, limit, arrayUnion, arrayRemove,
+  getDocs, getDoc, addDoc, query, orderBy, serverTimestamp, where, limit, arrayUnion, arrayRemove,
   runTransaction  //  ADD THIS
 } from "firebase/firestore";
 import { QRCodeSVG } from 'qrcode.react';
@@ -6515,7 +6515,7 @@ export default function App() {
   const [coinHistory, setCoinHistory] = useState([]);
   const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); const t = Number(params.get("table")); return Number.isInteger(t) && t >= 1 && t <= 12 ? t : 1; });
   const [menu, setMenuState] = useState(DEFAULT_MENU);
-  const [unavail, setUnavail] = useState([]);
+  // DUPLICATE_BLOCK_HERE
   const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   useEffect(() => {
@@ -6543,7 +6543,13 @@ export default function App() {
     try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
     catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
   };
-  const [unavail, setUnavail] = useState([]);
+   const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  // DUPLICATE_BLOCK_HERE
   const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   useEffect(() => {
@@ -6571,7 +6577,7 @@ export default function App() {
     try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
     catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
   };
-  const [unavail, setUnavail] = useState([]);
+  // DUPLICATE_BLOCK_HERE
   const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   useEffect(() => {
@@ -6599,7 +6605,7 @@ export default function App() {
     try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
     catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
   };
-  const [unavail, setUnavail] = useState([]);
+  // DUPLICATE_BLOCK_HERE
   const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   useEffect(() => {
@@ -6627,7 +6633,7 @@ export default function App() {
     try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
     catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
   };
-  const [unavail, setUnavail] = useState([]);
+  // DUPLICATE_BLOCK_HERE
   const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   useEffect(() => {
@@ -6655,7 +6661,7 @@ export default function App() {
     try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
     catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
   };
-  const [unavail, setUnavail] = useState([]);
+  // DUPLICATE_BLOCK_HERE
   const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   useEffect(() => {
@@ -6683,203 +6689,7 @@ export default function App() {
     try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
     catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
   };
-  const [unavail, setUnavail] = useState([]);
-  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
-  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
-  useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
-  }, []);
-  useEffect(() => {
-    let dead = false;
-    let unsub = () => {};
-    authReady.then(() => {
-      if (dead) return;
-      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
-        const ids = snap.exists() ? snap.data().ids : [];
-        setUnavail(Array.isArray(ids) ? ids : []);
-      }, (e) => console.error("availability listener:", e));
-    }).catch(() => {});
-    return () => { dead = true; unsub(); };
-  }, []);
-  const toggleAvail = async (id) => {
-    const isOff = unavail.includes(id);
-    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
-    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
-    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
-  };
-  const [unavail, setUnavail] = useState([]);
-  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
-  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
-  useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
-  }, []);
-  useEffect(() => {
-    let dead = false;
-    let unsub = () => {};
-    authReady.then(() => {
-      if (dead) return;
-      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
-        const ids = snap.exists() ? snap.data().ids : [];
-        setUnavail(Array.isArray(ids) ? ids : []);
-      }, (e) => console.error("availability listener:", e));
-    }).catch(() => {});
-    return () => { dead = true; unsub(); };
-  }, []);
-  const toggleAvail = async (id) => {
-    const isOff = unavail.includes(id);
-    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
-    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
-    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
-  };
-  const [unavail, setUnavail] = useState([]);
-  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
-  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
-  useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
-  }, []);
-  useEffect(() => {
-    let dead = false;
-    let unsub = () => {};
-    authReady.then(() => {
-      if (dead) return;
-      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
-        const ids = snap.exists() ? snap.data().ids : [];
-        setUnavail(Array.isArray(ids) ? ids : []);
-      }, (e) => console.error("availability listener:", e));
-    }).catch(() => {});
-    return () => { dead = true; unsub(); };
-  }, []);
-  const toggleAvail = async (id) => {
-    const isOff = unavail.includes(id);
-    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
-    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
-    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
-  };
-  const [unavail, setUnavail] = useState([]);
-  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
-  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
-  useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
-  }, []);
-  useEffect(() => {
-    let dead = false;
-    let unsub = () => {};
-    authReady.then(() => {
-      if (dead) return;
-      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
-        const ids = snap.exists() ? snap.data().ids : [];
-        setUnavail(Array.isArray(ids) ? ids : []);
-      }, (e) => console.error("availability listener:", e));
-    }).catch(() => {});
-    return () => { dead = true; unsub(); };
-  }, []);
-  const toggleAvail = async (id) => {
-    const isOff = unavail.includes(id);
-    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
-    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
-    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
-  };
-  const [unavail, setUnavail] = useState([]);
-  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
-  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
-  useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
-  }, []);
-  useEffect(() => {
-    let dead = false;
-    let unsub = () => {};
-    authReady.then(() => {
-      if (dead) return;
-      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
-        const ids = snap.exists() ? snap.data().ids : [];
-        setUnavail(Array.isArray(ids) ? ids : []);
-      }, (e) => console.error("availability listener:", e));
-    }).catch(() => {});
-    return () => { dead = true; unsub(); };
-  }, []);
-  const toggleAvail = async (id) => {
-    const isOff = unavail.includes(id);
-    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
-    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
-    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
-  };
-  const [unavail, setUnavail] = useState([]);
-  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
-  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
-  useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
-  }, []);
-  useEffect(() => {
-    let dead = false;
-    let unsub = () => {};
-    authReady.then(() => {
-      if (dead) return;
-      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
-        const ids = snap.exists() ? snap.data().ids : [];
-        setUnavail(Array.isArray(ids) ? ids : []);
-      }, (e) => console.error("availability listener:", e));
-    }).catch(() => {});
-    return () => { dead = true; unsub(); };
-  }, []);
-  const toggleAvail = async (id) => {
-    const isOff = unavail.includes(id);
-    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
-    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
-    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
-  };
-  const [unavail, setUnavail] = useState([]);
-  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
-  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
-  useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
-  }, []);
-  useEffect(() => {
-    let dead = false;
-    let unsub = () => {};
-    authReady.then(() => {
-      if (dead) return;
-      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
-        const ids = snap.exists() ? snap.data().ids : [];
-        setUnavail(Array.isArray(ids) ? ids : []);
-      }, (e) => console.error("availability listener:", e));
-    }).catch(() => {});
-    return () => { dead = true; unsub(); };
-  }, []);
-  const toggleAvail = async (id) => {
-    const isOff = unavail.includes(id);
-    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
-    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
-    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
-  };
-  const [unavail, setUnavail] = useState([]);
+  // DUPLICATE_BLOCK_HERE
   const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   useEffect(() => {
