@@ -6443,7 +6443,7 @@ export default function App() {
         const _r = s.exists() ? (s.data().role || "staff") : null;
         setStaffRole(_r);
         try {
-          const saved = localStorage.getItem("eatpark_role");
+          const saved = sessionStorage.getItem("eatpark_role");
           if (_r && (saved === "staff" || (saved === "admin" && _r === "admin"))) setRole(saved);
         } catch (e) {}
 
@@ -6503,13 +6503,13 @@ export default function App() {
 
   const requestPinPrompt = (target) => {
     if (target === "customer") {
-      setRole("customer"); try { localStorage.removeItem("eatpark_role"); } catch (e) {}
+      setRole("customer"); try { sessionStorage.removeItem("eatpark_role"); } catch (e) {}
 
       setOrdersState([]); setLoyaltyUsers([]); setInventory([]); setCoinHistory([]); setBookings([]); setCalls([]);
       signOut(auth).catch(() => {});
       return;
     }
-    if (staffRole === "admin" || (target === "staff" && staffRole === "staff")) { setRole(target); try { localStorage.setItem("eatpark_role", target); } catch (e) {} return; }
+    if (staffRole === "admin" || (target === "staff" && staffRole === "staff")) { setRole(target); try { sessionStorage.setItem("eatpark_role", target); } catch (e) {} return; }
 
     setTargetRole(target); setShowPinModal(true); setPinInput("");
   };
@@ -6560,7 +6560,7 @@ export default function App() {
       }
 
       pinLock.reset();
-      setRole(targetRole); try { localStorage.setItem("eatpark_role", targetRole); } catch (e) {}
+      setRole(targetRole); try { sessionStorage.setItem("eatpark_role", targetRole); } catch (e) {}
 
       setShowPinModal(false);
       setPinInput("");
