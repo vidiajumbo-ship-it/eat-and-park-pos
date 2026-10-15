@@ -6515,6 +6515,7 @@ export default function App() {
   const [coinHistory, setCoinHistory] = useState([]);
   const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); const t = Number(params.get("table")); return Number.isInteger(t) && t >= 1 && t <= 12 ? t : 1; });
   const [menu, setMenuState] = useState(DEFAULT_MENU);
+  const [unavail, setUnavail] = useState([]);
     const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
   useEffect(() => {
@@ -6542,12 +6543,7 @@ export default function App() {
     try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
     catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
   };
-   const toggleAvail = async (id) => {
-    const isOff = unavail.includes(id);
-    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
-    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
-    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
-  };const [orders, setOrdersState] = useState([]);
+  const [orders, setOrdersState] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80" });
   const [loading, setLoading] = useState(true);
