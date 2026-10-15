@@ -4225,10 +4225,10 @@ function BillPOSScreenInner(p) {
         </div>
       </div>
 
-      <div style={{ flex: isDesktop ? 1 : "none", minHeight: 100, maxHeight: isDesktop ? "none" : "42dvh", overflowY: "auto", border: `1px solid #E5E7EB`, borderRadius: 8, background: "#fff" }}>
+      <div style={{ flex: isDesktop ? "1 1 auto" : "none", minHeight: isDesktop ? 180 : 120, maxHeight: isDesktop ? "none" : "38dvh", overflowY: "auto", border: `1px solid #E5E7EB`, borderRadius: 8, background: "#fff" }}>
         {items.length === 0 && <div style={{ textAlign: "center", padding: "30px 16px", color: "#9CA3AF", fontSize: 13, fontWeight: 600 }}>👈 Menu se item tap karo</div>}
         {items.map((it) => (
-          <div key={it._rowId} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderBottom: `1px solid #F3F4F6`, transition: "background 0.15s ease", minHeight: 38 }} onMouseEnter={(e) => e.currentTarget.style.background = "#F9FAFB"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+          <div key={it._rowId} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderBottom: `1px solid #F3F4F6`, transition: "background 0.15s ease", minHeight: 34 }} onMouseEnter={(e) => e.currentTarget.style.background = "#F9FAFB"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
             <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#111827" }}>{it.name}{it.portion ? <span style={{ color: "#9CA3AF", fontWeight: 500 }}> · {it.portion}</span> : ""}</span>
               <input key={it._rowId + "_p_" + it.price} type="number" inputMode="decimal" min={0} step="any" defaultValue={it.price}
@@ -4299,7 +4299,7 @@ function BillPOSScreenInner(p) {
       </div>
 
       <div style={{ background: "linear-gradient(135deg, #FDFCFA 0%, #F5F3EE 100%)", borderRadius: 14, padding: "14px 16px", fontSize: 13, border: `1.5px solid #E8E0D0`, boxShadow: "0 4px 16px rgba(0,0,0,0.04)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0" }}><span style={{ color: "#6B7280", fontWeight: 600 }}>Subtotal</span><b style={{ fontFamily: "'JetBrains Mono', monospace", color: "#111827" }}>₹{calc.sub}</b></div>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}><span style={{ color: "#6B7280", fontWeight: 600 }}>Subtotal</span><b style={{ fontFamily: "'JetBrains Mono', monospace", color: "#111827" }}>₹{calc.sub}</b></div>
         {p.discPct > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.success }}><span>Discount {p.discPct}%</span><b>-₹{calc.discPctAmt}</b></div>}
         {p.disc > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.success }}><span>Extra discount</span><b>-₹{calc.discAmt}</b></div>}
         {calc.gstRate > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.copper }}><span>GST {calc.gstRate}%</span><b>+₹{calc.gst}</b></div>}
@@ -4323,14 +4323,14 @@ function BillPOSScreenInner(p) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,0.55)", backdropFilter: "blur(6px)", zIndex: 200, display: "flex", alignItems: isDesktop ? "center" : "flex-end", justifyContent: "center" }} onClick={p.onClose}>
       <div onClick={(e) => e.stopPropagation()} className="slide-up"
        style={{ background: "#fff", colorScheme: "light", width: isDesktop ? "min(1200px, 97vw)" : "100%",
- maxWidth: isDesktop ? 1280 : 560, height: isDesktop ? "94vh" : "95dvh", borderRadius: isDesktop ? 14 : "20px 20px 0 0", padding: isDesktop ? 0 : "0 0 calc(0px + env(safe-area-inset-bottom, 0px))", display: "flex", flexDirection: "column", boxSizing: "border-box", gap: 0, boxShadow: "0 25px 50px rgba(0,0,0,0.15)", overflow: "hidden" }}>
+ maxWidth: isDesktop ? 1280 : 560, height: isDesktop ? "96vh" : "98dvh", borderRadius: isDesktop ? 14 : "20px 20px 0 0", padding: isDesktop ? 0 : "0 0 calc(0px + env(safe-area-inset-bottom, 0px))", display: "flex", flexDirection: "column", boxSizing: "border-box", gap: 0, boxShadow: "0 25px 50px rgba(0,0,0,0.15)", overflow: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800, background: "linear-gradient(135deg, #1A1A1A 0%, #3C3C3C 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: "-0.01em" }}>🧾 {isDraft ? "New Order + Bill" : "Order Bill"}</div>
           <button type="button" onClick={p.onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 30, height: 30, fontSize: 14, cursor: "pointer" }}>✕</button>
         </div>
 
         {(isDesktop || tab === "bill") && (
-          <div style={{ order: 99, display: "flex", gap: 8, alignItems: "center", flexShrink: 0, padding: "12px 20px", background: "#F9FAFB", borderTop: `1px solid #E5E7EB` }}>
+          <div style={{ order: 99, display: "flex", gap: 8, alignItems: "center", flexShrink: 0, padding: "10px 16px", background: "#F9FAFB", borderTop: `1px solid #E5E7EB` }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: "#DC2626", fontFamily: "'JetBrains Mono', monospace", minWidth: 80 }}>₹{calc.total}</div>
             <button type="button" disabled={disabled} onClick={() => p.onAction("save")} style={footBtn("#DC2626", "#fff")}>
               {p.saving ? "⏳..." : (isDraft && p.sendKot ? "🍳 Send KOT" : "💾 Save")}
