@@ -1109,6 +1109,21 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
   const [editPrice, setEditPrice] = useState(null);
   const [payMode, setPayMode] = useState("cash");
 
+  // 🔥 existingOrder ke items ko cart me load karo (sirf bill mode me, add-more mode me nahi)
+  useEffect(() => {
+    if (existingOrder && !addMoreMode) {
+      const initialCart = {};
+      (existingOrder.items || []).forEach(it => {
+        initialCart[it.itemId] = (initialCart[it.itemId] || 0) + it.qty;
+      });
+      setCart(initialCart);
+    }
+  }, [existingOrder?.id, addMoreMode]);
+
+  // existingOrder ke items ka total (editing ke liye)
+  const existingItems = existingOrder?.items || [];
+  const existingSubtotal = existingItems.reduce((s, it) => s + (it.price * it.qty), 0);
+
   const categories = useMemo(() => ["All", ...Array.from(new Set(menu.map(m => m.category)))], [menu]);
   const filtered = useMemo(() => menu.filter(m => m.available && (category === "All" || m.category === category) && (!search.trim() || m.name.toLowerCase().includes(search.toLowerCase()))), [menu, category, search]);
 
@@ -1185,11 +1200,31 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
     if (!existingOrder || placing) return;
     setPlacing(true);
     try {
-      const sub = Number(existingOrder.subtotal) || 0;
+      // existing items + any new items in cart
+      const existing = existingOrder.items || [];
+      const existingMap = {};
+      existing.forEach(it => { existingMap[it.itemId] = (existingMap[it.itemId] || 0) + it.qty; });
+
+      // Build final items array — cart me jo hai wahi final
+      const finalItems = [];
+      Object.entries(cart).forEach(([id, qty]) => {
+        if (qty <= 0) return;
+        const m = menu.find(x => x.id === id);
+        if (!m) return;
+        finalItems.push({
+          itemId: id, name: m.name, portion: m.portion || "",
+          price: m.price, qty, kotNumber: existingMap[id] ? (existing.find(e => e.itemId === id)?.kotNumber || 1) : (Math.max(...(existingOrder.kots || [{ kotNumber: 1 }]).map(k => k.kotNumber || 1)) + 1),
+        });
+      });
+
+      const sub = finalItems.reduce((s, it) => s + it.price * it.qty, 0);
       const discAmt = Math.round((sub * discount) / 100);
       const gstAmt = Math.round(((sub - discAmt) * gstRate) / 100);
       const finalTotal = Math.max(0, sub - discAmt) + gstAmt;
+
       await updateDoc(doc(db, "orders", existingOrder.id), {
+        items: finalItems,
+        subtotal: sub,
         billDiscountPct: discount, billDiscount: discAmt,
         gstRate, gstAmount: gstAmt, finalTotal,
         payment: payMode,
@@ -1254,9 +1289,9 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: "9px 16px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>← Back</button>
         <div style={{ fontWeight: 800, fontSize: 16 }}>
           {existingOrder
-            ? (addMoreMode ? `➕ Add to Table ${table}` : `🧾 Bill · Table ${table}`)
+            ? (addMoreMode ? `➕ Add to Table ${table}` : `🧾 Bill · Table ${table} · ${existingItems.length} items`)
             : `🍽️ New Order · Table ${table}`}
-          {" · "}{cartItems.length} new items
+          {existingOrder && ` · Total ₹${existingSubtotal}`}
         </div>
         <div style={{ width: 60 }} />
       </div>
@@ -1297,11 +1332,18 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
             {cartItems.map(([id, q]) => {
               const m = menu.find(x => x.id === id);
               if (!m) return null;
+              // Check karo — existing item hai ya naya add kiya
+              const existing = existingItems.filter(e => e.itemId === id).reduce((s, e) => s + e.qty, 0);
+              const isNew = !addMoreMode && existing === 0;
               return (
-                <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px", borderBottom: `1px solid ${C.line}` }}>
+                <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px", borderBottom: `1px solid ${C.line}`, background: isNew ? C.greenLight : "transparent" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</div>
-                    <div style={{ fontSize: 11, color: C.gray, fontFamily: "monospace" }}>₹{m.price}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</span>
+                      {!addMoreMode && existing > 0 && <span style={{ background: C.blue, color: "#fff", fontSize: 9, padding: "2px 6px", borderRadius: 4, fontWeight: 800 }}>RUNNING ×{existing}</span>}
+                      {!addMoreMode && existing === 0 && <span style={{ background: C.green, color: "#fff", fontSize: 9, padding: "2px 6px", borderRadius: 4, fontWeight: 800 }}>NEW</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.gray, fontFamily: "monospace" }}>₹{m.price} · {inr(m.price * q)}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", border: `1.5px solid ${C.red}`, borderRadius: 6, overflow: "hidden" }}>
                     <button onClick={() => setQty(id, q - 1)} style={{ width: 28, height: 30, border: "none", background: C.redLight, color: C.red, fontSize: 16, fontWeight: 900, cursor: "pointer" }}>−</button>
@@ -1340,13 +1382,15 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
             {/* TOTALS */}
             <div style={{ background: C.card, borderRadius: 8, padding: 10, marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12 }}>
-                <span style={{ color: C.gray }}>Running items subtotal</span>
-                <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>₹{(Number(existingOrder?.subtotal) || 0)}</span>
+                <span style={{ color: C.gray }}>Running items ({existingItems.length})</span>
+                <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>₹{existingSubtotal}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12 }}>
-                <span style={{ color: C.gray }}>New cart</span>
-                <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>₹{cartSubtotal}</span>
-              </div>
+              {cartItems.length > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12, color: C.green }}>
+                  <span>New items ({cartItems.length})</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700 }}>+₹{cartSubtotal}</span>
+                </div>
+              )}
               {discount > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12, color: C.green }}>
                   <span>Discount {discount}%</span>
@@ -1364,7 +1408,14 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
             <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 10, padding: "14px 18px", marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: `0 6px 16px ${C.red}40` }}>
               <span style={{ color: "#fff", fontSize: 13, fontWeight: 800, letterSpacing: 0.5 }}>TOTAL</span>
               <span style={{ color: "#fff", fontSize: 24, fontWeight: 900, fontFamily: "monospace" }}>
-                ₹{Math.max(0, ((Number(existingOrder?.subtotal) || 0) + cartSubtotal) * (1 - discount / 100) + ((Number(existingOrder?.subtotal) || 0) + cartSubtotal) * (1 - discount / 100) * gstRate / 100).toFixed(0)}
+                {(() => {
+                  const base = addMoreMode ? existingSubtotal : existingSubtotal;
+                  const newSum = addMoreMode ? cartSubtotal : 0;
+                  const gross = base + newSum;
+                  const discAmt = Math.round(gross * discount / 100);
+                  const gstAmt = Math.round((gross - discAmt) * gstRate / 100);
+                  return "₹" + (Math.max(0, gross - discAmt) + gstAmt).toFixed(0);
+                })()}
               </span>
             </div>
 
