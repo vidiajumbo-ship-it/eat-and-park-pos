@@ -4161,7 +4161,7 @@ function BillPOSScreenInner(p) {
         {list.map((m) => {
           const q = qtyOf(m.id);
           return (
-            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "8px 10px", borderRadius: 6, border: `1px solid ${q > 0 ? "#16A34A" : "#E5E7EB"}`, background: "#fff", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isDesktop ? 44 : 56, transition: "all 0.15s ease", boxShadow: q > 0 ? "0 1px 3px rgba(22,163,74,0.15)" : "0 1px 2px rgba(0,0,0,0.03)" }} className="smooth-transition hover-lift">
+            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "6px 8px", borderRadius: 5, border: `1px solid ${q > 0 ? "#16A34A" : "#E5E7EB"}`, background: "#fff", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isDesktop ? 36 : 46, transition: "all 0.15s ease", boxShadow: q > 0 ? "0 1px 3px rgba(22,163,74,0.15)" : "0 1px 2px rgba(0,0,0,0.03)" }} className="smooth-transition hover-lift">
               <div style={{ display: "flex", gap: 5, alignItems: "flex-start" }}>
                 <VegDot veg={m.veg} />
                 <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2, color: COLORS.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{m.name}</span>
