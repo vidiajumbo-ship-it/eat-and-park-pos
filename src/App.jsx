@@ -4479,7 +4479,9 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
   };
 
   // mode: "save" | "print" | "paid"
-  const printKotSlip = (order) => {
+  const printKotSlip = (order, onDone) => {
+  let fired = false;
+  const next = () => { if (fired) return; fired = true; if (onDone) onDone(); };
     try {
       const kot = (order.kots && order.kots.length ? order.kots[order.kots.length - 1] : null) || { kotNumber: 1, items: order.items || [] };
       const rows = (kot.items || []).map((it) => `<div class="r"><span>${it.qty} x ${escapeHtml(it.name)}${it.portion ? " (" + escapeHtml(it.portion) + ")" : ""}</span></div>`).join("");
@@ -4492,8 +4494,10 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
       w.document.open();
       w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:8px;font-weight:700}h2,h3{text-align:center;margin:3px 0}.r{font-size:17px;padding:4px 0;border-bottom:1px dashed #000}.c{text-align:center;font-size:12px}</style></head><body><h2>KOT #${kot.kotNumber || 1}${kot.isRunning ? " (RUNNING)" : ""}</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + escapeHtml(String(order.table))}</h3><div class="c">${escapeHtml(now)} · #${escapeHtml(order.id.slice(1, 5).toUpperCase())}${order.waiter ? " · " + escapeHtml(order.waiter) : ""}</div><div style="margin-top:8px">${rows}</div>${order.notes ? `<div class="c" style="margin-top:8px">Note: ${escapeHtml(order.notes)}</div>` : ""}</body></html>`);
       w.document.close();
-      setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("⚠️ KOT print nahi ho paya: " + e.message); } }, 400);
-    } catch (e) { console.error("KOT print error:", e); }
+      w.onafterprint = () => setTimeout(next, 400);
+setTimeout(next, 20000);
+setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("⚠️ KOT print nahi ho paya: " + e.message); next(); } }, 400);
+    } catch (e) { console.error("KOT print error:", e); next(); }
   };
 
   const handleBillAction = async (mode) => {
@@ -4509,9 +4513,9 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
       if (mode === "paid" && saved.status === "ready") await advanceStatus(saved.id, "ready");
       setBillOrder(null);
       addDoc(collection(db, "auditLogs"), { orderId: saved.id, action: mode, by: (auth.currentUser && auth.currentUser.email) || "?", before: getOrderTotal(billOrder), after: saved.finalTotal, at: Date.now() }).catch(() => {});
-      let delay = 200;
-      if ((wasDraft && sendKot) || saved._ranKot) { setTimeout(() => printKotSlip(saved), 200); delay = 1500; }
-      if (mode !== "save") setTimeout(() => printFinalBill(saved, itemsSnapshot), delay);
+      const doBill = () => { if (mode !== "save") printFinalBill(saved, itemsSnapshot); };
+      if ((wasDraft && sendKot) || saved._ranKot) setTimeout(() => printKotSlip(saved, doBill), 200);
+      else setTimeout(doBill, 200);
     } finally {
       setBillSaving(false);
     }
