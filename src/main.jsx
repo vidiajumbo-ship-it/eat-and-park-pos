@@ -2,9 +2,12 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import StaffApp from './StaffApp.jsx'
+
+const isStaffUrl = window.location.pathname === '/staff' || window.location.pathname.startsWith('/staff/');
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    {isStaffUrl ? <StaffApp /> : <App />}
   </StrictMode>,
 )
