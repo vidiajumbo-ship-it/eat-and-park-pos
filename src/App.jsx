@@ -10,6 +10,7 @@ import {
   runTransaction  //  ADD THIS
 } from "firebase/firestore";
 import { QRCodeSVG } from 'qrcode.react';
+import * as HX from "./hardening";
 function ImageUploadButton({ currentImage, onUploaded, label }) {
   const widgetRef = useRef(null);
   const onUploadedRef = useRef(onUploaded);
@@ -211,7 +212,8 @@ function getOrderTotal(o) {
 }
 
 // Firestore doc ko safe shape deta hai (purane/adhure docs se crash nahi hoga)
-const normOrder = (d) => {
+const normOrder = HX.normOrder;
+const normOrderLegacy = (d) => {
   const o = { id: d.id, ...d.data() };
   if (!Array.isArray(o.items)) o.items = [];
   if (!o.customer) o.customer = { name: "", phone: "" };
@@ -250,7 +252,8 @@ async function guardedOrderUpdate(base, patch) {
 
 const DEMO_OTP = process.env.REACT_APP_DEMO_OTP === "true";
 function timeAgo(ts) { const s = Math.floor((Date.now() - ts) / 1000); if (s < 60) return s + "s ago"; const m = Math.floor(s / 60); if (m < 60) return m + "m ago"; return Math.floor(m / 60) + "h ago"; }
-function toLocalISODate(timestamp) { const d = new Date(timestamp); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]; }
+const toLocalISODate = HX.toLocalISODate;
+function toLocalISODateLegacy(timestamp) { const d = new Date(timestamp); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]; }
 
 function getEstimatedTime(items, menu = []) {
   if (!items || items.length === 0) return 5;
@@ -818,7 +821,7 @@ const loadRazorpayScript = () => new Promise((resolve) => {
 });
 
 // Success pe Razorpay response, cancel/fail pe null return karta hai
-const processRazorpayPayment = (amount, orderId, customerName, customerPhone) =>
+const processRazorpayPaymentLegacy = (amount, orderId, customerName, customerPhone) =>
   new Promise(async (resolve) => {
     if (!RAZORPAY_KEY || RAZORPAY_KEY.startsWith("YOUR_")) {
       alert("⚠️ Razorpay key configure nahi hai.");
@@ -838,6 +841,15 @@ const processRazorpayPayment = (amount, orderId, customerName, customerPhone) =>
     rzp.open();
   });
 
+const processRazorpayPayment = async (amount, orderId, customerName, customerPhone) => {
+  try {
+    return await HX.payWithRazorpay({
+      key: RAZORPAY_KEY, amount, orderId, name: RESTAURANT.name,
+      desc: `Order #${orderId.slice(1, 5).toUpperCase()}`,
+      prefill: { name: customerName, contact: customerPhone }, color: COLORS.copper
+    });
+  } catch (e) { alert("⚠️ " + (e.message || e)); return null; }
+};
 const loadRazorpayScriptOld = () => new Promise((resolve) => {
   const script = document.createElement('script');
   script.src = 'https://checkout.razorpay.com/v1/checkout.js';
@@ -1018,7 +1030,7 @@ function AIOrderModal({ menu, onOrderParsed, onClose }) {
     setAiBusy(true);
     setAiErr("");
     try {
-      const r = await fetch("/api/parse-order", {
+      const r = await HX.fetchWithTimeout("/api/parse-order", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(auth.currentUser ? { Authorization: "Bearer " + (await auth.currentUser.getIdToken()) } : {}) },
 
@@ -1031,7 +1043,7 @@ function AIOrderModal({ menu, onOrderParsed, onClose }) {
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "AI processing fail ho gayi");
-      onOrderParsed(data);
+      onOrderParsed(HX.sanitizeAiLines(data, menu));
       onClose();
     } catch (e) {
       setAiErr("⚠️ " + (e.message || e));
@@ -2404,9 +2416,10 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
   const [myLoyalty, setMyLoyalty] = useState(null);
   useEffect(() => {
-    if (!custPhone || custPhone.length < 10) { setMyLoyalty(null); return; }
+    const _p = HX.cleanPhone(custPhone);
+    if (!HX.isValidPhone(_p)) { setMyLoyalty(null); return; }
     let off = false;
-    getDoc(doc(db, "loyaltyUsers", custPhone)).then((s) => { if (!off) setMyLoyalty(s.exists() ? s.data() : null); }).catch(() => {});
+    getDoc(doc(db, "loyaltyUsers", _p)).then((s) => { if (!off) setMyLoyalty(s.exists() ? s.data() : null); }).catch(() => {});
     return () => { off = true; };
   }, [custPhone]);
   const activeUser = isLoggedIn ? (loyaltyUsers.find(u => u.phone === custPhone) || myLoyalty) : null;
@@ -3968,7 +3981,7 @@ function BillPOSScreenInner(p) {
       }
 
       // 2. Fetch call
-      const r = await fetch("/api/parse-order", {
+      const r = await HX.fetchWithTimeout("/api/parse-order", {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -3987,7 +4000,7 @@ function BillPOSScreenInner(p) {
 
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "AI processing failed");
-      setAiRes(data);
+      setAiRes(HX.sanitizeAiLines(data, menu));
     } catch (e) {
       console.error("AI Order Error:", e);
       setAiErr("⚠️ " + (e.message || "Failed to process order"));
@@ -5338,11 +5351,11 @@ function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, or
   const [editingItem, setEditingItem] = useState(null);
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
-  const [newItemCat, setNewItemCat] = useState(CATEGORIES[0]);
+  const [newItemCat, setNewItemCat] = useState((categories && categories[0]) || CATEGORIES[0]);
   const [newItemImage, setNewItemImage] = useState("");
   const [addMenuName, setAddMenuName] = useState("");
   const [addMenuPrice, setAddMenuPrice] = useState("");
-  const [addMenuCat, setAddMenuCat] = useState(CATEGORIES[0]);
+  const [addMenuCat, setAddMenuCat] = useState((categories && categories[0]) || CATEGORIES[0]);
   const [addMenuVeg, setAddMenuVeg] = useState(true);
   const [addMenuDesc, setAddMenuDesc] = useState("");
   const [addMenuImage, setAddMenuImage] = useState("");
@@ -5442,11 +5455,11 @@ function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, or
   };
   const handleAddGalleryPhoto = async () => { if (!newGalleryImg.trim()) return; const u = [...gallery, newGalleryImg.trim()]; setGallery(u); try { await setDoc(doc(db, "settings", "gallery"), { images: u }); } catch (e) { console.error(e); alert("⚠️ Gallery save nahi hui. Internet check karo."); } setNewGalleryImg(""); };
   const handleDeleteGalleryPhoto = async (index) => { const u = gallery.filter((_, i) => i !== index); setGallery(u); try { await setDoc(doc(db, "settings", "gallery"), { images: u }); } catch (e) { } };
-  const handleSaveHeroImage = async () => { if (!heroImgInput.trim()) return; const n = { ...settings, heroImage: heroImgInput.trim() }; setSettings(n); try { await setDoc(doc(db, "settings", "appSettings"), n); alert("✅ Saved!"); } catch (e) { alert("⚠️ Save nahi hua: " + e.message); } };
+  const handleSaveHeroImage = async () => { if (!heroImgInput.trim()) return; const n = { ...settings, heroImage: heroImgInput.trim() }; setSettings(n); try { await setDoc(doc(db, "settings", "appSettings"), { heroImage: heroImgInput.trim() }, { merge: true }); alert("✅ Saved!"); } catch (e) { alert("⚠️ Save nahi hua: " + e.message); } };
   const handleExportCSV = () => {
     const rows = [["Time", "Type", "Items", "Total", "Paid"]];
     filteredOrders.forEach(o => { const t = getOrderTotal(o); rows.push([new Date(o.createdAt).toLocaleTimeString('en-IN'), o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`, o.items.map(it => `${it.qty}x ${it.name}`).join("; "), t, o.paid ? "Yes" : "No"]); });
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = rows.map(r => r.map(c => `"${String(HX.csvCell(c)).replace(/"/g, '""')}"`).join(",")).join("\n");
     const link = document.createElement('a');
     link.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent("\uFEFF" + csv);
     link.download = `orders_${filterDate}.csv`; link.click();
@@ -5516,7 +5529,7 @@ function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, or
                 const newSettings = { ...settings, heroImage: url };
                 setSettings(newSettings);
                 try {
-                  await setDoc(doc(db, "settings", "appSettings"), newSettings);
+                  await setDoc(doc(db, "settings", "appSettings"), { heroImage: url }, { merge: true });
                   alert("✅ Wallpaper update ho gaya!");
                 } catch (e) {
                   alert("⚠️ Save fail: " + e.message);
@@ -6815,7 +6828,7 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
 });
   
   const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  startOfToday.setTime(HX.businessDayStart());
   const reloadAt = new Date(); reloadAt.setHours(5, 0, 0, 0);
   if (reloadAt <= new Date()) reloadAt.setDate(reloadAt.getDate() + 1);
   const reloadTimer = setTimeout(() => window.location.reload(), reloadAt - new Date());
@@ -6934,11 +6947,16 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
         if (!snap.exists()) return;
         const cur = snap.data();
         if (cur.status === "cancelled") return;
+        if (cur.status !== currentStatus) throw new Error("STALE_STATUS"); // another screen already moved it
         const patch = { status: nextStatus, ...(nextStatus === "served" ? { servedAt: Date.now() } : {}) };
         if (cur.kots?.length) patch.kots = cur.kots.map(k => (k.status === currentStatus ? { ...k, status: nextStatus } : k));
         tx.update(ref, patch);
       });
-    } catch (e) { console.error(e); alert("⚠️ Status update fail hua. Dobara try karo."); }
+    } catch (e) {
+      console.error(e);
+      setOrdersState(prev => prev.map(o => (o.id === orderId ? { ...o, status: currentStatus, ...(order?.kots ? { kots: order.kots } : {}) } : o)));
+      alert(String(e && e.message).includes("STALE_STATUS") ? "⚠️ Ye order kisi aur screen se pehle hi aage badh chuka hai." : "⚠️ Status update fail hua. Dobara try karo.");
+    }
   };
   const advanceStatusOld = async (orderId, currentStatus) => {
     const idx = STATUS_FLOW.indexOf(currentStatus);
