@@ -4078,17 +4078,17 @@ function BillPOSScreenInner(p) {
     ? (orders || []).find((o) => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled" && Number(o.table) === Number(p.table))
     : null;
 
-    const inp = { padding: isDesktop ? "10px 12px" : "10px 10px", border: `1.5px solid #E0DDD5`, borderRadius: 10, fontSize: isDesktop ? 13 : 15, width: "100%", boxSizing: "border-box", fontFamily: "inherit", minWidth: 0, background: "#FDFCFA", color: COLORS.ink, colorScheme: "light", transition: "all 0.15s ease", outline: "none" };
+    const inp = { padding: isDesktop ? "9px 12px" : "10px 10px", border: `1px solid #E5E7EB`, borderRadius: 8, fontSize: isDesktop ? 13 : 14, width: "100%", boxSizing: "border-box", fontFamily: "inherit", minWidth: 0, background: "#fff", color: "#111827", colorScheme: "light", transition: "all 0.15s ease", outline: "none" };
 
-  const chip = (on, color = COLORS.copper) => ({ padding: isDesktop ? "7px 14px" : "8px 12px", borderRadius: 10, border: `1.5px solid ${on ? color : "#E0DDD5"}`, background: on ? color : "#FDFCFA", color: on ? "#fff" : COLORS.text, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", transition: "all 0.15s ease", boxShadow: on ? `0 2px 8px ${color}33` : "none" });
+  const chip = (on, color = "#DC2626") => ({ padding: isDesktop ? "7px 14px" : "8px 12px", borderRadius: 6, border: `1px solid ${on ? color : "#E5E7EB"}`, background: on ? color : "#fff", color: on ? "#fff" : "#374151", fontWeight: 600, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", transition: "all 0.15s ease", boxShadow: on ? `0 1px 3px ${color}40` : "0 1px 2px rgba(0,0,0,0.04)" });
   const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: isDesktop ? 34 : 30 };
   const disabled = p.saving || items.length === 0;
-  const footBtn = (bg, color, border) => ({ flex: 1, padding: isDesktop ? "12px 6px" : "9px 4px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 14, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
+  const footBtn = (bg, color, border) => ({ flex: 1, padding: isDesktop ? "11px 12px" : "9px 6px", borderRadius: 6, border: border || "none", background: disabled ? "#F3F4F6" : bg, color: disabled ? "#9CA3AF" : color, fontWeight: 700, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit", transition: "all 0.15s ease" });
   const actBtn = (bg, color, border) => ({ display: "none", flex: 1, padding: "11px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
   const qtyBtn = { width: isDesktop ? 24 : 28, height: isDesktop ? 24 : 28, border: "none", background: "transparent", color: COLORS.sage, fontSize: 16, fontWeight: 800, cursor: "pointer", padding: 0 };
 
   const menuPane = (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, height: "100%", padding: isDesktop ? "16px 20px" : "12px 14px", background: "#F9FAFB" }}>
       <div style={{ display: "flex", gap: 6 }}>
         <input placeholder="🔍 Item search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...inp, flex: 1, width: "auto" }} />
                 <button type="button" onClick={() => setShowNew(true)} style={{ ...chip(true, COLORS.sage), padding: "9px 12px" }}>{isDesktop ? "➕ New Item" : "➕ Item"}</button>
@@ -4161,7 +4161,7 @@ function BillPOSScreenInner(p) {
         {list.map((m) => {
           const q = qtyOf(m.id);
           return (
-            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "10px 12px", borderRadius: 12, border: `1.5px solid ${q > 0 ? COLORS.sage : "#E8E6DC"}`, background: q > 0 ? COLORS.sageLight : "#fff", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isDesktop ? 56 : 72, transition: "all 0.15s ease", boxShadow: q > 0 ? "0 2px 8px rgba(74,124,89,0.15)" : "0 1px 2px rgba(0,0,0,0.02)" }} className="smooth-transition hover-lift">
+            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "10px 12px", borderRadius: 8, border: `1px solid ${q > 0 ? "#DC2626" : "#E5E7EB"}`, background: q > 0 ? "#FEF2F2" : "#fff", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isDesktop ? 56 : 72, transition: "all 0.15s ease", boxShadow: q > 0 ? "0 1px 3px rgba(220,38,38,0.15)" : "0 1px 2px rgba(0,0,0,0.03)" }} className="smooth-transition hover-lift">
               <div style={{ display: "flex", gap: 5, alignItems: "flex-start" }}>
                 <VegDot veg={m.veg} />
                 <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2, color: COLORS.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{m.name}</span>
@@ -4225,10 +4225,10 @@ function BillPOSScreenInner(p) {
         </div>
       </div>
 
-      <div style={{ flex: isDesktop ? 1 : "none", minHeight: 80, maxHeight: isDesktop ? "none" : "34dvh", overflowY: "auto", border: `1.5px solid #E8E6DC`, borderRadius: 14, background: "#fff", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.03)" }}>
+      <div style={{ flex: isDesktop ? 1 : "none", minHeight: 80, maxHeight: isDesktop ? "none" : "34dvh", overflowY: "auto", border: `1px solid #E5E7EB`, borderRadius: 8, background: "#fff" }}>
         {items.length === 0 && <div style={{ textAlign: "center", padding: 16, color: COLORS.textLight, fontSize: 12 }}>Menu se item tap karo ➕</div>}
         {items.map((it) => (
-          <div key={it._rowId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: `1px solid #F0EFEB`, transition: "background 0.15s ease" }} onMouseEnter={(e) => e.currentTarget.style.background = "#FAFAF8"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+          <div key={it._rowId} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderBottom: `1px solid #F3F4F6`, transition: "background 0.15s ease" }} onMouseEnter={(e) => e.currentTarget.style.background = "#F9FAFB"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}{it.portion ? ` (${it.portion})` : ""}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
@@ -4323,18 +4323,18 @@ function BillPOSScreenInner(p) {
   );
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)", zIndex: 200, display: "flex", alignItems: isDesktop ? "center" : "flex-end", justifyContent: "center" }} onClick={p.onClose}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,0.55)", backdropFilter: "blur(6px)", zIndex: 200, display: "flex", alignItems: isDesktop ? "center" : "flex-end", justifyContent: "center" }} onClick={p.onClose}>
       <div onClick={(e) => e.stopPropagation()} className="slide-up"
        style={{ background: "#fff", colorScheme: "light", width: isDesktop ? "min(1200px, 97vw)" : "100%",
- maxWidth: isDesktop ? 1200 : 560, height: isDesktop ? "92vh" : "95dvh", borderRadius: isDesktop ? 24 : "24px 24px 0 0", padding: isDesktop ? 16 : "12px 12px calc(12px + env(safe-area-inset-bottom, 0px))", display: "flex", flexDirection: "column", boxSizing: "border-box", gap: 12, boxShadow: "0 24px 80px rgba(0,0,0,0.3)" }}>
+ maxWidth: isDesktop ? 1280 : 560, height: isDesktop ? "94vh" : "95dvh", borderRadius: isDesktop ? 14 : "20px 20px 0 0", padding: isDesktop ? 0 : "0 0 calc(0px + env(safe-area-inset-bottom, 0px))", display: "flex", flexDirection: "column", boxSizing: "border-box", gap: 0, boxShadow: "0 25px 50px rgba(0,0,0,0.15)", overflow: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800, background: "linear-gradient(135deg, #1A1A1A 0%, #3C3C3C 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: "-0.01em" }}>🧾 {isDraft ? "New Order + Bill" : "Order Bill"}</div>
           <button type="button" onClick={p.onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 30, height: 30, fontSize: 14, cursor: "pointer" }}>✕</button>
         </div>
 
         {(isDesktop || tab === "bill") && (
-          <div style={{ order: 99, display: "flex", gap: 6, alignItems: "center", flexShrink: 0, paddingTop: 8, borderTop: `1px solid ${COLORS.line}` }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: COLORS.copper, fontFamily: "'JetBrains Mono', monospace", minWidth: 70 }}>₹{calc.total}</div>
+          <div style={{ order: 99, display: "flex", gap: 8, alignItems: "center", flexShrink: 0, padding: "12px 20px", background: "#F9FAFB", borderTop: `1px solid #E5E7EB` }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: "#DC2626", fontFamily: "'JetBrains Mono', monospace", minWidth: 80 }}>₹{calc.total}</div>
             <button type="button" disabled={disabled} onClick={() => p.onAction("save")} style={footBtn("transparent", COLORS.sage, `2px solid ${COLORS.sage}`)}>
               {p.saving ? "⏳..." : (isDraft && p.sendKot ? "🍳 KOT" : "💾 Save")}
             </button>
