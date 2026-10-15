@@ -6,7 +6,7 @@ import { db, auth, authReady } from "./firebase";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc,
-  getDocs, getDoc, addDoc, query, orderBy, serverTimestamp, where,
+  getDocs, getDoc, addDoc, query, orderBy, serverTimestamp, where, limit, arrayUnion, arrayRemove, limit, arrayUnion, arrayRemove,
   runTransaction  //  ADD THIS
 } from "firebase/firestore";
 import { QRCodeSVG } from 'qrcode.react';
@@ -276,7 +276,10 @@ function getCartQty(cartEntry) {
 function getCartLineTotal(cartEntry, menuItem) {
   if (!cartEntry || !menuItem) return 0;
   const price = cartEntry.priceOverride ?? menuItem.price ?? 0;
-  return price * getCartQty(cartEntry);
+  const _q = getCartQty(cartEntry);
+  if (cartEntry.priceOverride == null) return price * _q;
+  const _cap = Math.min(_q, cartEntry.ovQty ?? _q);
+  return price * _cap + (menuItem.price ?? 0) * (_q - _cap);
 }
 
 function getSmartSuggestionPool(menu, cart) {
@@ -358,6 +361,17 @@ class ErrorBoundary extends React.Component {
     this.setState({ error, errorInfo: info });
   }
   render() {
+    if (this.state.hasError && this.props.compact) {
+      return (
+        <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 20, maxWidth: 320, textAlign: "center" }}>
+            <div style={{ fontSize: 40 }}>⚠️</div>
+            <div style={{ fontWeight: 800, margin: "8px 0 14px" }}>Ye screen me dikkat aayi. Band karke dobara kholo.</div>
+            <button onClick={() => { this.setState({ hasError: false, error: null, errorInfo: null }); if (this.props.onReset) this.props.onReset(); }} style={{ background: COLORS.ink, color: "#fff", border: "none", padding: "10px 24px", borderRadius: 10, fontWeight: 800, cursor: "pointer" }}>Theek hai</button>
+          </div>
+        </div>
+      );
+    }
     if (this.state.hasError) {
       return (
         <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', padding: 20 }}>
@@ -2058,7 +2072,7 @@ ${notes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #000;
 }
 
 const deriveBill = (o) => ({
-  items: (o.items || []).map((it, i) => ({ ...it, _rowId: i + "_" + Math.random().toString(36).slice(2, 6) })),
+  items: (o.items || []).map((it, i) => ({ ...it, _origQty: it.qty, _rowId: i + "_" + Math.random().toString(36).slice(2, 6) })),
   gstRate: o.gstRate ?? 0,
   disc: o.billEditedAt ? (o.billDiscount || 0) : (o.loyaltyDiscount || 0),
   discPct: o.billEditedAt ? (o.billDiscountPct || 0) : (o.discount || 0),
@@ -2120,7 +2134,7 @@ function POSController({ initialOrder, orders, menu, categories, viewMode, place
     try {
       const { sub, gstRate: gr, gst, discPctAmt, discAmt, total } = calc;
       const updated = {
-        items: items.map(({ _rowId, _new, ...rest }) => (!billOrder.isDraft && _new ? { ...rest, kotNumber: getNextKotNo(billOrder) } : rest)),
+        items: items.map(({ _rowId, _new, _origQty, ...rest }) => (!billOrder.isDraft && _new ? { ...rest, kotNumber: getNextKotNo(billOrder) } : rest)),
         subtotal: sub, gstRate: gr, gstAmount: gst,
         billDiscount: discAmt, billDiscountPct: discPct, billDiscountAmt: discPctAmt,
         finalTotal: total, payment: payMode,
@@ -2146,10 +2160,14 @@ function POSController({ initialOrder, orders, menu, categories, viewMode, place
         await placeOrder(fullOrder);
         return fullOrder;
       }
-      const addedRows = items.filter((it) => it._new && (it.qty || 0) > 0);
+      const addedRows = items.map((it) => {
+        if (it._new) return (it.qty || 0) > 0 ? it : null;
+        const extra = (it.qty || 0) - (it._origQty ?? it.qty);
+        return extra > 0 ? { ...it, qty: extra } : null;
+      }).filter(Boolean);
       if (addedRows.length > 0) {
         const no = getNextKotNo(billOrder);
-        const runKot = { id: uid("kot"), kotNumber: no, items: addedRows.map(({ _rowId, _new, ...r }) => ({ ...r, kotNumber: no })), createdAt: Date.now(), status: "new", isRunning: true };
+        const runKot = { id: uid("kot"), kotNumber: no, items: addedRows.map(({ _rowId, _new, _origQty, ...r }) => ({ ...r, kotNumber: no })), createdAt: Date.now(), status: "new", isRunning: true };
         clean.kots = JSON.parse(JSON.stringify([...getBaseKots(billOrder), runKot]));
         clean.status = "new";
         clean.lastKotAt = Date.now();
@@ -2157,7 +2175,7 @@ await guardedOrderUpdate(billOrder, clean);
 
         return { ...billOrder, ...clean, _ranKot: true };
       }
-      await updateDoc(doc(db, "orders", billOrder.id), clean);
+      await guardedOrderUpdate(billOrder, clean);
       return { ...billOrder, ...updated };
     } catch (e) {
       console.error("waiter saveBill error:", e);
@@ -2291,6 +2309,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const cartRef = useRef({});
   const lastStatusRef = useRef({});
   const payIdRef = useRef(null);
+  const pendingOrderIdRef = useRef(null);
   const aiTimerRef = useRef(null);
   const waiterLock = usePinLockout();  const [cart, setCart] = useState({});
   const [showAiModal, setShowAiModal] = useState(false);
@@ -2499,7 +2518,7 @@ if (savedCart) {
       if (q <= 0) delete next[id];
       else {
         const existingOverride = prev[id]?.priceOverride;
-        next[id] = existingOverride != null ? { qty: q, priceOverride: existingOverride } : { qty: q };
+        next[id] = existingOverride != null ? { qty: q, priceOverride: existingOverride, ovQty: prev[id].ovQty } : { qty: q };
       }
       return next;
     });
@@ -2836,6 +2855,9 @@ const handleWaiterPinSubmitOld = () => {
 
   const handlePlaceOrder = useCallback(async () => {
     if (isProcessingPayment) return;
+    if (isScheduled && (!scheduleDate || !scheduleTime)) { showToast("⚠️ Schedule ki date aur time dono daalo", 'error'); return; }
+    const _gone = cartItems.filter(([id]) => !menu.some((m) => m.id === id && m.available));
+    if (_gone.length > 0) { showToast("⚠️ " + _gone.map(([id]) => (menu.find((m) => m.id === id) || {}).name || "Item").join(", ") + " ab available nahi hai — cart se hata do", 'error'); return; }
     if (cartItems.length === 0) return;
     if (!custName.trim()) { showToast("⚠️ Enter Name", 'error'); return; }
     if (!custPhone.trim() || custPhone.length < 10) { showToast("⚠️ Enter valid Phone", 'error'); return; }
@@ -2843,7 +2865,8 @@ const handleWaiterPinSubmitOld = () => {
 
     setIsProcessingPayment(true);
     try {
-      const orderId = uid("o");
+      if (!pendingOrderIdRef.current) pendingOrderIdRef.current = uid("o");
+      const orderId = pendingOrderIdRef.current;
       payIdRef.current = null;
       let paymentInfo = { paid: false, status: "pending", paymentId: null };
 
@@ -2865,7 +2888,7 @@ const handleWaiterPinSubmitOld = () => {
         const m = menu.find((x) => x.id === id);
         return {
           itemId: id, name: m.name, portion: m.portion || "",
-          price: entry.priceOverride ?? m.price, originalPrice: m.price,
+          price: Math.round((getCartLineTotal(entry, m) / Math.max(1, getCartQty(entry))) * 100) / 100, originalPrice: m.price,
           qty: getCartQty(entry), kotNumber: 1
         };
       });
@@ -2893,6 +2916,7 @@ const handleWaiterPinSubmitOld = () => {
 
       await placeOrder(order);
 
+      pendingOrderIdRef.current = null;
       const orderHistory = safeJSON('eatpark_orders', []);
       orderHistory.push(order);
       safeSet('eatpark_orders', orderHistory.slice(-30));
@@ -3070,7 +3094,10 @@ const handleWaiterPinSubmitOld = () => {
           const prevQty = getCartQty(prevEntry);
           const prevPrice = prevEntry?.priceOverride ?? l.menuItem.price;
           const newQty = prevQty + l.quantity;
-          next[l.id] = { qty: newQty, priceOverride: Math.round((prevQty * prevPrice + l.quantity * l.menuItem.price * ratio) / newQty) };
+          const _k = prevEntry?.priceOverride != null ? (prevEntry.ovQty ?? prevQty) : 0;
+          const _o = prevEntry?.priceOverride != null ? prevEntry.priceOverride : 0;
+          const _cp = l.menuItem.price * ratio;
+          next[l.id] = { qty: newQty, priceOverride: Math.round((_k * _o + l.quantity * _cp) / (_k + l.quantity)), ovQty: _k + l.quantity };
         });
         return next;
       });
@@ -3118,7 +3145,13 @@ const handleWaiterPinSubmitOld = () => {
     if (item.stock != null && getCartQty(cartRef.current[item.id]) + 1 > item.stock) {
       showToast(`⚠️ Sirf ${item.stock} bache hain`, 'warning'); return;
     }
-    setCart(prev => ({ ...prev, [item.id]: { qty: getCartQty(prev[item.id]) + 1, priceOverride: item.discountPrice } }));
+    setCart(prev => {
+      const e = prev[item.id];
+      const q = getCartQty(e);
+      const k = e?.priceOverride != null ? (e.ovQty ?? q) : 0;
+      const o = e?.priceOverride != null ? e.priceOverride : 0;
+      return { ...prev, [item.id]: { qty: q + 1, priceOverride: Math.round((k * o + item.discountPrice) / (k + 1)), ovQty: k + 1 } };
+    });
     showToast(`⚡ ${item.name} added!`, 'success');
   }, [menu, showToast]);
   const addFlashSaleToCartOld = useCallback((item) => {
@@ -3845,6 +3878,9 @@ const KeyboardHelpModal = memo(({ onClose }) => (
 // 🧾 BILL + ORDER — ONE SCREEN POS
 // ═══════════════════════════════════════════════
 function BillPOSScreen(p) {
+  return <ErrorBoundary compact onReset={p.onClose}><BillPOSScreenInner {...p} /></ErrorBoundary>;
+}
+function BillPOSScreenInner(p) {
   const { order, orders, menu, viewMode, items, setItems, calc } = p;
   const [tab, setTab] = useState(order && order.isDraft ? "menu" : "bill");
   const [presets] = usePresets();
@@ -4609,10 +4645,10 @@ setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("⚠️ KOT p
         clean.kots = JSON.parse(JSON.stringify([...getBaseKots(billOrder), runKot]));
         clean.status = "new";
         clean.lastKotAt = Date.now();
-        await updateDoc(doc(db, "orders", billOrder.id), clean);
+        await guardedOrderUpdate(billOrder, clean);
         return { ...billOrder, ...clean, _ranKot: true };
       }
-      await updateDoc(doc(db, "orders", billOrder.id), clean);
+      await guardedOrderUpdate(billOrder, clean);
       return { ...billOrder, ...updated };
     } catch (e) {
       console.error("saveBillEdits error:", e);
@@ -4835,6 +4871,9 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
                             {it.kotNumber > 1 && (<span style={{ fontSize: 10, marginLeft: 6, color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.info, fontWeight: 700 }}>KOT#{it.kotNumber}</span>)}
                           </div>
                         ))}
+                        {o.orderType === "parcel" && (<div style={{ fontSize: 13, marginTop: 8, padding: "6px 10px", borderRadius: 8, fontWeight: 800, background: isSelected ? "rgba(255,255,255,0.2)" : "#FFF3E0", color: isSelected ? "#fff" : "#E65100" }}>📍 {o.customer?.address || "Address nahi"}<br />📞 {o.customer?.phone || "-"} · {o.customer?.name || "-"}</div>)}
+                        {o.notes && (<div style={{ fontSize: 13, marginTop: 6, padding: "6px 10px", borderRadius: 8, fontWeight: 800, background: isSelected ? "rgba(255,255,255,0.2)" : "#FFFBEA", color: isSelected ? "#fff" : COLORS.ink }}>📝 {o.notes}</div>)}
+                        {o.isScheduled && o.scheduledDate && (<div style={{ fontSize: 13, marginTop: 6, padding: "6px 10px", borderRadius: 8, fontWeight: 800, background: isSelected ? "rgba(255,255,255,0.2)" : "#E3F2FD", color: isSelected ? "#fff" : "#1565C0" }}>📅 Scheduled: {o.scheduledDate} {o.scheduledTime}</div>)}
                         {o.claimedReward && (<div style={{ fontSize: 14, marginTop: 10, padding: '6px 10px', background: isSelected ? 'rgba(255,255,255,0.2)' : COLORS.sageLight, color: isSelected ? '#fff' : COLORS.sageDark, borderRadius: 8, fontWeight: 800 }}>🎁 FREE: {o.claimedReward}</div>)}
                         {o.payment && (<div style={{ fontSize: 11, marginTop: 6, color: isSelected ? 'rgba(255,255,255,0.7)' : COLORS.textLight, fontWeight: 600 }}>💳 {o.payment} {o.paid ? '✅' : '⏳'}</div>)}
                       </div>
@@ -5291,7 +5330,7 @@ function PresetsAdmin() {
   );
 }
 
-function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery, categories, updateCategories, flashSaleItems, setFlashSaleItems, comboOffers, setComboOffers, savePromotions }) {
+function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, orders, markPaid, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery, categories, updateCategories, flashSaleItems, setFlashSaleItems, comboOffers, setComboOffers, savePromotions }) {
   const [tab, setTab] = useState("overview");
   const [filterDate, setFilterDate] = useState(toLocalISODate(Date.now()));
   const [newInv, setNewInv] = useState({ name: "", stock: "", unit: "kg" });
@@ -5751,6 +5790,7 @@ function AdminView({ menu, setMenuState, bookings, orders, markPaid, requestPinP
               <div style={{ flex: 1 }}><div style={{ fontWeight: 800, fontSize: 16 }}>{item.name} <span style={{ fontSize: 12, color: COLORS.textLight }}>({item.category})</span></div><div style={{ color: COLORS.copper, fontWeight: 800 }}>{inr(item.price)}</div></div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => { setEditingItem(item); setNewItemName(item.name); setNewItemPrice(item.price); setNewItemCat(item.category); setNewItemImage(item.image); }} style={{ background: COLORS.paper2, border: 'none', padding: '8px 14px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Edit</button>
+                <button onClick={() => toggleAvail && toggleAvail(item.id)} style={{ background: unavail.includes(item.id) ? COLORS.error : COLORS.sageLight, color: unavail.includes(item.id) ? '#fff' : COLORS.sageDark, border: 'none', padding: '8px 14px', borderRadius: 8, fontWeight: 800, cursor: 'pointer' }}>{unavail.includes(item.id) ? '❌ Khatam' : '✅ Hai'}</button>
                 <button onClick={() => handleDeleteMenuItem(item.id)} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '8px 14px', borderRadius: 8, fontWeight: 700, cursor: 'pointer' }}>Delete</button>
               </div>
             </div>
@@ -6418,6 +6458,12 @@ const OrderTimer = memo(({ createdAt, estimatedTime }) => {
 // 21. MAIN APP
 // ==
 
+async function setOrderOnce(order) {
+  const ref = doc(db, "orders", order.id);
+  try { const ex = await getDoc(ref); if (ex.exists()) return; } catch (e) {}
+  await setDoc(ref, order);
+}
+
 let _anonInFlight = null;
 async function ensureUser() {
   try { await Promise.race([authReady, new Promise((r) => setTimeout(r, 4000))]); } catch (e) {}
@@ -6469,6 +6515,398 @@ export default function App() {
   const [coinHistory, setCoinHistory] = useState([]);
   const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); const t = Number(params.get("table")); return Number.isInteger(t) && t >= 1 && t <= 12 ? t : 1; });
   const [menu, setMenuState] = useState(DEFAULT_MENU);
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
+  const [unavail, setUnavail] = useState([]);
+  const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+  useEffect(() => {
+    let dead = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (dead) return;
+      unsub = onSnapshot(doc(db, "settings", "availability"), (snap) => {
+        const ids = snap.exists() ? snap.data().ids : [];
+        setUnavail(Array.isArray(ids) ? ids : []);
+      }, (e) => console.error("availability listener:", e));
+    }).catch(() => {});
+    return () => { dead = true; unsub(); };
+  }, []);
+  const toggleAvail = async (id) => {
+    const isOff = unavail.includes(id);
+    setUnavail((p) => (isOff ? p.filter((x) => x !== id) : [...p, id]));
+    try { await setDoc(doc(db, "settings", "availability"), { ids: isOff ? arrayRemove(id) : arrayUnion(id) }, { merge: true }); }
+    catch (e) { console.error(e); alert("⚠️ Save nahi hua. Internet / rules check karo."); setUnavail((p) => (isOff ? [...p, id] : p.filter((x) => x !== id))); }
+  };
   const [orders, setOrdersState] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80" });
@@ -6794,9 +7232,9 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
   useEffect(() => {
     if (!staffRole) return;
     (async () => {
-      try { const q1 = await getDocs(collection(db, "loyaltyUsers")); setLoyaltyUsers(q1.docs.map(d => d.data())); } catch (e) { console.error(e); }
-      try { const q2 = await getDocs(collection(db, "inventory")); setInventory(q2.docs.map(d => d.data())); } catch (e) { console.error(e); }
-      try { const q3 = await getDocs(collection(db, "coinHistory")); setCoinHistory(q3.docs.map(d => d.data())); } catch (e) { console.error(e); }
+      if (staffRole === "admin") try { const q1 = await getDocs(query(collection(db, "loyaltyUsers"), orderBy("coins", "desc"), limit(300))); setLoyaltyUsers(q1.docs.map(d => d.data())); } catch (e) { console.error(e); }
+      if (staffRole === "admin") try { const q2 = await getDocs(collection(db, "inventory")); setInventory(q2.docs.map(d => d.data())); } catch (e) { console.error(e); }
+      if (staffRole === "admin") try { const q3 = await getDocs(query(collection(db, "coinHistory"), orderBy("timestamp", "desc"), limit(300))); setCoinHistory(q3.docs.map(d => d.data())); } catch (e) { console.error(e); }
     })();
   }, [staffRole]);
 
@@ -6833,7 +7271,7 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
 
   const placeOrder = async (order) => {
     try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; const _u = await ensureUser(); order.createdBy = _u.uid;
- await Promise.race([setDoc(doc(db, "orders", order.id), order), new Promise((_, rej) => setTimeout(() => rej(new Error("Internet slow hai, order confirm nahi hua. Dobara try karo")), 15000))
+ await Promise.race([setOrderOnce(order), new Promise((_, rej) => setTimeout(() => rej(new Error("Internet slow hai, order confirm nahi hua. Dobara try karo")), 15000))
 ]);
     setOrdersState(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]); } catch (e) {
       console.error("placeOrder failed:", e.code, e.message);
@@ -6854,8 +7292,18 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
       updateData.kots = order.kots.map(k => (k.status === currentStatus ? { ...k, status: nextStatus } : k));
     }
     setOrdersState(prev => prev.map(o => (o.id === orderId ? { ...o, ...updateData } : o)));
-    try { await updateDoc(doc(db, "orders", orderId), updateData); }
-    catch (e) { console.error(e); alert("⚠️ Status update fail hua. Dobara try karo."); }
+    try {
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, "orders", orderId);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) return;
+        const cur = snap.data();
+        if (cur.status === "cancelled") return;
+        const patch = { status: nextStatus, ...(nextStatus === "served" ? { servedAt: Date.now() } : {}) };
+        if (cur.kots?.length) patch.kots = cur.kots.map(k => (k.status === currentStatus ? { ...k, status: nextStatus } : k));
+        tx.update(ref, patch);
+      });
+    } catch (e) { console.error(e); alert("⚠️ Status update fail hua. Dobara try karo."); }
   };
   const advanceStatusOld = async (orderId, currentStatus) => {
     const idx = STATUS_FLOW.indexOf(currentStatus);
@@ -6961,14 +7409,15 @@ const earned = Math.floor(getOrderTotal(order) / (Number(loyaltyRules?.rate) || 
     <ErrorBoundary>
       <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <style>{FONTS}</style>
+        {!online && (<div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999, background: COLORS.error, color: "#fff", textAlign: "center", padding: "6px 8px", fontWeight: 800, fontSize: 13 }}>📵 Internet nahi hai — order / KOT abhi nahi jayega</div>)}
         <div className="app-content">
   
   
-  {role === "customer" && <ErrorBoundary key="cust"><CustomerView menu={menu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} setLoyaltyRules={saveLoyaltyRules} advanceStatus={advanceStatus} /></ErrorBoundary>}
+  {role === "customer" && <ErrorBoundary key="cust"><CustomerView menu={menuEff} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} setLoyaltyRules={saveLoyaltyRules} advanceStatus={advanceStatus} /></ErrorBoundary>}
   
-  {role === "staff" && <ErrorBoundary key="staff"><StaffView menu={menu} orders={orders} placeOrder={placeOrder} categories={categories} setMenuState={setMenuState} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} /></ErrorBoundary>}
+  {role === "staff" && <ErrorBoundary key="staff"><StaffView menu={menuEff} orders={orders} placeOrder={placeOrder} categories={categories} setMenuState={setMenuState} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} /></ErrorBoundary>}
   
-  {role === "admin" && <ErrorBoundary key="admin"><AdminView menu={menu} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={saveLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} /></ErrorBoundary>}
+  {role === "admin" && <ErrorBoundary key="admin"><AdminView menu={menu} unavail={unavail} toggleAvail={toggleAvail} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={saveLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} /></ErrorBoundary>}
   
   {/* (Removed unreachable fallback — role is always one of customer/staff/admin) */}
 </div>
