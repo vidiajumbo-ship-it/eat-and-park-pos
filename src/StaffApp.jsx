@@ -262,7 +262,38 @@ export default function StaffApp() {
           <KOTView C={C} orders={orders} />
         )}
         {activeTab === "dashboard" && (
-          <DashboardView C={C} orders={orders} todayRevenue={todayRevenue} todayTotal={todayTotal} paidCount={paidCount} activeOrders={activeOrders.length} />
+          <DashboardView
+            C={C}
+            orders={orders}
+            menu={menu}
+            todayRevenue={todayRevenue}
+            todayTotal={todayTotal}
+            paidCount={paidCount}
+            activeOrders={activeOrders.length}
+            onStatusClick={(status) => {
+              // Orders tab pe jao + filter set karo
+              if (status === "all") {
+                setActiveTab("orders");
+              } else if (status === "paid") {
+                setActiveTab("orders");
+                // paid filter — handled in OrdersView
+              } else if (status === "active") {
+                setActiveTab("orders");
+              } else {
+                // status (new / preparing / ready / served)
+                setActiveTab("orders");
+              }
+            }}
+            onOrderClick={(order) => {
+              // Order detail dekho — agar dine_in hai to table billing kholo
+              if (order.orderType === "dine_in" && order.table) {
+                setSelectedTable(Number(order.table));
+              } else {
+                // Parcel order — Orders tab pe le jao
+                setActiveTab("orders");
+              }
+            }}
+          />
         )}
       </div>
 
@@ -536,45 +567,153 @@ function KOTView({ C, orders }) {
 // ═══════════════════════════════════════════════════════
 // 📊 DASHBOARD VIEW
 // ═══════════════════════════════════════════════════════
-function DashboardView({ C, orders, todayRevenue, todayTotal, paidCount, activeOrders }) {
+function DashboardView({ C, orders, menu, todayRevenue, todayTotal, paidCount, activeOrders, onStatusClick, onOrderClick }) {
   const avgOrder = todayTotal ? Math.round(todayRevenue / Math.max(1, paidCount)) : 0;
   const statusCounts = { new: 0, preparing: 0, ready: 0, served: 0 };
   orders.forEach(o => { if (statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
+
+  // Recent 10 orders (sorted by latest first)
+  const recentOrders = [...orders].sort((a, b) => b.createdAt - a.createdAt).slice(0, 10);
 
   return (
     <div>
       <h2 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 800, color: C.ink }}>📊 Dashboard</h2>
 
+      {/* STATS CARDS — clickable */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
         {[
-          { label: "Revenue", value: inr(todayRevenue), color: C.green, icon: "💰" },
-          { label: "Total Orders", value: todayTotal, color: C.red, icon: "📋" },
-          { label: "Paid", value: paidCount, color: C.green, icon: "✅" },
-          { label: "Active", value: activeOrders, color: C.amber, icon: "🔥" },
-          { label: "Avg Order", value: inr(avgOrder), color: C.blue, icon: "📈" },
+          { label: "Revenue", value: inr(todayRevenue), color: C.green, icon: "💰", click: null },
+          { label: "Total Orders", value: todayTotal, color: C.red, icon: "📋", click: () => onStatusClick && onStatusClick("all") },
+          { label: "Paid", value: paidCount, color: C.green, icon: "✅", click: () => onStatusClick && onStatusClick("paid") },
+          { label: "Active", value: activeOrders, color: C.amber, icon: "🔥", click: () => onStatusClick && onStatusClick("active") },
+          { label: "Avg Order", value: inr(avgOrder), color: C.blue, icon: "📈", click: null },
         ].map((s, i) => (
-          <div key={i} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+          <div
+            key={i}
+            onClick={s.click || undefined}
+            style={{
+              background: C.card,
+              border: `1px solid ${C.line}`,
+              borderRadius: 14,
+              padding: 20,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              cursor: s.click ? "pointer" : "default",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={s.click ? (e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.1)"; } : undefined}
+            onMouseLeave={s.click ? (e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; } : undefined}
+          >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
               <span style={{ fontSize: 26 }}>{s.icon}</span>
             </div>
             <div style={{ fontSize: 26, fontWeight: 900, color: s.color, fontFamily: "monospace" }}>{s.value}</div>
+            {s.click && <div style={{ fontSize: 10, color: C.gray, marginTop: 6, fontWeight: 700 }}>👆 Tap for details</div>}
           </div>
         ))}
       </div>
 
-      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginBottom: 16 }}>Order Status</div>
+      {/* ORDER STATUS — CLICKABLE cards */}
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>Order Status</div>
+          <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>👆 Tap any card to see orders</div>
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {STATUS_FLOW.map(s => {
             const st = STATUS[s];
             const color = C[st.color] || C.gray;
+            const count = statusCounts[s];
             return (
-              <div key={s} style={{ background: C[st.color + "Light"] || C.light, borderRadius: 12, padding: 16, textAlign: "center" }}>
+              <button
+                key={s}
+                onClick={() => onStatusClick && onStatusClick(s)}
+                disabled={count === 0}
+                style={{
+                  background: C[st.color + "Light"] || C.light,
+                  border: `2px solid ${count > 0 ? color : "transparent"}`,
+                  borderRadius: 12,
+                  padding: 16,
+                  textAlign: "center",
+                  cursor: count > 0 ? "pointer" : "default",
+                  opacity: count > 0 ? 1 : 0.6,
+                  fontFamily: "inherit",
+                  transition: "all 0.15s ease",
+                }}
+              >
                 <div style={{ fontSize: 28, marginBottom: 6 }}>{st.emoji}</div>
-                <div style={{ fontSize: 24, fontWeight: 900, color }}>{statusCounts[s]}</div>
+                <div style={{ fontSize: 24, fontWeight: 900, color }}>{count}</div>
                 <div style={{ fontSize: 11, color: C.gray, fontWeight: 700, textTransform: "uppercase", marginTop: 4 }}>{st.label}</div>
-              </div>
+                {count > 0 && <div style={{ fontSize: 10, color, fontWeight: 800, marginTop: 6 }}>Tap →</div>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* RECENT ORDERS — LAST 10 with details */}
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>📋 Recent Orders (Last 10)</div>
+          <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>{orders.length} total today</div>
+        </div>
+
+        {recentOrders.length === 0 && (
+          <div style={{ textAlign: "center", padding: 40, color: C.gray }}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>😌</div>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Aaj koi order nahi</div>
+          </div>
+        )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {recentOrders.map((o) => {
+            const st = STATUS[o.status] || STATUS.new;
+            const color = C[st.color] || C.gray;
+            const bg = C[st.color + "Light"] || C.light;
+            return (
+              <button
+                key={o.id}
+                onClick={() => onOrderClick && onOrderClick(o)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "12px 16px",
+                  background: C.cardAlt,
+                  border: `1px solid ${C.line}`,
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  textAlign: "left",
+                  gap: 12,
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = C[st.color + "Light"] || C.light; }}
+                onMouseLeave={(e) => { e.currentTarget.currentTarget.style.background = C.cardAlt; }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 24 }}>{o.orderType === "parcel" ? "🛍️" : "🍽️"}</div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`}</span>
+                      <span style={{ background: bg, color, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>{st.emoji} {st.label}</span>
+                      {o.paid && <span style={{ background: C.greenLight, color: C.green, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>✅ PAID</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.gray, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      #{(o.id || "").slice(1, 5).toUpperCase()} · {timeAgo(o.createdAt)} ago · {(o.items || []).length} items
+                      {o.waiter ? ` · 🧑‍🍳 ${o.waiter}` : ""}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.gray, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {(o.items || []).slice(0, 3).map(it => `${it.qty}× ${it.name}`).join(", ")}
+                      {(o.items || []).length > 3 ? ` +${o.items.length - 3} more` : ""}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</div>
+                  <div style={{ fontSize: 10, color: C.gray, marginTop: 3, fontWeight: 700 }}>Tap →</div>
+                </div>
+              </button>
             );
           })}
         </div>
