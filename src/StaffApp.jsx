@@ -472,7 +472,7 @@ function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, search, se
                 <button onClick={(e) => { e.stopPropagation(); onAddMore && onAddMore(t.order); }} style={{ padding: "6px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>➕ Add</button>
               </div>
             ) : (
-              <button onClick={(e) => { e.stopPropagation(); onTableClick(t.table); }} style={{ marginTop: 8, padding: "6px", border: "none", borderRadius: 6, background: C.ink, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>➕ New Order</button>
+              <button onClick={(e) => { e.stopPropagation(); onTableClick(t.table); }} style={{ marginTop: 8, padding: "7px 4px", border: "none", borderRadius: 6, background: C.ink, color: "#fff", fontWeight: 800, fontSize: 10, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>➕ New Order</button>
             )}
           </div>
         ))}
