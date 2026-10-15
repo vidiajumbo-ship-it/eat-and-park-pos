@@ -4153,7 +4153,7 @@ function BillPOSScreenInner(p) {
       )}
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, flexShrink: 0 }}>
         {["all", ...cats].map((c) => (
-          <button key={c} type="button" onClick={() => setCat(c)} style={chip(cat === c, COLORS.ink)}>{c === "all" ? "All" : c}</button>
+          <button key={c} type="button" onClick={() => setCat(c)} style={chip(cat === c, "#111827")}>{c === "all" ? "All" : c}</button>
         ))}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "grid", gridTemplateColumns: isDesktop ? "repeat(auto-fill, minmax(170px, 1fr))" : "repeat(2, 1fr)", gap: 6, alignContent: "start" }}>
@@ -4302,7 +4302,7 @@ function BillPOSScreenInner(p) {
       </div>
 
       <div style={{ background: "linear-gradient(135deg, #FDFCFA 0%, #F5F3EE 100%)", borderRadius: 14, padding: "14px 16px", fontSize: 13, border: `1.5px solid #E8E0D0`, boxShadow: "0 4px 16px rgba(0,0,0,0.04)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}><span style={{ color: "#8A8375", fontWeight: 600 }}>Subtotal ({itemCount} items)</span><b style={{ fontFamily: "'JetBrains Mono', monospace" }}>₹{calc.sub}</b></div>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0" }}><span style={{ color: "#6B7280", fontWeight: 600 }}>Subtotal</span><b style={{ fontFamily: "'JetBrains Mono', monospace", color: "#111827" }}>₹{calc.sub}</b></div>
         {p.discPct > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.success }}><span>Discount {p.discPct}%</span><b>-₹{calc.discPctAmt}</b></div>}
         {p.disc > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.success }}><span>Extra discount</span><b>-₹{calc.discAmt}</b></div>}
         {calc.gstRate > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.copper }}><span>GST {calc.gstRate}%</span><b>+₹{calc.gst}</b></div>}
@@ -4335,8 +4335,8 @@ function BillPOSScreenInner(p) {
         {(isDesktop || tab === "bill") && (
           <div style={{ order: 99, display: "flex", gap: 8, alignItems: "center", flexShrink: 0, padding: "12px 20px", background: "#F9FAFB", borderTop: `1px solid #E5E7EB` }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: "#DC2626", fontFamily: "'JetBrains Mono', monospace", minWidth: 80 }}>₹{calc.total}</div>
-            <button type="button" disabled={disabled} onClick={() => p.onAction("save")} style={footBtn("transparent", COLORS.sage, `2px solid ${COLORS.sage}`)}>
-              {p.saving ? "⏳..." : (isDraft && p.sendKot ? "🍳 KOT" : "💾 Save")}
+            <button type="button" disabled={disabled} onClick={() => p.onAction("save")} style={footBtn("#DC2626", "#fff")}>
+              {p.saving ? "⏳..." : (isDraft && p.sendKot ? "🍳 Send KOT" : "💾 Save")}
             </button>
             {!p.hidePrint && (
               <>
@@ -4362,8 +4362,8 @@ function BillPOSScreenInner(p) {
               {tab === "menu" ? menuPane : billPane}
             </div>
             {tab === "menu" && (
-              <button type="button" onClick={() => setTab("bill")} style={{ padding: 12, borderRadius: 12, border: "none", background: COLORS.sage, color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", display: "flex", justifyContent: "space-between" }}>
-                <span>{itemCount} item{itemCount !== 1 ? "s" : ""}</span><span>Bill dekho ₹{calc.total} ➔</span>
+              <button type="button" onClick={() => setTab("bill")} style={{ padding: "14px 16px", borderRadius: 8, border: "none", background: "#DC2626", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 12px rgba(220,38,38,0.25)" }}>
+                <span>{itemCount} item{itemCount !== 1 ? "s" : ""}</span><span style={{ fontFamily: "'JetBrains Mono', monospace" }}>₹{calc.total} ➔</span>
               </button>
             )}
           </>
