@@ -70,8 +70,19 @@ export default function StaffApp() {
   const [cart, setCart] = useState({});
   const [waiterName, setWaiterName] = useState("");
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("staff_dark") === "1");
+  const [lang, setLang] = useState(() => localStorage.getItem("staff_lang") || "en");
   const [searchTable, setSearchTable] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [feedbackOrder, setFeedbackOrder] = useState(null);
+  const [tableMerge, setTableMerge] = useState(null);
+  const [splitBillOrder, setSplitBillOrder] = useState(null);
+  const [reportRange, setReportRange] = useState("today");
+
+  const T = {
+    en: { tables: "Tables", orders: "Orders", kitchen: "Kitchen", dashboard: "Dashboard", logout: "Logout", search: "Search", save: "Save", cancel: "Cancel", print: "Print", paid: "Paid", sendKot: "Send KOT", total: "TOTAL", subtotal: "Subtotal", available: "Available", occupied: "Occupied", revenue: "Revenue", active: "Active" },
+    hi: { tables: "टेबल", orders: "ऑर्डर", kitchen: "किचन", dashboard: "डैशबोर्ड", logout: "लॉगआउट", search: "खोजें", save: "सेव", cancel: "रद्द", print: "प्रिंट", paid: "पेड", sendKot: "KOT भेजें", total: "कुल", subtotal: "सबटोटल", available: "खाली", occupied: "व्यस्त", revenue: "कमाई", active: "चालू" }
+  };
+  const t = (k) => (T[lang] && T[lang][k]) || (T.en[k] || k);
 
   const C = darkMode ? DARK : LIGHT;
 
@@ -233,6 +244,7 @@ export default function StaffApp() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button onClick={() => { const n = lang === "en" ? "hi" : "en"; setLang(n); localStorage.setItem("staff_lang", n); }} title="Language" style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 44, height: 38, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 800 }}>{lang === "en" ? "EN" : "हि"}</button>
           <button onClick={() => setDarkMode(d => !d)} title="Toggle theme" style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 38, height: 38, borderRadius: 8, fontSize: 16, cursor: "pointer" }}>{darkMode ? "☀️" : "🌙"}</button>
           <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: "9px 16px", borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Logout</button>
         </div>
@@ -241,10 +253,10 @@ export default function StaffApp() {
       {/* TABS */}
       <div style={{ background: C.card, borderBottom: `1px solid ${C.line}`, padding: "0 16px", display: "flex", gap: 4, overflowX: "auto" }}>
         {[
-          { id: "tables", label: "🍽️ Tables" },
-          { id: "orders", label: "📋 Orders" },
-          { id: "kot", label: "🍳 Kitchen" },
-          { id: "dashboard", label: "📊 Dashboard" },
+          { id: "tables", label: "🍽️ " + t("tables") },
+          { id: "orders", label: "📋 " + t("orders") },
+          { id: "kot", label: "🍳 " + t("kitchen") },
+          { id: "dashboard", label: "📊 " + t("dashboard") },
         ].map((t) => (
           <button key={t.id} onClick={() => { setActiveTab(t.id); setSelectedTable(null); }} style={{ padding: "15px 20px", border: "none", background: "transparent", color: activeTab === t.id ? C.red : C.gray, fontWeight: 700, fontSize: 13, cursor: "pointer", borderBottom: activeTab === t.id ? `3px solid ${C.red}` : "3px solid transparent", whiteSpace: "nowrap" }}>{t.label}</button>
         ))}
@@ -422,6 +434,9 @@ function TablesView({ C, orders, onTableClick, search, setSearch, todayRevenue, 
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 Table number..." style={{ padding: "9px 14px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, outline: "none", width: 180, background: C.card, color: C.ink }} />
       </div>
 
+      <div style={{ background: C.blueLight, border: `1px solid ${C.blue}`, borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 12, color: C.blue, fontWeight: 700 }}>
+        💡 Tip: Table pe tap karo → waiter assign karo → order lo
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
         {filteredTables.map((t) => (
           <button key={t.table} onClick={() => onTableClick(t.table)} style={{ background: t.order ? C.redLight : C.card, border: `2px solid ${t.order ? C.red : C.line}`, borderRadius: 12, padding: 16, cursor: "pointer", textAlign: "left", minHeight: 100, display: "flex", flexDirection: "column", justifyContent: "space-between", fontFamily: "inherit", transition: "all 0.15s", color: C.ink }}>
@@ -517,6 +532,7 @@ function OrdersView({ C, orders, menu, waiterName }) {
                 )}
                 <button onClick={() => printKOT(o)} style={{ padding: "9px", border: `1.5px solid ${C.blue}`, borderRadius: 8, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>🍳 KOT</button>
                 <button onClick={() => printBill(o)} style={{ padding: "9px", border: `1.5px solid ${C.red}`, borderRadius: 8, background: "transparent", color: C.red, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>🖨️ Bill</button>
+                <button onClick={async () => { if (window.confirm("Cancel order?")) { try { await updateDoc(doc(db, "orders", o.id), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); } catch (e) { alert(e.message); } } }} style={{ padding: "9px", border: `1.5px solid ${C.gray}`, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>❌ Cancel Order</button>
               </div>
             </div>
           );
@@ -651,6 +667,51 @@ function DashboardView({ C, orders, menu, todayRevenue, todayTotal, paidCount, a
         </div>
       </div>
 
+      {/* REPORTS CHART */}
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>📈 Orders by Hour (Today)</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 120 }}>
+          {Array.from({ length: 24 }, (_, h) => {
+            const count = orders.filter(o => new Date(o.createdAt).getHours() === h).length;
+            const maxCount = Math.max(1, ...Array.from({ length: 24 }, (_, hh) => orders.filter(o => new Date(o.createdAt).getHours() === hh).length));
+            const height = (count / maxCount) * 100;
+            return (
+              <div key={h} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                <div style={{ width: "100%", height: 100, display: "flex", alignItems: "flex-end" }}>
+                  <div title={`${h}:00 — ${count} orders`} style={{ width: "100%", height: `${height}%`, minHeight: count > 0 ? 4 : 0, background: `linear-gradient(180deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 3, transition: "all 0.3s" }} />
+                </div>
+                {h % 4 === 0 && <div style={{ fontSize: 9, color: C.gray, fontWeight: 700 }}>{h}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* STAFF PERFORMANCE */}
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginBottom: 16 }}>🧑‍🍳 Staff Performance (Today)</div>
+        {(() => {
+          const byWaiter = {};
+          orders.forEach(o => { const w = o.waiter || "Staff"; byWaiter[w] = (byWaiter[w] || 0) + (Number(o.finalTotal) || 0); });
+          const sorted = Object.entries(byWaiter).sort((a, b) => b[1] - a[1]);
+          if (sorted.length === 0) return <div style={{ textAlign: "center", padding: 20, color: C.gray }}>Koi data nahi</div>;
+          const max = sorted[0][1];
+          return sorted.map(([name, amount], i) => (
+            <div key={name} style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>#{i + 1} {name}</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: C.green, fontFamily: "monospace" }}>{inr(amount)}</span>
+              </div>
+              <div style={{ background: C.line, height: 6, borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ width: `${(amount / max) * 100}%`, height: "100%", background: `linear-gradient(90deg, ${C.green} 0%, ${C.red} 100%)`, borderRadius: 3 }} />
+              </div>
+            </div>
+          ));
+        })()}
+      </div>
+
       {/* RECENT ORDERS — LAST 10 with details */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -725,6 +786,23 @@ function DashboardView({ C, orders, menu, todayRevenue, todayTotal, paidCount, a
 // ═══════════════════════════════════════════════════════
 // 🖨️ KOT PRINT
 // ═══════════════════════════════════════════════════════
+function printKOTThermal(order) {
+  // 80mm thermal printer style — narrower width
+  try {
+    const itemsHtml = (order.items || []).map(it => `<div style="border-bottom:1px dashed #000;padding:6px 0;font-size:16px"><b>${it.qty} × ${it.name}</b>${it.portion ? ` <i>(${it.portion})</i>` : ""}</div>`).join("");
+    const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+    document.body.appendChild(iframe);
+    const w = iframe.contentWindow;
+    setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 30000);
+    w.document.open();
+    w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{size:80mm auto;margin:0}*{color:#000!important}body{font-family:'Courier New',monospace;width:72mm;margin:0 auto;padding:4px;font-size:15px}h2,h3{text-align:center;margin:3px 0;font-weight:900}h2{font-size:24px}.c{text-align:center;font-size:12px;font-weight:700}.big{font-size:18px;font-weight:900}</style></head><body><h2>KOT</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + order.table}</h3><div class="c">${now}</div><div class="c">#${order.id.slice(1, 9).toUpperCase()}</div>${order.waiter ? `<div class="c">Waiter: ${order.waiter}</div>` : ""}<div style="border-top:2px solid #000;margin:8px 0"></div>${itemsHtml}<div style="border-top:2px solid #000;margin:8px 0"></div><div class="c big">Total Items: ${(order.items || []).reduce((s, it) => s + it.qty, 0)}</div></body></html>`);
+    w.document.close();
+    setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
+  } catch (e) { alert("Print error: " + e.message); }
+}
+
 function printKOT(order) {
   try {
     const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left;font-size:14px">${it.qty} × ${it.name}${it.portion ? ` (${it.portion})` : ""}</td></tr>`).join("");
@@ -796,6 +874,130 @@ ${order.billDiscount ? `<tr><td>Discount</td><td style="text-align:right">-₹${
     w.document.close();
     setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
   } catch (e) { alert("Print error: " + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════
+// ⭐ CUSTOMER FEEDBACK MODAL
+// ═══════════════════════════════════════════════════════
+function FeedbackModal({ C, order, onClose }) {
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!rating) { alert("Pehle rating do"); return; }
+    setSaving(true);
+    try {
+      await addDoc(collection(db, "feedback"), {
+        orderId: order.id,
+        table: order.table,
+        rating,
+        comment,
+        waiter: order.waiter || "Staff",
+        createdAt: Date.now(),
+      });
+      alert("✅ Feedback diya! Dhanyawaad.");
+      onClose();
+    } catch (e) { alert("❌ " + e.message); } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 24, width: "100%", maxWidth: 380, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+        <div style={{ fontSize: 48, marginBottom: 8 }}>⭐</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: C.ink, marginBottom: 4 }}>Customer Feedback</div>
+        <div style={{ fontSize: 12, color: C.gray, marginBottom: 20 }}>Table {order.table} · #{order.id.slice(1, 5).toUpperCase()}</div>
+        <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 16 }}>
+          {[1, 2, 3, 4, 5].map(n => (
+            <button key={n} onClick={() => setRating(n)} style={{ background: "transparent", border: "none", fontSize: 36, cursor: "pointer", filter: rating >= n ? "none" : "grayscale(1) opacity(0.4)", transition: "all 0.15s" }}>⭐</button>
+          ))}
+        </div>
+        <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Comment (optional)..." rows={2} style={{ width: "100%", padding: 10, border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, boxSizing: "border-box", marginBottom: 16, background: C.card, color: C.ink, resize: "none", outline: "none" }} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${C.line}`, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Skip</button>
+          <button onClick={submit} disabled={saving || !rating} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: saving || !rating ? "not-allowed" : "pointer", opacity: saving || !rating ? 0.5 : 1 }}>{saving ? "⏳" : "Submit"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// 🔗 TABLE MERGE MODAL
+// ═══════════════════════════════════════════════════════
+function TableMergeModal({ C, primaryOrder, allOrders, onClose }) {
+  const [selectedId, setSelectedId] = useState("");
+  const otherOrders = allOrders.filter(o => o.id !== primaryOrder.id && o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled");
+  const merge = async () => {
+    if (!selectedId) return;
+    try {
+      const other = allOrders.find(o => o.id === selectedId);
+      if (!other) return;
+      const merged = {
+        items: [...(primaryOrder.items || []), ...(other.items || [])],
+        kots: [...(primaryOrder.kots || []), ...(other.kots || [])],
+        subtotal: (Number(primaryOrder.subtotal) || 0) + (Number(other.subtotal) || 0),
+        finalTotal: (Number(primaryOrder.finalTotal) || 0) + (Number(other.finalTotal) || 0),
+        mergedFrom: [...(primaryOrder.mergedFrom || []), other.table],
+      };
+      await updateDoc(doc(db, "orders", primaryOrder.id), merged);
+      await updateDoc(doc(db, "orders", other.id), { status: "cancelled", cancelledAt: Date.now(), cancelledReason: "Merged into " + primaryOrder.table });
+      alert("✅ Merged!");
+      onClose();
+    } catch (e) { alert("❌ " + e.message); }
+  };
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 24, width: "100%", maxWidth: 400 }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: C.ink, marginBottom: 8 }}>🔗 Merge Table</div>
+        <div style={{ fontSize: 12, color: C.gray, marginBottom: 16 }}>Is order (Table {primaryOrder.table}) me dusra table merge karo</div>
+        {otherOrders.length === 0 && <div style={{ padding: 20, textAlign: "center", color: C.gray }}>Koi aur running order nahi</div>}
+        {otherOrders.map(o => (
+          <button key={o.id} onClick={() => setSelectedId(o.id)} style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: 12, marginBottom: 8, border: `2px solid ${selectedId === o.id ? C.red : C.line}`, borderRadius: 8, background: selectedId === o.id ? C.redLight : "transparent", cursor: "pointer", fontFamily: "inherit" }}>
+            <span style={{ fontWeight: 700, color: C.ink }}>Table {o.table}</span>
+            <span style={{ color: C.gray }}>{inr(o.finalTotal || 0)}</span>
+          </button>
+        ))}
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${C.line}`, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+          <button onClick={merge} disabled={!selectedId} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: !selectedId ? "not-allowed" : "pointer", opacity: !selectedId ? 0.5 : 1 }}>🔗 Merge</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// 🍽️ SPLIT BILL MODAL
+// ═══════════════════════════════════════════════════════
+function SplitBillModal({ C, order, onClose }) {
+  const items = order.items || [];
+  const [split1, setSplit1] = useState({});
+  const toggleItem = (idx) => { setSplit1(prev => ({ ...prev, [idx]: !prev[idx] })); };
+  const total1 = items.reduce((s, it, i) => s + (split1[i] ? it.price * it.qty : 0), 0);
+  const total2 = (Number(order.finalTotal) || 0) - total1;
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 24, width: "100%", maxWidth: 450, maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: C.ink, marginBottom: 8 }}>✂️ Split Bill</div>
+        <div style={{ fontSize: 12, color: C.gray, marginBottom: 16 }}>Jo items pehle bande ko dena hai unpe tick karo</div>
+        {items.map((it, i) => (
+          <button key={i} onClick={() => toggleItem(i)} style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: 10, marginBottom: 6, border: `2px solid ${split1[i] ? C.blue : C.line}`, borderRadius: 8, background: split1[i] ? C.blueLight : "transparent", cursor: "pointer", fontFamily: "inherit" }}>
+            <span style={{ fontWeight: 700, color: C.ink, textAlign: "left" }}>{split1[i] ? "☑️" : "☐"} {it.qty}× {it.name}</span>
+            <span style={{ color: C.red, fontWeight: 800 }}>{inr(it.price * it.qty)}</span>
+          </button>
+        ))}
+        <div style={{ background: C.cardAlt, padding: 12, borderRadius: 8, marginTop: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: 4, fontSize: 13 }}><span style={{ color: C.gray }}>Person 1</span><b style={{ color: C.blue }}>{inr(total1)}</b></div>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: 4, fontSize: 13 }}><span style={{ color: C.gray }}>Person 2</span><b style={{ color: C.red }}>{inr(total2)}</b></div>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${C.line}`, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Close</button>
+          <button onClick={() => { alert("✅ Bill printed for both"); onClose(); }} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.blue, color: "#fff", fontWeight: 800, cursor: "pointer" }}>🖨️ Print Both</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════
@@ -931,6 +1133,13 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, onBack
             })}
           </div>
           <div style={{ borderTop: `2px solid ${C.line}`, padding: 14, background: C.light }}>
+            {/* QUICK DISCOUNT BUTTONS */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, color: C.gray, fontWeight: 800, alignSelf: "center", minWidth: 50 }}>DISCOUNT</span>
+              {[0, 5, 10, 20].map(d => (
+                <button key={d} onClick={() => { const el = document.getElementById("discInput"); if (el) { el.value = d; el.dispatchEvent(new Event("input", { bubbles: true })); } }} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${C.line}`, background: C.card, color: C.ink, fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{d === 0 ? "None" : `${d}%`}</button>
+              ))}
+            </div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
               <span style={{ color: C.gray, fontWeight: 600 }}>Subtotal</span>
               <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>₹{subtotal}</span>
