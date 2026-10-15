@@ -97,6 +97,10 @@ const FONTS = `
 @keyframes fadeInScale { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 @keyframes notificationPulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(226,89,56,0.7); } 70% { transform: scale(1.05); box-shadow: 0 0 0 20px rgba(226,89,56,0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(226,89,56,0); } }
+@keyframes itemBounce { 0% { transform: scale(1); } 40% { transform: scale(1.04); } 100% { transform: scale(1); } }
+@keyframes slideInRight { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.item-bounce { animation: itemBounce 0.35s ease-out; }
+.slide-in-right { animation: slideInRight 0.3s ease-out; }
 .flash-banner { animation: flash 2s infinite; }
 .slide-up { animation: slideUp 0.4s ease-out; }
 .slide-right { animation: slideRight 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
@@ -3897,6 +3901,20 @@ function BillPOSScreenInner(p) {
   const isDesktop = viewMode === "desktop" && wide;
 
   const isDraft = !!(order && order.isDraft);
+
+  // ⌨️ Keyboard shortcuts — F1 save, F2 print, F3 paid+print, Esc close
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = (e.target?.tagName || "").toUpperCase();
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "Escape") { p.onClose && p.onClose(); return; }
+      if (e.key === "F1") { e.preventDefault(); if (!disabled) p.onAction && p.onAction("save"); }
+      if (e.key === "F2") { e.preventDefault(); if (!disabled) p.onAction && p.onAction("print"); }
+      if (e.key === "F3") { e.preventDefault(); if (!disabled) p.onAction && p.onAction("paid"); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [disabled]);
   const cats = p.categories && p.categories.length ? p.categories : Array.from(new Set((menu || []).map((m) => m.category)));
 
   const list = useMemo(() => {
@@ -4151,6 +4169,16 @@ function BillPOSScreenInner(p) {
           </div>
         </div>
       )}
+      {(menu || []).some(m => m.isBestseller && m.available) && (
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4, flexShrink: 0, borderBottom: `1px dashed #E8E6DC`, paddingBottom: 8 }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color: COLORS.copper, textTransform: "uppercase", letterSpacing: 0.5, alignSelf: "center", minWidth: 42 }}>⭐ Top</span>
+          {(menu || []).filter(m => m.isBestseller && m.available).slice(0, 8).map((m) => (
+            <button key={"qs-" + m.id} type="button" onClick={() => addItem(m)} style={{ padding: "5px 10px", borderRadius: 8, border: `1.5px solid #FFD9A0`, background: "#FFFBF2", color: COLORS.ink, fontWeight: 700, fontSize: 11, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>
+              {m.name} <span style={{ color: COLORS.copper, fontFamily: "'JetBrains Mono', monospace" }}>₹{m.price}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, flexShrink: 0 }}>
         {["all", ...cats].map((c) => (
           <button key={c} type="button" onClick={() => setCat(c)} style={chip(cat === c, COLORS.ink)}>{c === "all" ? "All" : c}</button>
@@ -4216,11 +4244,13 @@ function BillPOSScreenInner(p) {
           {(presets.customers || []).map((c, i) => <option key={i} value={i}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}
         </select>
       )}
-           <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6 }}>
-        <input placeholder="Customer" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={inp} />
-
-        <input placeholder="Phone" value={p.custPhone} onChange={(e) => p.setCustPhone(e.target.value)} style={inp} />
-        <input placeholder="GSTIN" value={p.gstin} onChange={(e) => p.setGstin(e.target.value.toUpperCase())} style={inp} />
+           <div style={{ background: "linear-gradient(135deg, #FDFCFA 0%, #F7F5F0 100%)", borderRadius: 12, padding: 10, border: `1px solid #E8E6DC` }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: COLORS.textLight, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>👤 Customer</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6 }}>
+          <input placeholder="Name" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={inp} />
+          <input placeholder="Phone" value={p.custPhone} onChange={(e) => p.setCustPhone(e.target.value)} style={inp} />
+          <input placeholder="GSTIN" value={p.gstin} onChange={(e) => p.setGstin(e.target.value.toUpperCase())} style={inp} />
+        </div>
       </div>
 
       <div style={{ flex: isDesktop ? 1 : "none", minHeight: 80, maxHeight: isDesktop ? "none" : "34dvh", overflowY: "auto", border: `1.5px solid #E8E6DC`, borderRadius: 14, background: "#fff", boxShadow: "inset 0 1px 3px rgba(0,0,0,0.03)" }}>
@@ -4274,6 +4304,14 @@ function BillPOSScreenInner(p) {
         <button type="button" onClick={() => p.setPayStatus(p.payStatus === "paid" ? "pending" : "paid")} style={chip(true, p.payStatus === "paid" ? COLORS.success : COLORS.warning)}>
           {p.payStatus === "paid" ? "✓ Paid" : "⏳ Pending"}
         </button>
+      </div>
+
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", background: "#FAFAF8", borderRadius: 12, padding: "8px 10px", border: `1px solid #E8E6DC` }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: COLORS.textLight, textTransform: "uppercase", letterSpacing: 0.4, minWidth: 34 }}>Num</span>
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map((n) => (
+          <button key={"np-" + n} type="button" onClick={() => { p.setCustPhone((p.custPhone || "") + String(n)); }} style={{ width: 32, height: 32, borderRadius: 8, border: `1.5px solid #E8E6DC`, background: "#fff", color: COLORS.ink, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>{n}</button>
+        ))}
+        <button type="button" onClick={() => { p.setCustPhone(""); }} style={{ padding: "0 10px", height: 32, borderRadius: 8, border: `1.5px solid #E8E6DC`, background: "#fff", color: COLORS.error, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>CLR</button>
       </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
