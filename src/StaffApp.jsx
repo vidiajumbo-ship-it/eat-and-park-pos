@@ -1336,82 +1336,81 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
               const existing = existingItems.filter(e => e.itemId === id).reduce((s, e) => s + e.qty, 0);
               const isNew = !addMoreMode && existing === 0;
               return (
-                <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 14px", borderBottom: `1px solid ${C.line}`, background: isNew ? C.greenLight : "transparent" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.name}</span>
-                      {!addMoreMode && existing > 0 && <span style={{ background: C.blue, color: "#fff", fontSize: 9, padding: "2px 6px", borderRadius: 4, fontWeight: 800 }}>RUNNING ×{existing}</span>}
-                      {!addMoreMode && existing === 0 && <span style={{ background: C.green, color: "#fff", fontSize: 9, padding: "2px 6px", borderRadius: 4, fontWeight: 800 }}>NEW</span>}
-                    </div>
-                    <div style={{ fontSize: 11, color: C.gray, fontFamily: "monospace" }}>₹{m.price} · {inr(m.price * q)}</div>
+                <div key={id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderBottom: `1px solid ${C.line}`, background: isNew ? C.greenLight : "transparent", minHeight: 32 }}>
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: "0 1 auto", minWidth: 0 }}>{m.name}</span>
+                    {!addMoreMode && existing > 0 && <span style={{ background: C.blue, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>R{existing}</span>}
+                    {!addMoreMode && existing === 0 && <span style={{ background: C.green, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>NEW</span>}
+                    <span style={{ fontSize: 10, color: C.gray, fontFamily: "monospace", flexShrink: 0 }}>₹{m.price}</span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", border: `1.5px solid ${C.red}`, borderRadius: 6, overflow: "hidden" }}>
-                    <button onClick={() => setQty(id, q - 1)} style={{ width: 28, height: 30, border: "none", background: C.redLight, color: C.red, fontSize: 16, fontWeight: 900, cursor: "pointer" }}>−</button>
-                    <span style={{ width: 32, textAlign: "center", fontWeight: 900, fontSize: 14, color: C.red }}>{q}</span>
-                    <button onClick={() => setQty(id, q + 1)} style={{ width: 28, height: 30, border: "none", background: C.red, color: "#fff", fontSize: 16, fontWeight: 900, cursor: "pointer" }}>+</button>
+                  <div style={{ display: "flex", alignItems: "center", border: `1px solid ${C.red}`, borderRadius: 4, overflow: "hidden", height: 24 }}>
+                    <button onClick={() => setQty(id, q - 1)} style={{ width: 22, height: 22, border: "none", background: C.redLight, color: C.red, fontSize: 13, fontWeight: 900, cursor: "pointer", padding: 0 }}>−</button>
+                    <span style={{ width: 24, textAlign: "center", fontWeight: 900, fontSize: 11, color: C.red }}>{q}</span>
+                    <button onClick={() => setQty(id, q + 1)} style={{ width: 22, height: 22, border: "none", background: C.red, color: "#fff", fontSize: 13, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
                   </div>
-                  <div style={{ width: 62, textAlign: "right", fontWeight: 800, fontSize: 13, color: C.red, fontFamily: "monospace" }}>₹{m.price * q}</div>
+                  <div style={{ width: 52, textAlign: "right", fontWeight: 800, fontSize: 11, color: C.red, fontFamily: "monospace", flexShrink: 0 }}>₹{m.price * q}</div>
+                  <button onClick={() => setQty(id, 0)} style={{ background: "transparent", border: "none", color: C.gray, fontSize: 11, cursor: "pointer", padding: 2, flexShrink: 0 }}>✕</button>
                 </div>
               );
             })}
           </div>
-          <div style={{ borderTop: `2px solid ${C.line}`, padding: 14, background: C.light, maxHeight: "55vh", overflowY: "auto" }}>
-            {/* DISCOUNT + GST row */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 11, color: C.gray, fontWeight: 800, minWidth: 46 }}>DISC %</span>
+          <div style={{ borderTop: `2px solid ${C.line}`, padding: 8, background: C.light, maxHeight: "65vh", overflowY: "auto" }}>
+            {/* DISCOUNT row — compact */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>DISC</span>
               {[0, 5, 10, 20].map(d => (
-                <button key={d} onClick={() => setDiscount(d)} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${discount === d ? C.green : C.line}`, background: discount === d ? C.greenLight : C.card, color: discount === d ? C.green : C.ink, fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{d === 0 ? "None" : `${d}%`}</button>
+                <button key={d} onClick={() => setDiscount(d)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${discount === d ? C.green : C.line}`, background: discount === d ? C.greenLight : C.card, color: discount === d ? C.green : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{d === 0 ? "0" : `${d}%`}</button>
               ))}
-              <input type="number" min={0} max={100} value={discount || ""} onChange={(e) => setDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} placeholder="%" style={{ width: 56, padding: "4px 8px", border: `1px solid ${C.line}`, borderRadius: 6, fontSize: 11, background: C.card, color: C.ink, fontWeight: 700, textAlign: "center", outline: "none" }} />
+              <input type="number" min={0} max={100} value={discount || ""} onChange={(e) => setDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} placeholder="%" style={{ width: 44, padding: "3px 6px", border: `1px solid ${C.line}`, borderRadius: 4, fontSize: 10, background: C.card, color: C.ink, fontWeight: 700, textAlign: "center", outline: "none" }} />
             </div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 11, color: C.gray, fontWeight: 800, minWidth: 46 }}>GST %</span>
+
+            {/* GST row — compact */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>GST</span>
               {[0, 5, 12, 18].map(g => (
-                <button key={g} onClick={() => setGstRate(g)} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${gstRate === g ? C.copper || C.red : C.line}`, background: gstRate === g ? C.redLight : C.card, color: gstRate === g ? C.red : C.ink, fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{g === 0 ? "No" : `${g}%`}</button>
+                <button key={g} onClick={() => setGstRate(g)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${gstRate === g ? C.red : C.line}`, background: gstRate === g ? C.redLight : C.card, color: gstRate === g ? C.red : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{g === 0 ? "No" : `${g}%`}</button>
               ))}
             </div>
 
-            {/* PAY MODE row */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 11, color: C.gray, fontWeight: 800, minWidth: 46 }}>PAY</span>
+            {/* PAY row — compact */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>PAY</span>
               {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["due", "Due"]].map(([id, label]) => (
-                <button key={id} onClick={() => setPayMode(id)} style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${payMode === id ? C.red : C.line}`, background: payMode === id ? C.red : C.card, color: payMode === id ? "#fff" : C.ink, fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
+                <button key={id} onClick={() => setPayMode(id)} style={{ padding: "3px 9px", borderRadius: 4, border: `1px solid ${payMode === id ? C.red : C.line}`, background: payMode === id ? C.red : C.card, color: payMode === id ? "#fff" : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
               ))}
             </div>
 
-            {/* TOTALS */}
-            <div style={{ background: C.card, borderRadius: 8, padding: 10, marginBottom: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12 }}>
-                <span style={{ color: C.gray }}>Running items ({existingItems.length})</span>
+            {/* TOTALS — compact */}
+            <div style={{ background: C.card, borderRadius: 6, padding: 8, marginBottom: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11 }}>
+                <span style={{ color: C.gray }}>Running ({existingItems.length})</span>
                 <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>₹{existingSubtotal}</span>
               </div>
               {cartItems.length > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12, color: C.green }}>
-                  <span>New items ({cartItems.length})</span>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.green }}>
+                  <span>New ({cartItems.length})</span>
                   <span style={{ fontFamily: "monospace", fontWeight: 700 }}>+₹{cartSubtotal}</span>
                 </div>
               )}
               {discount > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12, color: C.green }}>
-                  <span>Discount {discount}%</span>
-                  <span style={{ fontFamily: "monospace" }}>-₹{Math.round(((Number(existingOrder?.subtotal) || 0) + cartSubtotal) * discount / 100)}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.green }}>
+                  <span>Disc {discount}%</span>
+                  <span style={{ fontFamily: "monospace" }}>-₹{Math.round((existingSubtotal + cartSubtotal) * discount / 100)}</span>
                 </div>
               )}
               {gstRate > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 12, color: C.red }}>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.red }}>
                   <span>GST {gstRate}%</span>
-                  <span style={{ fontFamily: "monospace" }}>+₹{Math.round(((Number(existingOrder?.subtotal) || 0) + cartSubtotal) * (1 - discount / 100) * gstRate / 100)}</span>
+                  <span style={{ fontFamily: "monospace" }}>+₹{Math.round((existingSubtotal + cartSubtotal) * (1 - discount / 100) * gstRate / 100)}</span>
                 </div>
               )}
             </div>
 
-            <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 10, padding: "14px 18px", marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: `0 6px 16px ${C.red}40` }}>
-              <span style={{ color: "#fff", fontSize: 13, fontWeight: 800, letterSpacing: 0.5 }}>TOTAL</span>
-              <span style={{ color: "#fff", fontSize: 24, fontWeight: 900, fontFamily: "monospace" }}>
+            <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 8, padding: "10px 14px", marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: `0 4px 12px ${C.red}40` }}>
+              <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, letterSpacing: 0.5 }}>TOTAL</span>
+              <span style={{ color: "#fff", fontSize: 20, fontWeight: 900, fontFamily: "monospace" }}>
                 {(() => {
-                  const base = addMoreMode ? existingSubtotal : existingSubtotal;
-                  const newSum = addMoreMode ? cartSubtotal : 0;
-                  const gross = base + newSum;
+                  const gross = existingSubtotal + (addMoreMode ? cartSubtotal : 0);
                   const discAmt = Math.round(gross * discount / 100);
                   const gstAmt = Math.round((gross - discAmt) * gstRate / 100);
                   return "₹" + (Math.max(0, gross - discAmt) + gstAmt).toFixed(0);
@@ -1421,9 +1420,9 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
 
             {/* ACTION BUTTONS — context ke hisaab se */}
             {existingOrder && !addMoreMode && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 10 }}>
-                <button onClick={handleSaveBill} disabled={placing} style={{ padding: 12, border: "none", borderRadius: 8, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>💾 Save Bill</button>
-                <button onClick={handlePaidPrint} disabled={placing} style={{ padding: 12, border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>✓ Paid + Print</button>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 6 }}>
+                <button onClick={handleSaveBill} disabled={placing} style={{ padding: 10, border: "none", borderRadius: 6, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>💾 Save</button>
+                <button onClick={handlePaidPrint} disabled={placing} style={{ padding: 10, border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>✓ Paid</button>
               </div>
             )}
 
