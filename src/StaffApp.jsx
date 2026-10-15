@@ -122,15 +122,19 @@ export default function StaffApp() {
       if (snap.exists() && Array.isArray(snap.data().items)) setMenu(snap.data().items);
     });
 
+    // Last 30 days ka data load karo
+    const startRange = new Date();
+    startRange.setDate(startRange.getDate() - 30);
+    startRange.setHours(0, 0, 0, 0);
+
     const unsubOrders = onSnapshot(
-      query(collection(db, "orders"), where("createdAt", ">=", startToday.getTime())),
+      query(collection(db, "orders"), where("createdAt", ">=", startRange.getTime())),
       (snap) => {
         const newOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setOrders(prev => {
-          // 🔔 Notification — agar naya order aaya
           if (prev.length > 0) {
             const prevIds = new Set(prev.map(o => o.id));
-            const newOnes = newOrders.filter(o => !prevIds.has(o.id) && o.status === "new");
+            const newOnes = newOrders.filter(o => !prevIds.has(o.id) && o.status === "new" && o.createdAt >= startToday.getTime());
             if (newOnes.length > 0) {
               playSound();
               newOnes.forEach(o => {
@@ -278,10 +282,6 @@ export default function StaffApp() {
             C={C}
             orders={orders}
             menu={menu}
-            todayRevenue={todayRevenue}
-            todayTotal={todayTotal}
-            paidCount={paidCount}
-            activeOrders={activeOrders.length}
             onStatusClick={(status) => {
               // Orders tab pe jao + filter set karo
               if (status === "all") {
@@ -583,17 +583,89 @@ function KOTView({ C, orders }) {
 // ═══════════════════════════════════════════════════════
 // 📊 DASHBOARD VIEW
 // ═══════════════════════════════════════════════════════
-function DashboardView({ C, orders, menu, todayRevenue, todayTotal, paidCount, activeOrders, onStatusClick, onOrderClick }) {
-  const avgOrder = todayTotal ? Math.round(todayRevenue / Math.max(1, paidCount)) : 0;
-  const statusCounts = { new: 0, preparing: 0, ready: 0, served: 0 };
-  orders.forEach(o => { if (statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
+function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
+  // ─── DATE FILTER STATE ───
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [range, setRange] = useState("today");
+  const [customDate, setCustomDate] = useState(todayStr);
 
-  // Recent 10 orders (sorted by latest first)
-  const recentOrders = [...orders].sort((a, b) => b.createdAt - a.createdAt).slice(0, 10);
+  // ─── FILTER ORDERS BY RANGE ───
+  const filtered = useMemo(() => {
+    const now = new Date();
+    if (range === "today") {
+      const start = new Date(); start.setHours(0, 0, 0, 0);
+      return orders.filter(o => o.createdAt >= start.getTime());
+    }
+    if (range === "yesterday") {
+      const start = new Date(); start.setDate(start.getDate() - 1); start.setHours(0, 0, 0, 0);
+      const end = new Date(); end.setHours(0, 0, 0, 0);
+      return orders.filter(o => o.createdAt >= start.getTime() && o.createdAt < end.getTime());
+    }
+    if (range === "7days") {
+      const start = new Date(); start.setDate(start.getDate() - 6); start.setHours(0, 0, 0, 0);
+      return orders.filter(o => o.createdAt >= start.getTime());
+    }
+    if (range === "30days") {
+      const start = new Date(); start.setDate(start.getDate() - 29); start.setHours(0, 0, 0, 0);
+      return orders.filter(o => o.createdAt >= start.getTime());
+    }
+    if (range === "month") {
+      const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
+      return orders.filter(o => o.createdAt >= start.getTime());
+    }
+    if (range === "custom" && customDate) {
+      const start = new Date(customDate + "T00:00:00").getTime();
+      const end = start + 86400000;
+      return orders.filter(o => o.createdAt >= start && o.createdAt < end);
+    }
+    return orders;
+  }, [orders, range, customDate]);
+
+  // ─── CALCULATIONS ON FILTERED ───
+  const todayRevenue = filtered.filter(o => o.paid && o.status !== "cancelled").reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+  const todayTotal = filtered.length;
+  const paidCount = filtered.filter(o => o.paid).length;
+  const activeOrders = filtered.filter(o => o.status !== "served" && o.status !== "cancelled").length;
+  const avgOrder = paidCount ? Math.round(todayRevenue / paidCount) : 0;
+
+  const statusCounts = { new: 0, preparing: 0, ready: 0, served: 0 };
+  filtered.forEach(o => { if (statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
+
+  const recentOrders = [...filtered].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
+
+  const rangeLabel = {
+    today: "Today",
+    yesterday: "Yesterday",
+    "7days": "Last 7 Days",
+    "30days": "Last 30 Days",
+    month: "This Month",
+    custom: `Date: ${customDate}`,
+  }[range] || "Today";
 
   return (
     <div>
-      <h2 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 800, color: C.ink }}>📊 Dashboard</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.ink }}>📊 Dashboard</h2>
+          <div style={{ fontSize: 12, color: C.gray, marginTop: 2, fontWeight: 700 }}>{rangeLabel} · {todayTotal} orders</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <input type="date" value={customDate} onChange={(e) => { setCustomDate(e.target.value); setRange("custom"); }} style={{ padding: "8px 12px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, background: C.card, color: C.ink, fontWeight: 700, outline: "none" }} />
+        </div>
+      </div>
+
+      {/* RANGE BUTTONS */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
+        {[
+          { id: "today", label: "Today" },
+          { id: "yesterday", label: "Yesterday" },
+          { id: "7days", label: "Last 7 Days" },
+          { id: "30days", label: "Last 30 Days" },
+          { id: "month", label: "This Month" },
+        ].map(r => (
+          <button key={r.id} onClick={() => setRange(r.id)} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${range === r.id ? C.red : C.line}`, background: range === r.id ? C.red : C.card, color: range === r.id ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>{r.label}</button>
+        ))}
+      </div>
 
       {/* STATS CARDS — clickable */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
@@ -670,12 +742,12 @@ function DashboardView({ C, orders, menu, todayRevenue, todayTotal, paidCount, a
       {/* REPORTS CHART */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>📈 Orders by Hour (Today)</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>📈 Orders by Hour — {rangeLabel}</div>
         </div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 120 }}>
           {Array.from({ length: 24 }, (_, h) => {
-            const count = orders.filter(o => new Date(o.createdAt).getHours() === h).length;
-            const maxCount = Math.max(1, ...Array.from({ length: 24 }, (_, hh) => orders.filter(o => new Date(o.createdAt).getHours() === hh).length));
+            const count = filtered.filter(o => new Date(o.createdAt).getHours() === h).length;
+            const maxCount = Math.max(1, ...Array.from({ length: 24 }, (_, hh) => filtered.filter(o => new Date(o.createdAt).getHours() === hh).length));
             const height = (count / maxCount) * 100;
             return (
               <div key={h} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
@@ -691,10 +763,10 @@ function DashboardView({ C, orders, menu, todayRevenue, todayTotal, paidCount, a
 
       {/* STAFF PERFORMANCE */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginBottom: 16 }}>🧑‍🍳 Staff Performance (Today)</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginBottom: 16 }}>🧑‍🍳 Staff Performance — {rangeLabel}</div>
         {(() => {
           const byWaiter = {};
-          orders.forEach(o => { const w = o.waiter || "Staff"; byWaiter[w] = (byWaiter[w] || 0) + (Number(o.finalTotal) || 0); });
+          filtered.forEach(o => { const w = o.waiter || "Staff"; byWaiter[w] = (byWaiter[w] || 0) + (Number(o.finalTotal) || 0); });
           const sorted = Object.entries(byWaiter).sort((a, b) => b[1] - a[1]);
           if (sorted.length === 0) return <div style={{ textAlign: "center", padding: 20, color: C.gray }}>Koi data nahi</div>;
           const max = sorted[0][1];
@@ -715,8 +787,8 @@ function DashboardView({ C, orders, menu, todayRevenue, todayTotal, paidCount, a
       {/* RECENT ORDERS — LAST 10 with details */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>📋 Recent Orders (Last 10)</div>
-          <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>{orders.length} total today</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>📋 Orders — {rangeLabel}</div>
+          <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>{filtered.length} total</div>
         </div>
 
         {recentOrders.length === 0 && (
