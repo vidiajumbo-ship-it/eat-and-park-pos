@@ -593,31 +593,7 @@ const ViewModeToggle = memo(() => {
 });
 
 // 5 galat PIN ke baad 30 second lock
-function usePinLockout(max = 5, lockMs = 30000) {
-  const [fails, setFails] = useState(0);
-  const [lockedUntil, setLockedUntil] = useState(0);
 
-  const isLocked = useCallback(() => Date.now() < lockedUntil, [lockedUntil]);
-  const secondsLeft = useCallback(
-    () => Math.max(0, Math.ceil((lockedUntil - Date.now()) / 1000)),
-    [lockedUntil]
-  );
-
-  const registerFail = useCallback(() => {
-    setFails(prev => {
-      const n = prev + 1;
-      if (n >= max) {
-        setLockedUntil(Date.now() + lockMs);
-        return 0;
-      }
-      return n;
-    });
-  }, [max, lockMs]);
-
-  const reset = useCallback(() => setFails(0), []);
-
-  return { isLocked, secondsLeft, registerFail, reset };
-}
 
 const useLocalStorageOld = (key, initialValue) => {
   const [storedValue, setStoredValue] = useState(() => {
@@ -2398,15 +2374,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   }, [visibleCategories, category]);
   useEffect(() => () => clearTimeout(aiTimerRef.current), []);
  
-  const [showWaiterMode, setShowWaiterMode] = useState(wasWaiterOpen);
-    const [showWaiterPinModal, setShowWaiterPinModal] = useState(false);
-  const [waiterPinInput, setWaiterPinInput] = useState("");
-  const [waiterEmail, setWaiterEmail] = useState("");
-  useEffect(() => {
+  const [showWaiterMode, setShowWaiterMode] = useState(wasWaiterOpen);  useEffect(() => {
   try { sessionStorage.setItem(WAITER_FLAG, showWaiterMode ? "1" : "0"); } catch (e) {}
 }, [showWaiterMode]);
-  const [waiterUnlocked, setWaiterUnlocked] = useState(wasWaiterOpen);
-
 useEffect(() => {
   if (!showWaiterMode) return;
   window.history.pushState({ w: 1 }, "");
@@ -2734,53 +2704,6 @@ if (savedCart) {
        return order;
   }, [placeOrder, showToast]);
 
-const handleWaiterPinSubmit = async () => {
-  if (!waiterEmail.trim() || !waiterPinInput) { showToast("⚠️ Email aur password daalo", "error"); return; }
-  try {
-    const cred = await signInWithEmailAndPassword(auth, waiterEmail.trim(), waiterPinInput);
-    const s = await getDoc(doc(db, "staff", cred.user.uid));
-    if (!s.exists()) { await signOut(auth); showToast("❌ Ye account staff/waiter ka nahi hai", "error"); setWaiterPinInput(""); return; }
-    setWaiterUnlocked(true); setShowWaiterPinModal(false); setWaiterPinInput(""); setShowWaiterMode(true);
-    showToast("🔓 Waiter Mode Unlocked!", "success");
-  } catch (e) { showToast("❌ Login fail", "error"); setWaiterPinInput(""); }
-};
-const handleWaiterPinSubmitUnused = () => {
-  if (waiterLock.isLocked()) {
-    showToast(`⏳ Bahut galat attempts. ${waiterLock.secondsLeft()}s ruko`, "error");
-    setWaiterPinInput("");
-    return;
-  }
-  const wPin = (settings?.waiterPin ?? "1234").toString().trim();
-  const sPin = (settings?.staffPin ?? "5432").toString().trim();
-  const aPin = (settings?.adminPin ?? "9876").toString().trim();
-  if (waiterPinInput === wPin || waiterPinInput === sPin || waiterPinInput === aPin) {
-    waiterLock.reset();
-    setWaiterUnlocked(true);
-    setShowWaiterPinModal(false);
-    setWaiterPinInput("");
-    setShowWaiterMode(true);
-    showToast("🔓 Waiter Mode Unlocked!", "success");
-  } else {
-    waiterLock.registerFail();
-    showToast("❌ Incorrect Waiter PIN", "error");
-    setWaiterPinInput("");
-  }
-};
-const handleWaiterPinSubmitOld = () => {
-  const wPin = (settings?.waiterPin ?? "1234").toString().trim();
-  const sPin = (settings?.staffPin ?? "5432").toString().trim();
-  const aPin = (settings?.adminPin ?? "9876").toString().trim();
-    if (waiterPinInput === wPin || waiterPinInput === sPin || waiterPinInput === aPin) {
-      setWaiterUnlocked(true);
-      setShowWaiterPinModal(false);
-      setWaiterPinInput("");
-      setShowWaiterMode(true);
-      showToast("🔓 Waiter Mode Unlocked!", "success");
-    } else {
-      showToast("❌ Incorrect Waiter PIN", "error");
-      setWaiterPinInput("");
-    }
-  };
 
   const handleSendOtp = () => {
     if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid phone", 'error'); return; }
@@ -5606,129 +5529,7 @@ function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, or
             />
           )}
 
-          {/* 🔐 SECURITY PINs */}
-          <div style={{ display: "none", borderTop: `1px solid ${COLORS.line}`, marginTop: 28, paddingTop: 24 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>🔐 Security PINs</h3>
-            <div style={{ fontSize: 12, color: COLORS.textLight, marginBottom: 18 }}>
-              Manage PINs for Waiter, Staff, and Admin access. Changes apply instantly.
-            </div>
-
-            {/* Waiter PIN */}
-            <div style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 22 }}>🧑‍🍳</span>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 15 }}>Waiter PIN</div>
-                    <div style={{ fontSize: 11, color: COLORS.textLight }}>Unlocks Waiter Mode on customer screen</div>
-                  </div>
-                </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", background: COLORS.info, color: '#fff', padding: '4px 10px', borderRadius: 8, fontWeight: 800, fontSize: 13 }}>
-                  {settings?.waiterPin || "1234"}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input type="text" inputMode="numeric" maxLength={6} value={settings?.waiterPin || "1234"}
-                  onChange={e => setSettings({ ...settings, waiterPin: e.target.value.replace(/\D/g, '') })}
-                  placeholder="4-6 digits"
-                  style={{ ...inputStyle, flex: 1, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 18, letterSpacing: 4, fontWeight: 800 }} />
-                <button onClick={async () => {
-                  const pin = (settings?.waiterPin || "1234").toString();
-                  if (pin.length < 4) { alert("⚠️ PIN must be at least 4 digits"); return; }
-                  try { await setDoc(doc(db, "settings", "appSettings"), settings); alert("✅ Waiter PIN updated to: " + pin); }
-                  catch (e) { alert("⚠️ Failed to save"); }
-                }} style={{ ...primaryBtn, whiteSpace: 'nowrap' }}>💾 Save</button>
-              </div>
-            </div>
-
-            {/* Staff PIN */}
-            <div style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 22 }}>🍳</span>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 15 }}>Staff PIN</div>
-                    <div style={{ fontSize: 11, color: COLORS.textLight }}>Unlocks Kitchen Board</div>
-                  </div>
-                </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", background: COLORS.copper, color: '#fff', padding: '4px 10px', borderRadius: 8, fontWeight: 800, fontSize: 13 }}>
-                  {settings?.staffPin || "5432"}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input type="text" inputMode="numeric" maxLength={6} value={settings?.staffPin || "5432"}
-                  onChange={e => setSettings({ ...settings, staffPin: e.target.value.replace(/\D/g, '') })}
-                  placeholder="4-6 digits"
-                  style={{ ...inputStyle, flex: 1, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 18, letterSpacing: 4, fontWeight: 800 }} />
-                <button onClick={async () => {
-                  const pin = (settings?.staffPin || "5432").toString();
-                  if (pin.length < 4) { alert("⚠️ PIN must be at least 4 digits"); return; }
-                  try { await setDoc(doc(db, "settings", "appSettings"), settings); alert("✅ Staff PIN updated to: " + pin); }
-                  catch (e) { alert("⚠️ Failed to save"); }
-                }} style={{ ...primaryBtn, whiteSpace: 'nowrap' }}>💾 Save</button>
-              </div>
-            </div>
-
-            {/* Admin PIN */}
-            <div style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 12, padding: 16, marginBottom: 20 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 22 }}>⚙️</span>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 15 }}>Admin PIN</div>
-                    <div style={{ fontSize: 11, color: COLORS.textLight }}>Unlocks Admin Dashboard (highest access)</div>
-                  </div>
-                </div>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace", background: COLORS.ink, color: '#fff', padding: '4px 10px', borderRadius: 8, fontWeight: 800, fontSize: 13 }}>
-                  {settings?.adminPin || "9876"}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input type="text" inputMode="numeric" maxLength={6} value={settings?.adminPin || "9876"}
-                  onChange={e => setSettings({ ...settings, adminPin: e.target.value.replace(/\D/g, '') })}
-                  placeholder="4-6 digits"
-                  style={{ ...inputStyle, flex: 1, textAlign: 'center', fontFamily: "'JetBrains Mono', monospace", fontSize: 18, letterSpacing: 4, fontWeight: 800 }} />
-                <button onClick={async () => {
-                  const pin = (settings?.adminPin || "9876").toString();
-                  if (pin.length < 4) { alert("⚠️ PIN must be at least 4 digits"); return; }
-                  try { await setDoc(doc(db, "settings", "appSettings"), settings); alert("✅ Admin PIN updated to: " + pin); }
-                  catch (e) { alert("⚠️ Failed to save"); }
-                }} style={{ ...primaryBtn, whiteSpace: 'nowrap' }}>💾 Save</button>
-              </div>
-            </div>
-
-            {/* Reset All PINs */}
-            <div style={{ background: 'rgba(239, 68, 68, 0.06)', border: `1.5px dashed ${COLORS.error}`, borderRadius: 12, padding: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
-                <span style={{ fontSize: 26 }}>⚠️</span>
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: COLORS.error }}>Reset All PINs</div>
-                  <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2, lineHeight: 1.5 }}>
-                    Restores all PINs to factory defaults.
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={async () => {
-                  if (!window.confirm("⚠️ Reset ALL PINs to defaults?\n\nWaiter: 1234\nStaff: 5432\nAdmin: 9876")) return;
-                  const resetSettings = { ...settings, waiterPin: "1234", staffPin: "5432", adminPin: "9876" };
-                  setSettings(resetSettings);
-                  try {
-                    await setDoc(doc(db, "settings", "appSettings"), resetSettings);
-                    alert("✅ All PINs reset!");
-                  } catch (e) {
-                    alert("⚠️ Failed to reset.");
-                  }
-                }}
-                style={{
-                  width: '100%', padding: 14, border: 'none', borderRadius: 12,
-                  background: COLORS.error, color: '#fff', fontWeight: 800,
-                  fontSize: 14, cursor: 'pointer'
-                }}>
-                🔄 Reset All PINs
-              </button>
-            </div>
-          </div>
+          
         </div>
       )}
                   {tab === "presets" && <PresetsAdmin />}
