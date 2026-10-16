@@ -2589,76 +2589,6 @@ if (savedCart) {
     showToast("🔄 Items added to cart!", 'success');
   }, [showToast]);
 
-  const addRunningItems = useCallback(async (orderId, newItems) => {
-    try {
-      let taggedItems = [];
-      let tableNo = "";
-      await runTransaction(db, async (tx) => {
-        const ref = doc(db, "orders", orderId);
-        const snap = await tx.get(ref);
-        if (!snap.exists()) throw new Error("Order not found");
-        const o = snap.data();
-        if (o.status === "cancelled") throw new Error("Order cancelled hai");
-        const baseKots = (o.kots?.length
-          ? o.kots
-          : [{ id: uid("kot"), kotNumber: 1, items: o.items, createdAt: o.createdAt, status: o.status }]
-        ).map(k => (k.status === "new" && o.status !== "new") ? { ...k, status: o.status } : k);
-        const nextNo = Math.max(...baseKots.map(k => k.kotNumber || 1)) + 1;
-        taggedItems = newItems.map(it => ({ ...it, kotNumber: nextNo }));
-        tableNo = o.table;
-        tx.update(ref, {
-          kots: [...baseKots, { id: uid("kot"), kotNumber: nextNo, items: taggedItems, createdAt: Date.now(), status: "new", isRunning: true }],
-          items: [...(o.items || []), ...taggedItems],
-          ...runningPatch(o, taggedItems),
-          status: "new",
-          lastKotAt: Date.now()
-        });
-      });
-      const addedTotal = taggedItems.reduce((s, it) => s + it.price * it.qty, 0);
-      const waText = `🍳 *RUNNING KOT* — Order #${orderId.slice(1, 5).toUpperCase()}\nTable ${tableNo}\n` + taggedItems.map(i => `• ${i.qty}x ${i.name}`).join("\n") + `\n\nAdditional: ₹${addedTotal}`;
-      /* WhatsApp band */
-      setRunningOrderId(null);
-      showToast("🍳 New KOT sent to kitchen!", "success");
-    } catch (e) { console.error(e); showToast("⚠️ Failed to add items", "error"); }
-  }, [showToast]);
-  const addRunningItemsPrev = useCallback(async (orderId, newItems) => {
-    try {
-      const order = orders.find(o => o.id === orderId);
-      if (!order) return;
-      const baseKots = order.kots?.length
-        ? order.kots
-        : [{ id: uid("kot"), kotNumber: 1, items: order.items, createdAt: order.createdAt, status: order.status }];
-      const existingKots = baseKots.map(k => (k.status === "new" && order.status !== "new") ? { ...k, status: order.status } : k);
-      const nextKotNumber = Math.max(...existingKots.map(k => k.kotNumber || 1)) + 1;
-      const taggedItems = newItems.map(it => ({ ...it, kotNumber: nextKotNumber }));
-      const newKot = { id: uid("kot"), kotNumber: nextKotNumber, items: taggedItems, createdAt: Date.now(), status: "new", isRunning: true };
-      const updatedKots = [...existingKots, newKot];
-      const updatedItems = [...order.items, ...taggedItems];
-      const addedTotal = taggedItems.reduce((s, it) => s + it.price * it.qty, 0);
-      await updateDoc(doc(db, "orders", orderId), { kots: updatedKots, items: updatedItems, status: "new", lastKotAt: Date.now() });
-      const waText = `🍳 *RUNNING KOT* — Order #${orderId.slice(1, 5).toUpperCase()}\nTable ${order.table}\n` + taggedItems.map(i => `• ${i.qty}x ${i.name}`).join("\n") + `\n\nAdditional: ₹${addedTotal}`;
-/* WhatsApp band */      setRunningOrderId(null);
-      showToast("🍳 New KOT sent to kitchen!", "success");
-    } catch (e) { console.error(e); showToast("⚠️ Failed to add items", "error"); }
-  }, [orders, showToast]);
-  const addRunningItemsOld = useCallback(async (orderId, newItems) => {
-    try {
-      const order = orders.find(o => o.id === orderId);
-      if (!order) return;
-      const nextKotNumber = (order.kots?.length || 1) + 1;
-      const taggedItems = newItems.map(it => ({ ...it, kotNumber: nextKotNumber }));
-      const newKot = { id: uid("kot"), kotNumber: nextKotNumber, items: taggedItems, createdAt: Date.now(), status: "new", isRunning: true };
-      const updatedKots = [...(order.kots || [{ id: uid("kot"), kotNumber: 1, items: order.items, createdAt: order.createdAt, status: "new" }]), newKot];
-      const updatedItems = [...order.items, ...taggedItems];
-      const addedTotal = taggedItems.reduce((s, it) => s + it.price * it.qty, 0);
-      await updateDoc(doc(db, "orders", orderId), { kots: updatedKots, items: updatedItems, status: "new", lastKotAt: Date.now() });
-      const waText = `🍳 *RUNNING KOT* — Order #${orderId.slice(1, 5).toUpperCase()}\nTable ${order.table}\n` + taggedItems.map(i => `• ${i.qty}x ${i.name}`).join("\n") + `\n\nAdditional: ₹${addedTotal}`;
-      window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
-      setRunningOrderId(null);
-      showToast("🍳 New KOT sent to kitchen!", "success");
-    } catch (e) { showToast("⚠️ Failed to add items", "error"); }
-  }, [orders, showToast]);
-
   const handleWaiterOrder = useCallback(async ({ table: t, orderType: ot, items, waiterName, customerName, customerPhone, notes: orderNotes }) => {
     const orderId = uid("o");
     const total = items.reduce((s, it) => s + it.price * it.qty, 0);
@@ -6966,7 +6896,35 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
     setOrdersState(orders.map(o => o.id === orderId ? { ...o, ...updateData } : o));
   };
 
- const markPaid = async (orderId, paid) => {
+   const addRunningItems = useCallback(async (orderId, newItems) => {
+    if (!orderId || !newItems || newItems.length === 0) return;
+    try {
+      const orderRef = doc(db, 'orders', orderId);
+      await runTransaction(db, async (transaction) => {
+        const orderDoc = await transaction.get(orderRef);
+        if (!orderDoc.exists()) throw new Error("Order does not exist!");
+        
+        const orderData = orderDoc.data();
+        const existingItems = orderData.items || [];
+        const updatedItems = [...existingItems, ...newItems];
+        const newTotal = updatedItems.reduce((sum, item) => sum + (item.price * (item.qty || 1)), 0);
+
+        transaction.update(orderRef, {
+          items: updatedItems,
+          total: newTotal,
+          updatedAt: serverTimestamp()
+        });
+      });
+
+      showToast("Running items added successfully!", "success");
+      setRunningOrderId(null);
+    } catch (error) {
+      console.error("Error adding running items:", error);
+      showToast("Failed to add running items: " + error.message, "error");
+    }
+  }, [db, showToast]);
+
+  const markPaid = async (orderId, paid) => {
   try {
     await runTransaction(db, async (tx) => {
       const orderRef = doc(db, "orders", orderId);
