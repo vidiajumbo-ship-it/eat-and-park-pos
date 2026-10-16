@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local backups and fix scripts
+*.backup_*
+*.bak2_*
+*.swp
+fix.js
+fix2.py
+fix_app.py
