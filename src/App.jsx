@@ -6556,7 +6556,7 @@ export default function App() {
   const [loyaltyUsers, setLoyaltyUsers] = useState([]);
   const [coinHistory, setCoinHistory] = useState([]);
   const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); const t = Number(params.get("table")); return Number.isInteger(t) && t >= 1 && t <= 12 ? t : 1; });
-  const [menu, setMenuState] = useState(DEFAULT_MENU);
+  const [menu, setMenuState] = useState(settings?.menuMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU);
   const isDussehraMode = settings?.menuMode === "dussehra";
   const currentMenu = isDussehraMode ? DUSSEHRA_MENU : (menu.length > 0 ? menu : NORMAL_MENU);
   const currentCategories = isDussehraMode ? DUSSEHRA_CATEGORIES : categories;
@@ -6590,7 +6590,7 @@ export default function App() {
   };
   const [orders, setOrdersState] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [settings, setSettings] = useState({ heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80" });
+  const [settings, setSettings] = useState({ menuMode: "normal", heroImage: "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80" });
   const [loading, setLoading] = useState(true);
   const [showPinModal, setShowPinModal] = useState(false);
   const [targetRole, setTargetRole] = useState("staff");
@@ -6731,6 +6731,15 @@ export default function App() {
   }, []);
 
   // 🟢 Live menu: rate / out-of-stock turant sabko dikhe
+  // 🆕 MenuMode बदलने पर मेन्यू अपडेट करें
+  useEffect(() => {
+    const activeMenu = settings?.menuMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU;
+    setMenuState(activeMenu);
+    if (settings?.menuMode) {
+      setDoc(doc(db, "settings", "menu"), { items: activeMenu }).catch(console.error);
+    }
+  }, [settings?.menuMode]);
+
   useEffect(() => {
     let off = false;
     let unsub = () => {};
@@ -6793,8 +6802,9 @@ export default function App() {
                         setMenuState(data.items.map(withDishImage));
           } else {
             console.log("📦 Firestore menu old/empty. Using DEFAULT_MENU:", DEFAULT_MENU.length, "items");
-            setMenuState(DEFAULT_MENU);
-            setDoc(doc(db, "settings", "menu"), { items: DEFAULT_MENU }).catch(console.error);
+            setMenuState(settings?.menuMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU);
+            const activeMenu = settings?.menuMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU;
+setDoc(doc(db, "settings", "menu"), { items: activeMenu }).catch(console.error);
           }
         }
         
@@ -6836,7 +6846,8 @@ export default function App() {
       if (false && !menuFound) {
 
         console.log("📦 No menu in Firestore. Saving DEFAULT_MENU:", DEFAULT_MENU.length, "items");
-        setDoc(doc(db, "settings", "menu"), { items: DEFAULT_MENU }).catch(console.error);
+        const activeMenu = settings?.menuMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU;
+setDoc(doc(db, "settings", "menu"), { items: activeMenu }).catch(console.error);
       }
       
     } catch (e) { 
