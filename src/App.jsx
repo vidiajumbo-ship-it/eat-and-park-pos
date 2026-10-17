@@ -5342,7 +5342,89 @@ function PresetsAdmin() {
   );
 }
 
-function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, orders, markPaid, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery, categories, updateCategories, flashSaleItems, setFlashSaleItems, comboOffers, setComboOffers, savePromotions }) {
+function DussehraRateEditor({ items, onSave, unavail = [], toggleAvail }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(items);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [add, setAdd] = useState({ name: "", price: "", category: DUSSEHRA_CATEGORIES[0], portion: "" });
+  useEffect(() => { if (!dirty) setDraft(items); }, [items, dirty]);
+
+  const fld = { padding: "8px 10px", border: `1.5px solid ${COLORS.line}`, borderRadius: 8, fontSize: 14, boxSizing: "border-box", fontFamily: "inherit" };
+  const edit = (id, patch) => { setDraft((d) => d.map((x) => (x.id === id ? { ...x, ...patch } : x))); setDirty(true); };
+  const remove = (id) => { if (!window.confirm("Ye item hatana hai?")) return; setDraft((d) => d.filter((x) => x.id !== id)); setDirty(true); };
+  const addItem = () => {
+    const price = Number(add.price);
+    if (!add.name.trim() || !Number.isFinite(price) || price <= 0) { alert("⚠️ Naam aur sahi rate daalo"); return; }
+    setDraft((d) => [...d, mi(uid("dz"), add.name.trim(), price, add.category, true, "", add.portion.trim(), false, true, "")]);
+    setAdd({ ...add, name: "", price: "", portion: "" });
+    setDirty(true);
+  };
+  const save = async () => {
+    if (draft.some((x) => !String(x.name || "").trim() || !Number.isFinite(Number(x.price)) || Number(x.price) <= 0)) { alert("⚠️ Har item ka naam aur sahi rate hona chahiye"); return; }
+    setSaving(true);
+    await onSave(draft.map((x) => ({ ...x, price: Number(x.price) })));
+    setSaving(false); setDirty(false);
+  };
+  const reset = () => { if (window.confirm("Saare Dussehra rates PDF wale original par wapas karne hain?")) { setDraft(DUSSEHRA_MENU); setDirty(true); } };
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} style={{ width: "100%", padding: 14, marginBottom: 20, background: "#E65100", color: "#fff", border: "none", borderRadius: 14, fontWeight: 800, fontSize: 15, cursor: "pointer" }}>
+        ✏️ Dussehra Rates Edit karo
+      </button>
+    );
+  }
+  return (
+    <div style={{ background: "#fff", border: "1.5px solid #E65100", borderRadius: 14, padding: 16, marginBottom: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ fontWeight: 800, fontSize: 16, color: "#E65100" }}>✏️ Dussehra Menu Rates</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={reset} style={{ ...fld, background: "transparent", color: COLORS.textLight, fontWeight: 700, cursor: "pointer" }}>↩️ PDF wale par reset</button>
+          <button onClick={() => setOpen(false)} style={{ ...fld, background: COLORS.paper2, fontWeight: 700, cursor: "pointer" }}>✕ Band</button>
+        </div>
+      </div>
+
+      {DUSSEHRA_CATEGORIES.map((cat) => {
+        const rows = draft.filter((x) => x.category === cat);
+        if (rows.length === 0) return null;
+        return (
+          <div key={cat} style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5, color: COLORS.textLight, marginBottom: 6 }}>{cat}</div>
+            {rows.map((x) => (
+              <div key={x.id} style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 6, opacity: unavail.includes(x.id) ? 0.55 : 1 }}>
+                <input value={x.name} onChange={(e) => edit(x.id, { name: e.target.value })} style={{ ...fld, flex: 1, minWidth: 0 }} />
+                {x.portion ? <span style={{ fontSize: 11, color: COLORS.textLight, fontWeight: 700, whiteSpace: "nowrap" }}>{x.portion}</span> : null}
+                <input type="number" inputMode="decimal" value={x.price} onChange={(e) => edit(x.id, { price: e.target.value })} style={{ ...fld, width: 80, fontWeight: 800, textAlign: "center" }} />
+                <button onClick={() => toggleAvail && toggleAvail(x.id)} title="Hai / Khatam" style={{ ...fld, padding: "8px 8px", cursor: "pointer", background: unavail.includes(x.id) ? COLORS.error : COLORS.sageLight, color: unavail.includes(x.id) ? "#fff" : COLORS.sageDark, fontWeight: 800, border: "none" }}>{unavail.includes(x.id) ? "❌" : "✅"}</button>
+                <button onClick={() => remove(x.id)} style={{ ...fld, padding: "8px 8px", cursor: "pointer", background: "transparent", color: COLORS.error, border: `1.5px solid ${COLORS.error}`, fontWeight: 800 }}>✕</button>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+
+      <div style={{ background: COLORS.paper, borderRadius: 10, padding: 10, marginBottom: 12 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.textLight, marginBottom: 6 }}>➕ Naya item</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <input placeholder="Naam" value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} style={{ ...fld, flex: 2, minWidth: 140 }} />
+          <input type="number" placeholder="Rate" value={add.price} onChange={(e) => setAdd({ ...add, price: e.target.value })} style={{ ...fld, width: 80 }} />
+          <input placeholder="Half / Full" value={add.portion} onChange={(e) => setAdd({ ...add, portion: e.target.value })} style={{ ...fld, width: 90 }} />
+          <select value={add.category} onChange={(e) => setAdd({ ...add, category: e.target.value })} style={{ ...fld, background: "#fff" }}>
+            {DUSSEHRA_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button onClick={addItem} style={{ ...fld, background: COLORS.sage, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer" }}>+ Add</button>
+        </div>
+      </div>
+
+      <button onClick={save} disabled={!dirty || saving} style={{ width: "100%", padding: 14, border: "none", borderRadius: 12, fontWeight: 800, fontSize: 15, cursor: dirty && !saving ? "pointer" : "not-allowed", background: dirty && !saving ? "#E65100" : COLORS.paper2, color: dirty && !saving ? "#fff" : COLORS.textLight }}>
+        {saving ? "⏳ Saving..." : dirty ? "💾 Save Dussehra Menu" : "Koi badlav nahi"}
+      </button>
+    </div>
+  );
+}
+
+function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], toggleAvail, setMenuState, bookings, orders, markPaid, requestPinPrompt, inventory, addInventory, updateStock, deleteBooking, offersList, addOffer, removeOffer, loyaltyRules, setLoyaltyRules, loyaltyUsers, settings, setSettings, gallery, setGallery, categories, updateCategories, flashSaleItems, setFlashSaleItems, comboOffers, setComboOffers, savePromotions }) {
   const [tab, setTab] = useState("overview");
   const [filterDate, setFilterDate] = useState(toLocalISODate(Date.now()));
   const [newInv, setNewInv] = useState({ name: "", stock: "", unit: "kg" });
@@ -5751,7 +5833,7 @@ function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, or
 
         <>
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.menuMode === 'dussehra' ? '#FFF3E0' : COLORS.paper2, border: `1.5px solid ${settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
+            {DUSSEHRA_ENABLED && (<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.menuMode === 'dussehra' ? '#FFF3E0' : COLORS.paper2, border: `1.5px solid ${settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 16, color: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink }}>
                   🎉 Menu Mode: {settings?.menuMode === 'dussehra' ? 'Dussehra Special' : 'Normal Menu'}
@@ -5761,7 +5843,8 @@ function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, or
               <button onClick={() => saveAppSetting({ menuMode: settings?.menuMode === 'dussehra' ? 'normal' : 'dussehra' })} style={{ background: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink, color: '#fff', border: 'none', borderRadius: 20, padding: '10px 20px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                 Switch to {settings?.menuMode === 'dussehra' ? 'Normal' : 'Dussehra'}
               </button>
-            </div>
+            </div>)}
+            {DUSSEHRA_ENABLED && (<DussehraRateEditor items={dussehraMenu} onSave={saveDussehraMenu} unavail={unavail} toggleAvail={toggleAvail} />)}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.vegMode ? COLORS.sageLight : '#fff', border: `1.5px solid ${settings?.vegMode ? COLORS.sage : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 16 }}>🟢 Veg Mode</div>
@@ -6508,6 +6591,9 @@ const DUSSEHRA_MENU = [
   mi("dz803", "Combo 3: Satvik (No Onion-Garlic)", 300, "Combos", true, "Special Paneer + Jeera Rice + 2 Butter Roti.", "", true)
 ];
 
+// Dussehra menu sirf Bihiya project (eat-park-r2) me, jahan VITE_BRANCH=bihiya set ho
+const DUSSEHRA_ENABLED = import.meta.env.VITE_BRANCH === "bihiya";
+
 const DEFAULT_OFFERS = [
   { id: "off1", title: "Flat 20% OFF 🍜", desc: "Enjoy 20% off on all Chinese today!" },
   { id: "off2", title: "Free Cold Drink 🥤", desc: "Free cold drink on orders above ₹499." }
@@ -6651,10 +6737,11 @@ export default function App() {
   const [targetRole, setTargetRole] = useState("staff");
   const [pinInput, setPinInput] = useState("");
   const [categories, setCategories] = useState(CATEGORIES);
-  const isDussehraMode = settings?.menuMode === "dussehra";
+  const [dussehraMenu, setDussehraMenu] = useState(DUSSEHRA_MENU);
+  const isDussehraMode = DUSSEHRA_ENABLED && settings?.menuMode === "dussehra";
   const currentMenu = useMemo(
-    () => (isDussehraMode ? DUSSEHRA_MENU : menu).map((m) => ({ ...m, available: !unavail.includes(m.id) })),
-    [isDussehraMode, menu, unavail]
+    () => (isDussehraMode ? dussehraMenu : menu).map((m) => ({ ...m, available: !unavail.includes(m.id) })),
+    [isDussehraMode, dussehraMenu, menu, unavail]
   );
   const currentCategories = isDussehraMode ? DUSSEHRA_CATEGORIES : categories;
   const [flashSaleItems, setFlashSaleItems] = useState([
@@ -6807,6 +6894,28 @@ export default function App() {
     }).catch(() => {});
     return () => { off = true; unsub(); };
   }, []);
+
+  // 🎉 Dussehra menu (rates admin se edit hote hain)
+  useEffect(() => {
+    if (!DUSSEHRA_ENABLED) return;
+    let off = false;
+    let unsub = () => {};
+    authReady.then(() => {
+      if (off) return;
+      unsub = onSnapshot(doc(db, "settings", "dussehraMenu"), (snap) => {
+        if (!snap.exists()) return;
+        const items = snap.data().items;
+        if (Array.isArray(items) && items.length > 0) setDussehraMenu(items.map(withDishImage));
+      }, (e) => console.error("dussehraMenu listener:", e));
+    }).catch(() => {});
+    return () => { off = true; unsub(); };
+  }, []);
+
+  const saveDussehraMenu = async (items) => {
+    setDussehraMenu(items);
+    try { await setDoc(doc(db, "settings", "dussehraMenu"), { items }); alert("✅ Dussehra menu save ho gaya!"); }
+    catch (e) { console.error(e); alert("⚠️ Dussehra menu save nahi hua. Internet / Firebase rules check karo."); }
+  };
 
   const loyaltyTimer = useRef(null);
 
@@ -7168,7 +7277,7 @@ const earned = Math.floor(getOrderTotal(order) / (Number(loyaltyRules?.rate) || 
   
   {role === "staff" && <ErrorBoundary key="staff"><StaffView menu={currentMenu} orders={orders} placeOrder={placeOrder} categories={currentCategories} setMenuState={setMenuState} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} /></ErrorBoundary>}
   
-  {role === "admin" && <ErrorBoundary key="admin"><AdminView menu={menu} unavail={unavail} toggleAvail={toggleAvail} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={saveLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} /></ErrorBoundary>}
+  {role === "admin" && <ErrorBoundary key="admin"><AdminView dussehraMenu={dussehraMenu} saveDussehraMenu={saveDussehraMenu} menu={menu} unavail={unavail} toggleAvail={toggleAvail} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={saveLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} /></ErrorBoundary>}
   
   {/* (Removed unreachable fallback — role is always one of customer/staff/admin) */}
 </div>
