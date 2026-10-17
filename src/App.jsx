@@ -6592,7 +6592,7 @@ const DUSSEHRA_MENU = [
 ];
 
 // Dussehra menu sirf Bihiya project (eat-park-r2) me, jahan VITE_BRANCH=bihiya set ho
-const DUSSEHRA_ENABLED = import.meta.env.VITE_BRANCH === "bihiya";
+const DUSSEHRA_ENABLED = true;
 
 const DEFAULT_OFFERS = [
   { id: "off1", title: "Flat 20% OFF 🍜", desc: "Enjoy 20% off on all Chinese today!" },
