@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isStaff() {
+      return signedIn()
+        && exists(/databases/$(db)/documents/staff/$(request.auth.uid))
+        && get(/databases/$(db)/documents/staff/$(request.auth.uid)).data.role in ['admin', 'staff', 'waiter'];
+    }
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(db)/documents/staff/$(request.auth.uid))
+        && get(/databases/$(db)/documents/staff/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /staff/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+    match /settings/privatePins {
+      allow read, write: if isAdmin();
+    }
+    match /orders/{id} {
+      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow read: if isStaff() || (signedIn() && resource.data.createdBy == request.auth.uid);
+      allow update: if isStaff();
+      allow delete: if isAdmin();
+    }
+    match /customers/{phone} {
+      allow read, write: if signedIn();
+    }
+    match /loyaltyUsers/{phone} {
+      allow get: if signedIn();
+      allow list, write: if isStaff();
+    }
+    match /coinHistory/{id} {
+      allow read: if signedIn();
+      allow create: if isStaff();
+      allow update, delete: if false;
+    }
+    match /calls/{id} {
+      allow create: if signedIn();
+      allow read, update: if isStaff();
+      allow delete: if isAdmin();
+    }
+    match /bookings/{id} {
+      allow create: if signedIn();
+      allow read, update, delete: if isStaff();
+    }
+    match /chats/{orderId}/messages/{msgId} {
+      allow read, write: if signedIn();
+    }
+    match /inventory/{id} {
+      allow read, write: if isAdmin();
+    }
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      allow create: if isStaff();
+      allow update, delete: if false;
+    }
+  }
+}

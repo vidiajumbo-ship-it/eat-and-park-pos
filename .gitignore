@@ -30,3 +30,6 @@ dist-ssr
 fix.js
 fix2.py
 fix_app.py
+.env.r2
+.vercel
+.env*

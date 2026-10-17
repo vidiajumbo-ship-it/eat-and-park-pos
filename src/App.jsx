@@ -2212,7 +2212,7 @@ await guardedOrderUpdate(billOrder, clean);
 
   return (
     <BillPOSScreen
-      order={billOrder} orders={orders} menu={menu} categories={categories} viewMode={viewMode} setMenuState={setMenuState}
+      order={billOrder} orders={orders} menu={menu} categories={currentCategories} viewMode={viewMode} setMenuState={setMenuState}
       items={items} setItems={setItems} calc={calc}
       orderType={orderType} setOrderType={setOrderType} table={table} setTable={setTable}
       waiter={waiter} setWaiter={setWaiter} sendKot={sendKot} setSendKot={setSendKot}
@@ -2303,7 +2303,7 @@ function WaiterMode({ orders, menu, categories, setMenuState, placeOrder, advanc
         <POSController
           key={target.id}
           initialOrder={target}
-          orders={orders} menu={menu} categories={categories} viewMode={viewMode}
+          orders={orders} menu={menu} categories={currentCategories} viewMode={viewMode}
           placeOrder={placeOrder} advanceStatus={advanceStatus} setMenuState={setMenuState}
           onClose={() => setTarget(null)}
         />
@@ -3789,7 +3789,7 @@ const handleWaiterPinSubmitOld = () => {
   <WaiterMode
     orders={orders}
     menu={menu}
-    categories={categories}
+    categories={currentCategories}
     setMenuState={setMenuState}
     placeOrder={placeOrder}
     advanceStatus={advanceStatus}
@@ -4911,7 +4911,7 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
       {/* 🧾 NEW: ONE-SCREEN ORDER + BILL */}
       {billOrder ? (
         <BillPOSScreen
-          order={billOrder} orders={orders} menu={menu} categories={categories} viewMode={viewMode} setMenuState={setMenuState}
+          order={billOrder} orders={orders} menu={menu} categories={currentCategories} viewMode={viewMode} setMenuState={setMenuState}
           items={billEditItems} setItems={setBillEditItems} calc={billCalc}
           orderType={billOrderType} setOrderType={setBillOrderType}
           table={billTable} setTable={setBillTable}
@@ -5480,7 +5480,9 @@ function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, or
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto" }}>
         {["overview", "menu", "tables", "presets", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings", "promotions"].map((t) => (<button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button>))}
       </div>
-      {tab === "tables" && (
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: settings?.menuMode === "dussehra" ? "#FFF3E0" : "#F0EFEB", border: `1.5px solid ${settings?.menuMode === "dussehra" ? "#E65100" : COLORS.line}`, borderRadius: 14, padding: "14px 16px", marginBottom: 20 }}><div><div style={{ fontWeight: 800, fontSize: 16, color: settings?.menuMode === "dussehra" ? "#E65100" : COLORS.ink }}>🎉 Menu Mode: {settings?.menuMode === "dussehra" ? "Dussehra Special" : "Normal Menu"}</div><div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>{settings?.menuMode === "dussehra" ? "ग्राहकों को सिर्फ दशहरा मेन्यू दिख रहा है" : "ग्राहकों को नॉर्मल मेन्यू दिख रहा है"}</div></div><button onClick={async () => { const newMode = settings?.menuMode === "dussehra" ? "normal" : "dussehra"; await setDoc(doc(db, "settings", "appSettings"), { menuMode: newMode }, { merge: true }); setSettings(prev => ({ ...prev, menuMode: newMode })); setMenuState(newMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU); updateCategories(newMode === "dussehra" ? DUSSEHRA_CATEGORIES : NORMAL_CATEGORIES); alert(`✅ Menu switched to ${newMode === "dussehra" ? "Dussehra Special" : "Normal"}`); }} style={{ background: settings?.menuMode === "dussehra" ? "#E65100" : COLORS.ink, color: "#fff", border: "none", borderRadius: 20, padding: "10px 20px", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>Switch to {settings?.menuMode === "dussehra" ? "Normal" : "Dussehra"}</button></div>
+
+      {tab === "tables" {tab === "tables" && ({tab === "tables" && ( (
         <TableStatusBoard
           orders={orders}
           tables={12}
@@ -6527,6 +6529,9 @@ export default function App() {
   const [coinHistory, setCoinHistory] = useState([]);
   const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); const t = Number(params.get("table")); return Number.isInteger(t) && t >= 1 && t <= 12 ? t : 1; });
   const [menu, setMenuState] = useState(DEFAULT_MENU);
+  const isDussehraMode = settings?.menuMode === "dussehra";
+  const currentMenu = isDussehraMode ? DUSSEHRA_MENU : (menu.length > 0 ? menu : NORMAL_MENU);
+  const currentCategories = isDussehraMode ? DUSSEHRA_CATEGORIES : categories;
   const [unavail, setUnavail] = useState([]);
     const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
@@ -7066,11 +7071,11 @@ const earned = Math.floor(getOrderTotal(order) / (Number(loyaltyRules?.rate) || 
         <div className="app-content">
   
   
-  {role === "customer" && <ErrorBoundary key="cust"><CustomerView menu={menuEff} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={categories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} setLoyaltyRules={saveLoyaltyRules} advanceStatus={advanceStatus} /></ErrorBoundary>}
+  {role === "customer" && <ErrorBoundary key="cust"><CustomerView menu={currentMenu} orders={orders} placeOrder={placeOrder} bookEvent={bookEvent} gallery={gallery} offersList={offersList} table={table} setTable={setTable} requestPinPrompt={requestPinPrompt} settings={settings} isDark={isDark} setIsDark={setIsDark} requestWaiter={requestWaiter} loyaltyRules={loyaltyRules} loyaltyUsers={loyaltyUsers} coinHistory={coinHistory} setOrdersState={setOrdersState} categories={currentCategories} flashSaleItems={validFlashSaleItems} comboOffers={validComboOffers} setMenuState={setMenuState} setLoyaltyRules={saveLoyaltyRules} advanceStatus={advanceStatus} /></ErrorBoundary>}
   
-  {role === "staff" && <ErrorBoundary key="staff"><StaffView menu={menuEff} orders={orders} placeOrder={placeOrder} categories={categories} setMenuState={setMenuState} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} /></ErrorBoundary>}
+  {role === "staff" && <ErrorBoundary key="staff"><StaffView menu={currentMenu} orders={orders} placeOrder={placeOrder} categories={currentCategories} setMenuState={setMenuState} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} /></ErrorBoundary>}
   
-  {role === "admin" && <ErrorBoundary key="admin"><AdminView menu={menu} unavail={unavail} toggleAvail={toggleAvail} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={saveLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} /></ErrorBoundary>}
+  {role === "admin" && <ErrorBoundary key="admin"><AdminView menu={menu} unavail={unavail} toggleAvail={toggleAvail} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={saveLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={currentCategories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} /></ErrorBoundary>}
   
   {/* (Removed unreachable fallback — role is always one of customer/staff/admin) */}
 </div>

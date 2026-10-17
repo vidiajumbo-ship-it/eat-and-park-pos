@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "enpmenu",
+    "r2": "eat-and-park"
+  },
+  "targets": {},
+  "etags": {}
+}
