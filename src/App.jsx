@@ -134,14 +134,14 @@ const COLORS = {
 const RESTAURANT = {
   name: "Eat & Park Restaurant", full: "Eat & Park Restaurant", tagline: "A Premium Family Restaurant",
   address: "Girja More, Ara – Buxar Main Road, Pakri, Ara",
-  phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "heckeyhr@ybl", gstin: process.env.REACT_APP_GSTIN || ""
+  phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "heckeyhr@ybl", gstin: import.meta.env.VITE_GSTIN || ""
 };
 
 const GOOGLE_PLACE_ID = "ChIJc8jv-j9fjTkRYFQLM7KK1aA";
 const GOOGLE_REVIEW_URL = `https://search.google.com/local/writereview?placeid=${GOOGLE_PLACE_ID}`;
 
-const RAZORPAY_KEY = process.env.REACT_APP_RAZORPAY_KEY || "YOUR_RAZORPAY_KEY_ID";
-const PHONEPE_MERCHANT_ID = process.env.REACT_APP_PHONEPE_MERCHANT_ID || "YOUR_MERCHANT_ID";
+const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY || "YOUR_RAZORPAY_KEY_ID";
+const PHONEPE_MERCHANT_ID = import.meta.env.VITE_PHONEPE_MERCHANT_ID || "YOUR_MERCHANT_ID";
 
 const CATEGORIES = [
   "Thali",
@@ -250,7 +250,7 @@ async function guardedOrderUpdate(base, patch) {
 }
 
 
-const DEMO_OTP = process.env.REACT_APP_DEMO_OTP === "true";
+const DEMO_OTP = import.meta.env.VITE_DEMO_OTP === "true";
 function timeAgo(ts) { const s = Math.floor((Date.now() - ts) / 1000); if (s < 60) return s + "s ago"; const m = Math.floor(s / 60); if (m < 60) return m + "m ago"; return Math.floor(m / 60) + "h ago"; }
 const toLocalISODate = HX.toLocalISODate;
 function toLocalISODateLegacy(timestamp) { const d = new Date(timestamp); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0]; }
@@ -2212,7 +2212,7 @@ await guardedOrderUpdate(billOrder, clean);
 
   return (
     <BillPOSScreen
-      order={billOrder} orders={orders} menu={menu} categories={currentCategories} viewMode={viewMode} setMenuState={setMenuState}
+      order={billOrder} orders={orders} menu={menu} categories={categories} viewMode={viewMode} setMenuState={setMenuState}
       items={items} setItems={setItems} calc={calc}
       orderType={orderType} setOrderType={setOrderType} table={table} setTable={setTable}
       waiter={waiter} setWaiter={setWaiter} sendKot={sendKot} setSendKot={setSendKot}
@@ -2303,7 +2303,7 @@ function WaiterMode({ orders, menu, categories, setMenuState, placeOrder, advanc
         <POSController
           key={target.id}
           initialOrder={target}
-          orders={orders} menu={menu} categories={currentCategories} viewMode={viewMode}
+          orders={orders} menu={menu} categories={categories} viewMode={viewMode}
           placeOrder={placeOrder} advanceStatus={advanceStatus} setMenuState={setMenuState}
           onClose={() => setTarget(null)}
         />
@@ -3789,7 +3789,7 @@ const handleWaiterPinSubmitOld = () => {
   <WaiterMode
     orders={orders}
     menu={menu}
-    categories={currentCategories}
+    categories={categories}
     setMenuState={setMenuState}
     placeOrder={placeOrder}
     advanceStatus={advanceStatus}
@@ -4371,34 +4371,7 @@ function BillPOSScreenInner(p) {
             <div style={{ flex: 1, minHeight: 0, overflowY: tab === "bill" ? "auto" : "hidden" }}>
               {tab === "menu" ? menuPane : billPane}
             </div>
-                  {/* 🎉 Menu Toggle Button */}
-      {tab === "menu" && (
-            {/* 🎉 Menu Toggle Button */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.menuMode === 'dussehra' ? '#FFF3E0' : '#F0EFEB', border: `1.5px solid ${settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 16, color: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink }}>
-                  🎉 Menu Mode: {settings?.menuMode === 'dussehra' ? 'Dussehra Special' : 'Normal Menu'}
-                </div>
-                <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>
-                  {settings?.menuMode === 'dussehra' ? 'Dussehra Menu Active' : 'Normal Menu Active'}
-                </div>
-              </div>
-              <button 
-                onClick={async () => {
-                  const newMode = settings?.menuMode === 'dussehra' ? 'normal' : 'dussehra';
-                  await setDoc(doc(db, 'settings', 'appSettings'), { menuMode: newMode }, { merge: true });
-                  setSettings(prev => ({ ...prev, menuMode: newMode }));
-                  setMenuState(newMode === 'dussehra' ? DUSSEHRA_MENU : NORMAL_MENU);
-                  updateCategories(newMode === 'dussehra' ? DUSSEHRA_CATEGORIES : NORMAL_CATEGORIES);
-                  alert(`Menu switched to ${newMode}`);
-                }} 
-                style={{ background: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink, color: '#fff', border: 'none', borderRadius: 20, padding: '10px 20px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
-              >
-                Switch to {settings?.menuMode === 'dussehra' ? 'Normal' : 'Dussehra'}
-              </button>
-            </div>
-
-        
+            {tab === "menu" && (
               <button type="button" onClick={() => setTab("bill")} style={{ padding: "14px 16px", borderRadius: 8, border: "none", background: "#DC2626", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 12px rgba(220,38,38,0.25)" }}>
                 <span>{itemCount} item{itemCount !== 1 ? "s" : ""}</span><span style={{ fontFamily: "'JetBrains Mono', monospace" }}>₹{calc.total} ➔</span>
               </button>
@@ -4938,7 +4911,7 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
       {/* 🧾 NEW: ONE-SCREEN ORDER + BILL */}
       {billOrder ? (
         <BillPOSScreen
-          order={billOrder} orders={orders} menu={menu} categories={currentCategories} viewMode={viewMode} setMenuState={setMenuState}
+          order={billOrder} orders={orders} menu={menu} categories={categories} viewMode={viewMode} setMenuState={setMenuState}
           items={billEditItems} setItems={setBillEditItems} calc={billCalc}
           orderType={billOrderType} setOrderType={setBillOrderType}
           table={billTable} setTable={setBillTable}
@@ -5509,7 +5482,7 @@ function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, or
       </div>
       
 
-      {tab === "tables" {tab === "tables" && ({tab === "tables" && ( (
+      {tab === "tables" && (
         <TableStatusBoard
           orders={orders}
           tables={12}
@@ -5778,6 +5751,17 @@ function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, or
 
         <>
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.menuMode === 'dussehra' ? '#FFF3E0' : COLORS.paper2, border: `1.5px solid ${settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink }}>
+                  🎉 Menu Mode: {settings?.menuMode === 'dussehra' ? 'Dussehra Special' : 'Normal Menu'}
+                </div>
+                <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>Sabko turant active menu dikhega. Normal menu kabhi overwrite nahi hota.</div>
+              </div>
+              <button onClick={() => saveAppSetting({ menuMode: settings?.menuMode === 'dussehra' ? 'normal' : 'dussehra' })} style={{ background: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink, color: '#fff', border: 'none', borderRadius: 20, padding: '10px 20px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                Switch to {settings?.menuMode === 'dussehra' ? 'Normal' : 'Dussehra'}
+              </button>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.vegMode ? COLORS.sageLight : '#fff', border: `1.5px solid ${settings?.vegMode ? COLORS.sage : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 16 }}>🟢 Veg Mode</div>
@@ -6450,6 +6434,80 @@ const DEFAULT_MENU = [
   mi("cb1607", "Pizza + Coke", 240, "Combos", true, "Pizza with Coke."),
   mi("cb1608", "Chicken Roll + Coke", 180, "Combos", false, "Chicken roll with Coke.")
 ];
+
+const DUSSEHRA_CATEGORIES = [
+  "Chaat, Momos & Starters", "Noodles / Chowmein", "Dal, Raita & Papad",
+  "Paneer Special", "Mushroom Special", "Rice & Pulao",
+  "Breads, Sweets & Drinks", "Combos"
+];
+const DUSSEHRA_MENU = [
+  // Chaat, Momos & Starters
+  mi("dz101", "Special Banarasi Samosa Chaat", 80, "Chaat, Momos & Starters", true, "Tangy & spicy Banarasi samosa chaat.", "Half", true),
+  mi("dz102", "Special Banarasi Samosa Chaat", 110, "Chaat, Momos & Starters", true, "Tangy & spicy Banarasi samosa chaat.", "Full", true),
+  mi("dz103", "Himalayan Authentic Steamed Momos", 80, "Chaat, Momos & Starters", true, "With spicy mountain chutney.", "6 pcs"),
+  mi("dz104", "Himalayan Authentic Steamed Momos", 110, "Chaat, Momos & Starters", true, "With spicy mountain chutney.", "10 pcs"),
+  mi("dz105", "Everest Golden Fried Momos", 90, "Chaat, Momos & Starters", true, "Hot and crispy fried momos.", "6 pcs"),
+  mi("dz106", "Everest Golden Fried Momos", 130, "Chaat, Momos & Starters", true, "Hot and crispy fried momos.", "10 pcs"),
+  mi("dz107", "Himalayan Special Kurkure Momos", 110, "Chaat, Momos & Starters", true, "Super crunchy kurkure momos.", "6 pcs"),
+  mi("dz108", "Himalayan Special Kurkure Momos", 160, "Chaat, Momos & Starters", true, "Super crunchy kurkure momos.", "10 pcs"),
+  mi("dz109", "Crispy Honey Chilli Potato", 170, "Chaat, Momos & Starters", true, "Crispy potato in honey chilli sauce."),
+  mi("dz110", "Hot Garlic Zesty Veg Manchurian", 200, "Chaat, Momos & Starters", true, "Dry or gravy.", "Dry / Gravy"),
+  mi("dz111", "Schezwan Fiery Paneer Chilli", 260, "Chaat, Momos & Starters", true, "Dry or gravy.", "Dry / Gravy"),
+  mi("dz112", "Tangy Pepper Mushroom Chilli", 300, "Chaat, Momos & Starters", true, "Dry or gravy.", "Dry / Gravy"),
+
+  // Noodles / Chowmein
+  mi("dz201", "Veg Noodles (Chowmein)", 90, "Noodles / Chowmein", true, "Wok-tossed veg chowmein.", "Half"),
+  mi("dz202", "Veg Noodles (Chowmein)", 140, "Noodles / Chowmein", true, "Wok-tossed veg chowmein.", "Full"),
+  mi("dz203", "Paneer Noodles (Chowmein)", 120, "Noodles / Chowmein", true, "Paneer chowmein.", "Half"),
+  mi("dz204", "Paneer Noodles (Chowmein)", 180, "Noodles / Chowmein", true, "Paneer chowmein.", "Full"),
+  mi("dz205", "Singapuri Veg Noodles (Spicy)", 110, "Noodles / Chowmein", true, "Spicy Singapuri style noodles.", "Half"),
+  mi("dz206", "Singapuri Veg Noodles (Spicy)", 170, "Noodles / Chowmein", true, "Spicy Singapuri style noodles.", "Full"),
+  mi("dz207", "Veg Chowmein + Manchurian (4 Pcs) Platter", 170, "Noodles / Chowmein", true, "Chowmein with 4 pcs manchurian.", "", true),
+
+  // Dal, Raita & Papad
+  mi("dz301", "Special Yellow Dal Tadka", 150, "Dal, Raita & Papad", true, "Special dal tadka.", "Full"),
+  mi("dz302", "Plain Yellow / Jeera Dal", 130, "Dal, Raita & Papad", true, "No onion, no garlic.", "Full"),
+  mi("dz303", "Special Boondi / Mix Veg Raita", 90, "Dal, Raita & Papad", true, "Boondi or mix veg raita."),
+  mi("dz304", "Roasted Papad", 50, "Dal, Raita & Papad", true, "Roasted papad."),
+  mi("dz305", "Masala Papad", 70, "Dal, Raita & Papad", true, "Masala papad."),
+
+  // Paneer Special
+  mi("dz401", "Paneer Kadai", 290, "Paneer Special", true, "", "Full"),
+  mi("dz402", "Paneer Do Pyaza", 300, "Paneer Special", true, "", "Full"),
+  mi("dz403", "Paneer Tawa Masala", 320, "Paneer Special", true, "", "Full"),
+  mi("dz404", "Paneer Butter Masala", 320, "Paneer Special", true, "", "Full", true),
+  mi("dz405", "Paneer Punjabi", 340, "Paneer Special", true, "", "Full"),
+  mi("dz406", "Special Paneer (No Onion-Garlic)", 350, "Paneer Special", true, "No onion, no garlic.", "Full", true),
+
+  // Mushroom Special
+  mi("dz501", "Mushroom Kadai", 300, "Mushroom Special", true, "", "Full"),
+  mi("dz502", "Mushroom Do Pyaza", 320, "Mushroom Special", true, "", "Full"),
+  mi("dz503", "Mushroom Tawa Masala", 330, "Mushroom Special", true, "", "Full"),
+  mi("dz504", "Mushroom Butter Masala", 330, "Mushroom Special", true, "", "Full"),
+  mi("dz505", "Mushroom Punjabi", 350, "Mushroom Special", true, "", "Full"),
+  mi("dz506", "Special Mushroom (No Onion-Garlic)", 370, "Mushroom Special", true, "No onion, no garlic.", "Full"),
+
+  // Rice & Pulao
+  mi("dz601", "Jeera Rice", 130, "Rice & Pulao", true, "", "Full"),
+  mi("dz602", "Green Peas Pulao", 160, "Rice & Pulao", true, "", "Full"),
+  mi("dz603", "Ghee Pulao (Special Veg Pulao)", 200, "Rice & Pulao", true, "", "Full"),
+
+  // Breads, Sweets & Drinks
+  mi("dz701", "Tandoori Roti (Plain)", 18, "Breads, Sweets & Drinks", true, "Plain tandoori roti."),
+  mi("dz702", "Tandoori Roti (Butter)", 20, "Breads, Sweets & Drinks", true, "Butter tandoori roti."),
+  mi("dz703", "Plain Naan", 60, "Breads, Sweets & Drinks", true, "Plain naan."),
+  mi("dz704", "Butter Naan", 70, "Breads, Sweets & Drinks", true, "Butter naan."),
+  mi("dz705", "Cold Drink Can (Coke / Sprite / Diet Coke)", 50, "Breads, Sweets & Drinks", true, "Chilled can."),
+  mi("dz706", "Hot Gulab Jamun (2 Pcs)", 80, "Breads, Sweets & Drinks", true, "Hot gulab jamun.", "2 pcs"),
+  mi("dz707", "Special Masala Cold Drink", 70, "Breads, Sweets & Drinks", true, "Masala cold drink."),
+  mi("dz708", "Mineral Water", 20, "Breads, Sweets & Drinks", true, "Packaged drinking water.", "1 L"),
+
+  // Combos
+  mi("dz801", "Combo 1: Chinese Platter", 220, "Combos", true, "Veg Noodles + Veg Manchurian (4 pcs) + 1 Coke can.", "", true),
+  mi("dz802", "Combo 2: Tandoori Feast", 280, "Combos", true, "Paneer Butter Masala + 2 Butter Naan + 1 Gulab Jamun.", "", true),
+  mi("dz803", "Combo 3: Satvik (No Onion-Garlic)", 300, "Combos", true, "Special Paneer + Jeera Rice + 2 Butter Roti.", "", true)
+];
+
 const DEFAULT_OFFERS = [
   { id: "off1", title: "Flat 20% OFF 🍜", desc: "Enjoy 20% off on all Chinese today!" },
   { id: "off2", title: "Free Cold Drink 🥤", desc: "Free cold drink on orders above ₹499." }
@@ -6556,10 +6614,7 @@ export default function App() {
   const [loyaltyUsers, setLoyaltyUsers] = useState([]);
   const [coinHistory, setCoinHistory] = useState([]);
   const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); const t = Number(params.get("table")); return Number.isInteger(t) && t >= 1 && t <= 12 ? t : 1; });
-  const [menu, setMenuState] = useState(settings?.menuMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU);
-  const isDussehraMode = settings?.menuMode === "dussehra";
-  const currentMenu = isDussehraMode ? DUSSEHRA_MENU : (menu.length > 0 ? menu : NORMAL_MENU);
-  const currentCategories = isDussehraMode ? DUSSEHRA_CATEGORIES : categories;
+  const [menu, setMenuState] = useState(DEFAULT_MENU);
   const [unavail, setUnavail] = useState([]);
     const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
@@ -6596,6 +6651,12 @@ export default function App() {
   const [targetRole, setTargetRole] = useState("staff");
   const [pinInput, setPinInput] = useState("");
   const [categories, setCategories] = useState(CATEGORIES);
+  const isDussehraMode = settings?.menuMode === "dussehra";
+  const currentMenu = useMemo(
+    () => (isDussehraMode ? DUSSEHRA_MENU : menu).map((m) => ({ ...m, available: !unavail.includes(m.id) })),
+    [isDussehraMode, menu, unavail]
+  );
+  const currentCategories = isDussehraMode ? DUSSEHRA_CATEGORIES : categories;
   const [flashSaleItems, setFlashSaleItems] = useState([
     { id: 'mf207', name: 'Fish Curry (4 pc)', price: 220, discountPrice: 179, stock: 10, active: true }
   ]);
@@ -6621,12 +6682,12 @@ export default function App() {
 
   const pinLock = usePinLockout();
   const validComboOffers = useMemo(
-    () => comboOffers.filter(c => c.items?.length && c.items.every(it => menu.some(m => m.id === it.id && (!settings.vegMode || m.veg)))),
-    [comboOffers, menu, settings.vegMode]
+    () => comboOffers.filter(c => c.items?.length && c.items.every(it => currentMenu.some(m => m.id === it.id && (!settings.vegMode || m.veg)))),
+    [comboOffers, currentMenu, settings.vegMode]
   );
   const validFlashSaleItems = useMemo(
-    () => flashSaleItems.filter(f => menu.some(m => m.id === f.id && (!settings.vegMode || m.veg))),
-    [flashSaleItems, menu, settings.vegMode]
+    () => flashSaleItems.filter(f => currentMenu.some(m => m.id === f.id && (!settings.vegMode || m.veg))),
+    [flashSaleItems, currentMenu, settings.vegMode]
   );
 
   const requestPinPrompt = (target) => {
@@ -6732,14 +6793,7 @@ export default function App() {
 
   // 🟢 Live menu: rate / out-of-stock turant sabko dikhe
   // 🆕 MenuMode बदलने पर मेन्यू अपडेट करें
-  useEffect(() => {
-    const activeMenu = settings?.menuMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU;
-    setMenuState(activeMenu);
-    if (settings?.menuMode) {
-      setDoc(doc(db, "settings", "menu"), { items: activeMenu }).catch(console.error);
-    }
-  }, [settings?.menuMode]);
-
+  
   useEffect(() => {
     let off = false;
     let unsub = () => {};
@@ -6802,8 +6856,8 @@ export default function App() {
                         setMenuState(data.items.map(withDishImage));
           } else {
             console.log("📦 Firestore menu old/empty. Using DEFAULT_MENU:", DEFAULT_MENU.length, "items");
-            setMenuState(settings?.menuMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU);
-            const activeMenu = settings?.menuMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU;
+            setMenuState(DEFAULT_MENU);
+            const activeMenu = DEFAULT_MENU;
 setDoc(doc(db, "settings", "menu"), { items: activeMenu }).catch(console.error);
           }
         }
@@ -6846,7 +6900,7 @@ setDoc(doc(db, "settings", "menu"), { items: activeMenu }).catch(console.error);
       if (false && !menuFound) {
 
         console.log("📦 No menu in Firestore. Saving DEFAULT_MENU:", DEFAULT_MENU.length, "items");
-        const activeMenu = settings?.menuMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU;
+        const activeMenu = DEFAULT_MENU;
 setDoc(doc(db, "settings", "menu"), { items: activeMenu }).catch(console.error);
       }
       
@@ -7114,7 +7168,7 @@ const earned = Math.floor(getOrderTotal(order) / (Number(loyaltyRules?.rate) || 
   
   {role === "staff" && <ErrorBoundary key="staff"><StaffView menu={currentMenu} orders={orders} placeOrder={placeOrder} categories={currentCategories} setMenuState={setMenuState} advanceStatus={advanceStatus} requestPinPrompt={requestPinPrompt} calls={calls} resolveCall={resolveCall} cancelOrderByStaff={cancelOrderByStaff} /></ErrorBoundary>}
   
-  {role === "admin" && <ErrorBoundary key="admin"><AdminView menu={menu} unavail={unavail} toggleAvail={toggleAvail} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={saveLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={currentCategories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} /></ErrorBoundary>}
+  {role === "admin" && <ErrorBoundary key="admin"><AdminView menu={menu} unavail={unavail} toggleAvail={toggleAvail} setMenuState={setMenuState} bookings={bookings} orders={orders} markPaid={markPaid} requestPinPrompt={requestPinPrompt} inventory={inventory} addInventory={addInventory} updateStock={updateStock} deleteBooking={deleteBooking} offersList={offersList} addOffer={addOffer} removeOffer={removeOffer} loyaltyRules={loyaltyRules} setLoyaltyRules={saveLoyaltyRules} loyaltyUsers={loyaltyUsers} settings={settings} setSettings={setSettings} gallery={gallery} setGallery={setGallery} categories={categories} updateCategories={updateCategories} flashSaleItems={flashSaleItems} setFlashSaleItems={setFlashSaleItems} comboOffers={comboOffers} setComboOffers={setComboOffers} savePromotions={savePromotions} /></ErrorBoundary>}
   
   {/* (Removed unreachable fallback — role is always one of customer/staff/admin) */}
 </div>
