@@ -4373,33 +4373,32 @@ function BillPOSScreenInner(p) {
             </div>
                   {/* 🎉 Menu Toggle Button */}
       {tab === "menu" && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.menuMode === 'dussehra' ? '#FFF3E0' : '#F0EFEB', border: `1.5px solid ${settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 16, color: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink }}>
-              🎉 Menu Mode: {settings?.menuMode === 'dussehra' ? 'Dussehra Special' : 'Normal Menu'}
+            {/* 🎉 Menu Toggle Button */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.menuMode === 'dussehra' ? '#FFF3E0' : '#F0EFEB', border: `1.5px solid ${settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink }}>
+                  🎉 Menu Mode: {settings?.menuMode === 'dussehra' ? 'Dussehra Special' : 'Normal Menu'}
+                </div>
+                <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>
+                  {settings?.menuMode === 'dussehra' ? 'Dussehra Menu Active' : 'Normal Menu Active'}
+                </div>
+              </div>
+              <button 
+                onClick={async () => {
+                  const newMode = settings?.menuMode === 'dussehra' ? 'normal' : 'dussehra';
+                  await setDoc(doc(db, 'settings', 'appSettings'), { menuMode: newMode }, { merge: true });
+                  setSettings(prev => ({ ...prev, menuMode: newMode }));
+                  setMenuState(newMode === 'dussehra' ? DUSSEHRA_MENU : NORMAL_MENU);
+                  updateCategories(newMode === 'dussehra' ? DUSSEHRA_CATEGORIES : NORMAL_CATEGORIES);
+                  alert(`Menu switched to ${newMode}`);
+                }} 
+                style={{ background: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink, color: '#fff', border: 'none', borderRadius: 20, padding: '10px 20px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+              >
+                Switch to {settings?.menuMode === 'dussehra' ? 'Normal' : 'Dussehra'}
+              </button>
             </div>
-            <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>
-              {settings?.menuMode === 'dussehra' ? 'Customer ko Dussehra Menu dikh raha hai' : 'Customer ko Normal Menu dikh raha hai'}
-            </div>
-          </div>
-          <button 
-            onClick={async () => {
-              const newMode = settings?.menuMode === 'dussehra' ? 'normal' : 'dussehra';
-              await setDoc(doc(db, 'settings', 'appSettings'), { menuMode: newMode }, { merge: true });
-              setSettings(prev => ({ ...prev, menuMode: newMode }));
-              setMenuState(newMode === 'dussehra' ? DUSSEHRA_MENU : NORMAL_MENU);
-              updateCategories(newMode === 'dussehra' ? DUSSEHRA_CATEGORIES : NORMAL_CATEGORIES);
-              alert(`Menu switched to ${newMode === 'dussehra' ? 'Dussehra Special' : 'Normal'}`);
-            }} 
-            style={{ background: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink, color: '#fff', border: 'none', borderRadius: 20, padding: '10px 20px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
-          >
-            Switch to {settings?.menuMode === 'dussehra' ? 'Normal' : 'Dussehra'}
-          </button>
-        </div>
-      )}
 
-      {tab === "menu" && (
-<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.menuMode === 'dussehra' ? '#FFF3E0' : '#F0EFEB', border: `1.5px solid ${settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}><div><div style={{ fontWeight: 800, fontSize: 16, color: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink }}>🎉 Menu Mode: {settings?.menuMode === 'dussehra' ? 'Dussehra Special' : 'Normal Menu'}</div><div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>{settings?.menuMode === 'dussehra' ? 'Dussehra Menu Active' : 'Normal Menu Active'}</div></div><button onClick={async () => { const newMode = settings?.menuMode === 'dussehra' ? 'normal' : 'dussehra'; await setDoc(doc(db, 'settings', 'appSettings'), { menuMode: newMode }, { merge: true }); setSettings(prev => ({ ...prev, menuMode: newMode })); setMenuState(newMode === 'dussehra' ? DUSSEHRA_MENU : NORMAL_MENU); updateCategories(newMode === 'dussehra' ? DUSSEHRA_CATEGORIES : NORMAL_CATEGORIES); alert(`Menu switched to ${newMode}`); }} style={{ background: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink, color: '#fff', border: 'none', borderRadius: 20, padding: '10px 20px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>Switch to {settings?.menuMode === 'dussehra' ? 'Normal' : 'Dussehra'}</button></div>
+        
               <button type="button" onClick={() => setTab("bill")} style={{ padding: "14px 16px", borderRadius: 8, border: "none", background: "#DC2626", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 12px rgba(220,38,38,0.25)" }}>
                 <span>{itemCount} item{itemCount !== 1 ? "s" : ""}</span><span style={{ fontFamily: "'JetBrains Mono', monospace" }}>₹{calc.total} ➔</span>
               </button>
@@ -5508,7 +5507,7 @@ function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, or
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto" }}>
         {["overview", "menu", "tables", "presets", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings", "promotions"].map((t) => (<button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button>))}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: settings?.menuMode === "dussehra" ? "#FFF3E0" : "#F0EFEB", border: `1.5px solid ${settings?.menuMode === "dussehra" ? "#E65100" : COLORS.line}`, borderRadius: 14, padding: "14px 16px", marginBottom: 20 }}><div><div style={{ fontWeight: 800, fontSize: 16, color: settings?.menuMode === "dussehra" ? "#E65100" : COLORS.ink }}>🎉 Menu Mode: {settings?.menuMode === "dussehra" ? "Dussehra Special" : "Normal Menu"}</div><div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>{settings?.menuMode === "dussehra" ? "ग्राहकों को सिर्फ दशहरा मेन्यू दिख रहा है" : "ग्राहकों को नॉर्मल मेन्यू दिख रहा है"}</div></div><button onClick={async () => { const newMode = settings?.menuMode === "dussehra" ? "normal" : "dussehra"; await setDoc(doc(db, "settings", "appSettings"), { menuMode: newMode }, { merge: true }); setSettings(prev => ({ ...prev, menuMode: newMode })); setMenuState(newMode === "dussehra" ? DUSSEHRA_MENU : NORMAL_MENU); updateCategories(newMode === "dussehra" ? DUSSEHRA_CATEGORIES : NORMAL_CATEGORIES); alert(`✅ Menu switched to ${newMode === "dussehra" ? "Dussehra Special" : "Normal"}`); }} style={{ background: settings?.menuMode === "dussehra" ? "#E65100" : COLORS.ink, color: "#fff", border: "none", borderRadius: 20, padding: "10px 20px", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>Switch to {settings?.menuMode === "dussehra" ? "Normal" : "Dussehra"}</button></div>
+      
 
       {tab === "tables" {tab === "tables" && ({tab === "tables" && ( (
         <TableStatusBoard
@@ -5776,7 +5775,7 @@ function AdminView({ menu, unavail = [], toggleAvail, setMenuState, bookings, or
       )}
 
       {tab === "menu" && (
-<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.menuMode === 'dussehra' ? '#FFF3E0' : '#F0EFEB', border: `1.5px solid ${settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}><div><div style={{ fontWeight: 800, fontSize: 16, color: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink }}>🎉 Menu Mode: {settings?.menuMode === 'dussehra' ? 'Dussehra Special' : 'Normal Menu'}</div><div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>{settings?.menuMode === 'dussehra' ? 'Dussehra Menu Active' : 'Normal Menu Active'}</div></div><button onClick={async () => { const newMode = settings?.menuMode === 'dussehra' ? 'normal' : 'dussehra'; await setDoc(doc(db, 'settings', 'appSettings'), { menuMode: newMode }, { merge: true }); setSettings(prev => ({ ...prev, menuMode: newMode })); setMenuState(newMode === 'dussehra' ? DUSSEHRA_MENU : NORMAL_MENU); updateCategories(newMode === 'dussehra' ? DUSSEHRA_CATEGORIES : NORMAL_CATEGORIES); alert(`Menu switched to ${newMode}`); }} style={{ background: settings?.menuMode === 'dussehra' ? '#E65100' : COLORS.ink, color: '#fff', border: 'none', borderRadius: 20, padding: '10px 20px', fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}>Switch to {settings?.menuMode === 'dussehra' ? 'Normal' : 'Dussehra'}</button></div>
+
         <>
           <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 30 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.vegMode ? COLORS.sageLight : '#fff', border: `1.5px solid ${settings?.vegMode ? COLORS.sage : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
