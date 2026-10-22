@@ -6183,7 +6183,7 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
         </div>
       )}
 
-            {tab === "promotions" && (
+                 {tab === "promotions" && (
         <div>
           <h3 style={{ marginBottom: 16 }}>⚡ Flash Sale</h3>
           {flashSaleItems.map((item, idx) => (
@@ -6215,9 +6215,7 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
           <button onClick={savePromotions} style={{ ...primaryBtn, width: '100%' }}>💾 Save All</button>
         </div>
       )}
-    </div>
-  );
-}
+
 
 
 // ==
