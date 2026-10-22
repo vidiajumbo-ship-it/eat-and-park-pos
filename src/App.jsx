@@ -2362,10 +2362,15 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   cartRef.current = cart;
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
-  const visibleCategories = useMemo(
-    () => categories.filter((c) => !(settings?.hiddenCategories || []).includes(c)),
-    [categories, settings?.hiddenCategories]
-  );
+    const visibleCategories = useMemo(() => {
+    const hidden = settings?.hiddenCategories || [];
+    const actualMenuCats = Array.from(new Set(menu.map((m) => m.category).filter(Boolean)));
+    const matched = categories.filter((c) => actualMenuCats.includes(c) && !hidden.includes(c));
+    const extras = actualMenuCats.filter((c) => !categories.includes(c) && !hidden.includes(c));
+    const finalCats = [...matched, ...extras];
+    return finalCats.length > 0 ? finalCats : actualMenuCats;
+  }, [categories, menu, settings?.hiddenCategories]);
+
   useEffect(() => {
     if (visibleCategories.length > 0 && !visibleCategories.includes(category)) setCategory(visibleCategories[0]);
   }, [visibleCategories, category]);
@@ -6971,24 +6976,8 @@ setDoc(doc(db, "settings", "menu"), { items: activeMenu }).catch(console.error);
           }
         }
         
-        // ✅ CATEGORIES — Force new categories if old
-        if (ds.id === "categories") {
-          const firestoreCats = data.categories || [];
-          const OLD_CATS = ["Chinese Starter", "Drinks", "Chef's Special", "Fun Food", "Mughlai", 
-                            "Tandoori", "Soup", "Snacks", "Chinese Mains", "Chicken, Mutton, Fish & Egg",
-                            "Indian Bread", "Pulao", "Aloo, Dal & Sides", 
-                            "Biryani & Thali", "Momo", "Tea & Coffee"];
-          const hasOldCats = false; // migration ho chuka, ab admin ki categories reset nahi hongi
-          
-          if (hasOldCats || firestoreCats.length === 0) {
-            console.log("📂 Firestore has OLD categories. Using new CATEGORIES.");
-            setCategories(CATEGORIES);
-            setDoc(doc(db, "settings", "categories"), { categories: CATEGORIES }).catch(console.error);
-          } else {
-            console.log("📂 Using Firestore categories");
-            setCategories(firestoreCats);
-          }
-        }
+                  const hasOldCats = firestoreCats.some((c) => OLD_CATS.includes(c));
+
         
         // ✅ GALLERY
         if (ds.id === "gallery" && data.images) setGallery(data.images);
