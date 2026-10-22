@@ -6042,8 +6042,88 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
         </>
       )}
 
-      {tab === "orders" && (
-        <div style={{ overflowX: "auto", borderRadius: 16, border: `1px solid ${COLORS.line}` }}>
+            {tab === "orders" && (() => {
+        // 📊 Calculations for Total, Cash, and UPI inside the filtered date
+        const validOrders = filteredOrders.filter(o => o.status !== "cancelled");
+        const totalSales = validOrders.reduce((s, o) => s + getOrderTotal(o), 0);
+        
+        const totalCash = validOrders
+          .filter(o => (o.payment || "").toLowerCase() === "cash")
+          .reduce((s, o) => s + getOrderTotal(o), 0);
+
+        const totalUpi = validOrders
+          .filter(o => ["upi", "gpay", "phonepe", "razorpay"].includes((o.payment || "").toLowerCase()))
+          .reduce((s, o) => s + getOrderTotal(o), 0);
+
+        const totalDue = validOrders
+          .filter(o => (o.payment || "").toLowerCase() === "due" || !o.paid)
+          .reduce((s, o) => s + getOrderTotal(o), 0);
+
+        return (
+          <div>
+            {/* 📈 SUMMARY CARDS FOR CASH, UPI, & TOTAL */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+              <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
+                <div style={{ fontSize: 11, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800 }}>Total Sales</div>
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 800, color: COLORS.copper, marginTop: 4 }}>{inr(totalSales)}</div>
+              </div>
+              <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
+                <div style={{ fontSize: 11, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800 }}>💵 Total Cash</div>
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 800, color: COLORS.sage, marginTop: 4 }}>{inr(totalCash)}</div>
+              </div>
+              <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
+                <div style={{ fontSize: 11, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800 }}>📱 Total UPI / Online</div>
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 800, color: "#3B82F6", marginTop: 4 }}>{inr(totalUpi)}</div>
+              </div>
+              <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
+                <div style={{ fontSize: 11, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800 }}>⏳ Pending / Due</div>
+                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 800, color: COLORS.rust, marginTop: 4 }}>{inr(totalDue)}</div>
+              </div>
+            </div>
+
+            {/* ORDERS TABLE */}
+            <div style={{ overflowX: "auto", borderRadius: 16, border: `1px solid ${COLORS.line}` }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
+                <thead>
+                  <tr style={{ textAlign: "left", background: COLORS.paper }}>
+                    <th style={th}>Time</th>
+                    <th style={th}>Table</th>
+                    <th style={th}>Items</th>
+                    <th style={th}>Total</th>
+                    <th style={th}>Payment</th>
+                    <th style={th}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...filteredOrders].sort((a, b) => b.createdAt - a.createdAt).map((o) => (
+                    <tr key={o.id} style={{ opacity: o.status === "cancelled" ? 0.5 : 1 }}>
+                      <td style={{ ...td, color: COLORS.textLight, fontWeight: 600 }}>
+                        {new Date(o.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td style={td}>
+                        {o.orderType === "parcel" ? <Badge color={COLORS.copper}>Parcel</Badge> : <strong>T-{o.table}</strong>}
+                        {o.status === "cancelled" && <span style={{ color: COLORS.error, fontSize: 11, fontWeight: 700, display: 'block' }}>❌ Cancelled</span>}
+                      </td>
+                      <td style={td}>{o.items.map((it) => `${it.qty}×${it.name}`).join(", ")}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>{inr(getOrderTotal(o))}</td>
+                      <td style={td}>
+                        <span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: 12 }}>{o.payment || "cash"}</span>
+                        <span style={{ fontSize: 11, color: o.paid ? COLORS.sage : COLORS.textLight, display: 'block' }}>{o.paid ? "✅ Paid" : "⏳ Pending"}</span>
+                      </td>
+                      <td style={td}>
+                        <button onClick={() => markPaid(o.id, o.paid && !o.coinsClaimed ? true : !o.paid)} style={{ border: `1.5px solid ${o.paid ? COLORS.sage : COLORS.line}`, background: o.paid ? COLORS.sage : "transparent", color: o.paid ? "#fff" : COLORS.ink, borderRadius: 10, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>
+                          {o.paid ? (o.coinsClaimed ? "✓ Paid" : "🪙 Award coins") : "Mark paid"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
             <thead><tr style={{ textAlign: "left", background: COLORS.paper }}><th style={th}>Time</th><th style={th}>Table</th><th style={th}>Items</th><th style={th}>Total</th><th style={th}>Payment</th><th style={th}>Action</th></tr></thead>
             <tbody>
