@@ -6183,60 +6183,8 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
         </div>
       )}
 
-      {tab === "promotions" && (
-        <>
-          <h3 style={{ marginBottom: 16 }}>⚡ Flash Sale</h3>
-          {flashSaleItems.map((item, idx) => (
-            <div key={idx} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 12, marginBottom: 12 }}>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                <select value={item.id}
-                  onChange={e => { const m = menu.find(x => x.id === e.target.value); if (m) setFlashSaleItems(patchAt(flashSaleItems, idx, { id: m.id, name: m.name, price: m.price })); }}
-                  style={{ ...inputStyle, flex: 2, minWidth: 200 }}>
-                  {!menu.some(m => m.id === item.id) && <option value={item.id}>⚠️ {item.name} (menu mein nahi)</option>}
-                  {menu.map(m => <option key={m.id} value={m.id}>{m.name}{m.portion ? ` (${m.portion})` : ""} — ₹{m.price}</option>)}
-                </select>
-                <input type="number" placeholder="Sale ₹" value={item.discountPrice} onChange={e => setFlashSaleItems(patchAt(flashSaleItems, idx, { discountPrice: Number(e.target.value) }))} style={{ ...inputStyle, width: 100 }} />
-                <input type="number" placeholder="Stock" value={item.stock} onChange={e => setFlashSaleItems(patchAt(flashSaleItems, idx, { stock: Number(e.target.value) }))} style={{ ...inputStyle, width: 90 }} />
-                <button onClick={() => setFlashSaleItems(patchAt(flashSaleItems, idx, { active: !item.active }))} style={{ background: item.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{item.active ? '✅ Active' : '❌ Inactive'}</button>
-                <button onClick={() => { if (window.confirm('Delete?')) setFlashSaleItems(flashSaleItems.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
-              </div>
-            </div>
-          ))}
-          <button onClick={() => {
-            const m = menu[0]; if (!m) return;
-            setFlashSaleItems([...flashSaleItems, { id: m.id, name: m.name, price: m.price, discountPrice: Math.round(m.price * 0.8), stock: 10, active: true }]);
-          }} style={{ ...primaryBtn, background: COLORS.sage, marginBottom: 30 }}>+ Add Flash Item</button>
-
-          <h3 style={{ marginBottom: 16 }}>🎯 Combo Offers</h3>
-          {comboOffers.map((combo, idx) => {
-            const broken = !combo.items?.every(it => menu.some(m => m.id === it.id));
-            return (
-              <div key={idx} style={{ background: '#fff', border: `1px solid ${broken ? COLORS.error : COLORS.line}`, padding: 16, borderRadius: 12, marginBottom: 12 }}>
-                {broken && <div style={{ color: COLORS.error, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>⚠️ Is combo ke kuch items menu mein nahi hain — customers ko dikhega nahi. Delete karke naya banao.</div>}
-                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <input value={combo.name} onChange={e => setComboOffers(patchAt(comboOffers, idx, { name: e.target.value }))} style={{ ...inputStyle, flex: 2 }} />
-                  <input type="number" value={combo.discount} onChange={e => { const d = Number(e.target.value); setComboOffers(patchAt(comboOffers, idx, { discount: d, finalPrice: Math.round(combo.totalPrice * (1 - d / 100)) })); }} style={{ ...inputStyle, width: 100 }} />
-                  <input value={combo.image} onChange={e => setComboOffers(patchAt(comboOffers, idx, { image: e.target.value }))} style={{ ...inputStyle, width: 80 }} />
-                  <button onClick={() => setComboOffers(patchAt(comboOffers, idx, { active: !combo.active }))} style={{ background: combo.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{combo.active ? '✅' : '❌'}</button>
-                  <button onClick={() => { if (window.confirm('Delete?')) setComboOffers(comboOffers.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
-                </div>
-              </div>
-            );
-          })}
-          <button onClick={() => {
-            const picks = menu.slice(0, 2); if (picks.length === 0) return;
-            const total = picks.reduce((s, m) => s + m.price, 0);
-            setComboOffers([...comboOffers, {
-              id: 'combo' + Date.now(), name: 'New Combo',
-              items: picks.map(m => ({ id: m.id, name: m.name, price: m.price, quantity: 1 })),
-              totalPrice: total, discount: 10, finalPrice: Math.round(total * 0.9), image: '🍽️', active: true
-            }]);
-          }} style={{ ...primaryBtn, background: COLORS.gold, marginBottom: 20 }}>+ Add Combo</button>
-          <button onClick={savePromotions} style={{ ...primaryBtn, width: '100%' }}>💾 Save All</button>
-        </>
-      )}
-      {false /* legacy promotions UI removed */ && (
-        <>
+            {tab === "promotions" && (
+        <div>
           <h3 style={{ marginBottom: 16 }}>⚡ Flash Sale</h3>
           {flashSaleItems.map((item, idx) => (
             <div key={item.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 12, marginBottom: 12 }}>
@@ -6245,7 +6193,7 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
                 <input type="number" value={item.discountPrice} onChange={e => { const u = [...flashSaleItems]; u[idx].discountPrice = Number(e.target.value); setFlashSaleItems(u); }} style={{ ...inputStyle, width: 100 }} />
                 <input type="number" value={item.stock} onChange={e => { const u = [...flashSaleItems]; u[idx].stock = Number(e.target.value); setFlashSaleItems(u); }} style={{ ...inputStyle, width: 80 }} />
                 <button onClick={() => { const u = [...flashSaleItems]; u[idx].active = !u[idx].active; setFlashSaleItems(u); }} style={{ background: item.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{item.active ? '✅ Active' : '❌ Inactive'}</button>
-                <button onClick={() => { if (window.confirm('Delete?')) setFlashSaleItems(flashSaleItems.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
+                <button onClick={() => { if (window.confirm('Delete?')) setFlashSaleItems(flashSaleItems.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1.5px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
               </div>
             </div>
           ))}
@@ -6259,16 +6207,18 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
                 <input type="number" value={combo.discount} onChange={e => { const u = [...comboOffers]; u[idx].discount = Number(e.target.value); u[idx].finalPrice = Math.round(u[idx].totalPrice * (1 - u[idx].discount / 100)); setComboOffers(u); }} style={{ ...inputStyle, width: 100 }} />
                 <input value={combo.image} onChange={e => { const u = [...comboOffers]; u[idx].image = e.target.value; setComboOffers(u); }} style={{ ...inputStyle, width: 80 }} />
                 <button onClick={() => { const u = [...comboOffers]; u[idx].active = !u[idx].active; setComboOffers(u); }} style={{ background: combo.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{combo.active ? '✅' : '❌'}</button>
-                <button onClick={() => { if (window.confirm('Delete?')) setComboOffers(comboOffers.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
+                <button onClick={() => { if (window.confirm('Delete?')) setComboOffers(comboOffers.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1.5px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
               </div>
             </div>
           ))}
           <button onClick={() => setComboOffers([...comboOffers, { id: 'combo' + Date.now(), name: 'New Combo', items: [{ id: 'f2', name: 'Pizza', price: 280, quantity: 1 }], totalPrice: 280, discount: 10, finalPrice: 252, image: '🍽️', active: true }])} style={{ ...primaryBtn, background: COLORS.gold, marginBottom: 20 }}>+ Add Combo</button>
           <button onClick={savePromotions} style={{ ...primaryBtn, width: '100%' }}>💾 Save All</button>
-        </>
+        </div>
       )}
+    </div>
   );
 }
+
 
 // ==
 // 19. DEFAULT DATA
