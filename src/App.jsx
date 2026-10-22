@@ -6042,8 +6042,7 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
         </>
       )}
 
-            {tab === "orders" && (() => {
-        // 📊 Calculations for Total, Cash, and UPI inside the filtered date
+      {tab === "orders" && (() => {
         const validOrders = filteredOrders.filter(o => o.status !== "cancelled");
         const totalSales = validOrders.reduce((s, o) => s + getOrderTotal(o), 0);
         
@@ -6061,7 +6060,7 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
 
         return (
           <div>
-            {/* 📈 SUMMARY CARDS FOR CASH, UPI, & TOTAL */}
+            {/* 📈 SUMMARY CARDS: Total Sales, Cash, UPI, Due */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
               <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
                 <div style={{ fontSize: 11, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800 }}>Total Sales</div>
