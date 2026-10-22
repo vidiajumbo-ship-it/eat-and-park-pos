@@ -6267,7 +6267,6 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
           <button onClick={savePromotions} style={{ ...primaryBtn, width: '100%' }}>💾 Save All</button>
         </>
       )}
-    </div>
   );
 }
 
