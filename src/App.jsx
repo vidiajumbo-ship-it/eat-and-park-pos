@@ -2362,15 +2362,10 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   cartRef.current = cart;
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
-    const visibleCategories = useMemo(() => {
-    const hidden = settings?.hiddenCategories || [];
-    const actualMenuCats = Array.from(new Set(menu.map((m) => m.category).filter(Boolean)));
-    const matched = categories.filter((c) => actualMenuCats.includes(c) && !hidden.includes(c));
-    const extras = actualMenuCats.filter((c) => !categories.includes(c) && !hidden.includes(c));
-    const finalCats = [...matched, ...extras];
-    return finalCats.length > 0 ? finalCats : actualMenuCats;
-  }, [categories, menu, settings?.hiddenCategories]);
-
+  const visibleCategories = useMemo(
+    () => categories.filter((c) => !(settings?.hiddenCategories || []).includes(c)),
+    [categories, settings?.hiddenCategories]
+  );
   useEffect(() => {
     if (visibleCategories.length > 0 && !visibleCategories.includes(category)) setCategory(visibleCategories[0]);
   }, [visibleCategories, category]);
@@ -6042,87 +6037,8 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
         </>
       )}
 
-      {tab === "orders" && (() => {
-        const validOrders = filteredOrders.filter(o => o.status !== "cancelled");
-        const totalSales = validOrders.reduce((s, o) => s + getOrderTotal(o), 0);
-        
-        const totalCash = validOrders
-          .filter(o => (o.payment || "").toLowerCase() === "cash")
-          .reduce((s, o) => s + getOrderTotal(o), 0);
-
-        const totalUpi = validOrders
-          .filter(o => ["upi", "gpay", "phonepe", "razorpay"].includes((o.payment || "").toLowerCase()))
-          .reduce((s, o) => s + getOrderTotal(o), 0);
-
-        const totalDue = validOrders
-          .filter(o => (o.payment || "").toLowerCase() === "due" || !o.paid)
-          .reduce((s, o) => s + getOrderTotal(o), 0);
-
-        return (
-          <div>
-            {/* 📈 SUMMARY CARDS: Total Sales, Cash, UPI, Due */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
-              <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-                <div style={{ fontSize: 11, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800 }}>Total Sales</div>
-                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 800, color: COLORS.copper, marginTop: 4 }}>{inr(totalSales)}</div>
-              </div>
-              <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-                <div style={{ fontSize: 11, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800 }}>💵 Total Cash</div>
-                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 800, color: COLORS.sage, marginTop: 4 }}>{inr(totalCash)}</div>
-              </div>
-              <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-                <div style={{ fontSize: 11, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800 }}>📱 Total UPI / Online</div>
-                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 800, color: "#3B82F6", marginTop: 4 }}>{inr(totalUpi)}</div>
-              </div>
-              <div style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-                <div style={{ fontSize: 11, color: COLORS.textLight, textTransform: "uppercase", fontWeight: 800 }}>⏳ Pending / Due</div>
-                <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 800, color: COLORS.rust, marginTop: 4 }}>{inr(totalDue)}</div>
-              </div>
-            </div>
-
-            {/* ORDERS TABLE */}
-            <div style={{ overflowX: "auto", borderRadius: 16, border: `1px solid ${COLORS.line}` }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
-                <thead>
-                  <tr style={{ textAlign: "left", background: COLORS.paper }}>
-                    <th style={th}>Time</th>
-                    <th style={th}>Table</th>
-                    <th style={th}>Items</th>
-                    <th style={th}>Total</th>
-                    <th style={th}>Payment</th>
-                    <th style={th}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...filteredOrders].sort((a, b) => b.createdAt - a.createdAt).map((o) => (
-                    <tr key={o.id} style={{ opacity: o.status === "cancelled" ? 0.5 : 1 }}>
-                      <td style={{ ...td, color: COLORS.textLight, fontWeight: 600 }}>
-                        {new Date(o.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td style={td}>
-                        {o.orderType === "parcel" ? <Badge color={COLORS.copper}>Parcel</Badge> : <strong>T-{o.table}</strong>}
-                        {o.status === "cancelled" && <span style={{ color: COLORS.error, fontSize: 11, fontWeight: 700, display: 'block' }}>❌ Cancelled</span>}
-                      </td>
-                      <td style={td}>{o.items.map((it) => `${it.qty}×${it.name}`).join(", ")}</td>
-                      <td style={{ ...td, fontWeight: 700 }}>{inr(getOrderTotal(o))}</td>
-                      <td style={td}>
-                        <span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: 12 }}>{o.payment || "cash"}</span>
-                        <span style={{ fontSize: 11, color: o.paid ? COLORS.sage : COLORS.textLight, display: 'block' }}>{o.paid ? "✅ Paid" : "⏳ Pending"}</span>
-                      </td>
-                      <td style={td}>
-                        <button onClick={() => markPaid(o.id, o.paid && !o.coinsClaimed ? true : !o.paid)} style={{ border: `1.5px solid ${o.paid ? COLORS.sage : COLORS.line}`, background: o.paid ? COLORS.sage : "transparent", color: o.paid ? "#fff" : COLORS.ink, borderRadius: 10, padding: "6px 14px", fontSize: 13, cursor: "pointer", fontWeight: 700 }}>
-                          {o.paid ? (o.coinsClaimed ? "✓ Paid" : "🪙 Award coins") : "Mark paid"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })()}
-
+      {tab === "orders" && (
+        <div style={{ overflowX: "auto", borderRadius: 16, border: `1px solid ${COLORS.line}` }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
             <thead><tr style={{ textAlign: "left", background: COLORS.paper }}><th style={th}>Time</th><th style={th}>Table</th><th style={th}>Items</th><th style={th}>Total</th><th style={th}>Payment</th><th style={th}>Action</th></tr></thead>
             <tbody>
@@ -6183,8 +6099,60 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
         </div>
       )}
 
-                 {tab === "promotions" && (
-        <div>
+      {tab === "promotions" && (
+        <>
+          <h3 style={{ marginBottom: 16 }}>⚡ Flash Sale</h3>
+          {flashSaleItems.map((item, idx) => (
+            <div key={idx} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 12, marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <select value={item.id}
+                  onChange={e => { const m = menu.find(x => x.id === e.target.value); if (m) setFlashSaleItems(patchAt(flashSaleItems, idx, { id: m.id, name: m.name, price: m.price })); }}
+                  style={{ ...inputStyle, flex: 2, minWidth: 200 }}>
+                  {!menu.some(m => m.id === item.id) && <option value={item.id}>⚠️ {item.name} (menu mein nahi)</option>}
+                  {menu.map(m => <option key={m.id} value={m.id}>{m.name}{m.portion ? ` (${m.portion})` : ""} — ₹{m.price}</option>)}
+                </select>
+                <input type="number" placeholder="Sale ₹" value={item.discountPrice} onChange={e => setFlashSaleItems(patchAt(flashSaleItems, idx, { discountPrice: Number(e.target.value) }))} style={{ ...inputStyle, width: 100 }} />
+                <input type="number" placeholder="Stock" value={item.stock} onChange={e => setFlashSaleItems(patchAt(flashSaleItems, idx, { stock: Number(e.target.value) }))} style={{ ...inputStyle, width: 90 }} />
+                <button onClick={() => setFlashSaleItems(patchAt(flashSaleItems, idx, { active: !item.active }))} style={{ background: item.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{item.active ? '✅ Active' : '❌ Inactive'}</button>
+                <button onClick={() => { if (window.confirm('Delete?')) setFlashSaleItems(flashSaleItems.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
+              </div>
+            </div>
+          ))}
+          <button onClick={() => {
+            const m = menu[0]; if (!m) return;
+            setFlashSaleItems([...flashSaleItems, { id: m.id, name: m.name, price: m.price, discountPrice: Math.round(m.price * 0.8), stock: 10, active: true }]);
+          }} style={{ ...primaryBtn, background: COLORS.sage, marginBottom: 30 }}>+ Add Flash Item</button>
+
+          <h3 style={{ marginBottom: 16 }}>🎯 Combo Offers</h3>
+          {comboOffers.map((combo, idx) => {
+            const broken = !combo.items?.every(it => menu.some(m => m.id === it.id));
+            return (
+              <div key={idx} style={{ background: '#fff', border: `1px solid ${broken ? COLORS.error : COLORS.line}`, padding: 16, borderRadius: 12, marginBottom: 12 }}>
+                {broken && <div style={{ color: COLORS.error, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>⚠️ Is combo ke kuch items menu mein nahi hain — customers ko dikhega nahi. Delete karke naya banao.</div>}
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input value={combo.name} onChange={e => setComboOffers(patchAt(comboOffers, idx, { name: e.target.value }))} style={{ ...inputStyle, flex: 2 }} />
+                  <input type="number" value={combo.discount} onChange={e => { const d = Number(e.target.value); setComboOffers(patchAt(comboOffers, idx, { discount: d, finalPrice: Math.round(combo.totalPrice * (1 - d / 100)) })); }} style={{ ...inputStyle, width: 100 }} />
+                  <input value={combo.image} onChange={e => setComboOffers(patchAt(comboOffers, idx, { image: e.target.value }))} style={{ ...inputStyle, width: 80 }} />
+                  <button onClick={() => setComboOffers(patchAt(comboOffers, idx, { active: !combo.active }))} style={{ background: combo.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{combo.active ? '✅' : '❌'}</button>
+                  <button onClick={() => { if (window.confirm('Delete?')) setComboOffers(comboOffers.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
+                </div>
+              </div>
+            );
+          })}
+          <button onClick={() => {
+            const picks = menu.slice(0, 2); if (picks.length === 0) return;
+            const total = picks.reduce((s, m) => s + m.price, 0);
+            setComboOffers([...comboOffers, {
+              id: 'combo' + Date.now(), name: 'New Combo',
+              items: picks.map(m => ({ id: m.id, name: m.name, price: m.price, quantity: 1 })),
+              totalPrice: total, discount: 10, finalPrice: Math.round(total * 0.9), image: '🍽️', active: true
+            }]);
+          }} style={{ ...primaryBtn, background: COLORS.gold, marginBottom: 20 }}>+ Add Combo</button>
+          <button onClick={savePromotions} style={{ ...primaryBtn, width: '100%' }}>💾 Save All</button>
+        </>
+      )}
+      {false /* legacy promotions UI removed */ && (
+        <>
           <h3 style={{ marginBottom: 16 }}>⚡ Flash Sale</h3>
           {flashSaleItems.map((item, idx) => (
             <div key={item.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 16, borderRadius: 12, marginBottom: 12 }}>
@@ -6193,7 +6161,7 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
                 <input type="number" value={item.discountPrice} onChange={e => { const u = [...flashSaleItems]; u[idx].discountPrice = Number(e.target.value); setFlashSaleItems(u); }} style={{ ...inputStyle, width: 100 }} />
                 <input type="number" value={item.stock} onChange={e => { const u = [...flashSaleItems]; u[idx].stock = Number(e.target.value); setFlashSaleItems(u); }} style={{ ...inputStyle, width: 80 }} />
                 <button onClick={() => { const u = [...flashSaleItems]; u[idx].active = !u[idx].active; setFlashSaleItems(u); }} style={{ background: item.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{item.active ? '✅ Active' : '❌ Inactive'}</button>
-                <button onClick={() => { if (window.confirm('Delete?')) setFlashSaleItems(flashSaleItems.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1.5px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
+                <button onClick={() => { if (window.confirm('Delete?')) setFlashSaleItems(flashSaleItems.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
               </div>
             </div>
           ))}
@@ -6207,16 +6175,17 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
                 <input type="number" value={combo.discount} onChange={e => { const u = [...comboOffers]; u[idx].discount = Number(e.target.value); u[idx].finalPrice = Math.round(u[idx].totalPrice * (1 - u[idx].discount / 100)); setComboOffers(u); }} style={{ ...inputStyle, width: 100 }} />
                 <input value={combo.image} onChange={e => { const u = [...comboOffers]; u[idx].image = e.target.value; setComboOffers(u); }} style={{ ...inputStyle, width: 80 }} />
                 <button onClick={() => { const u = [...comboOffers]; u[idx].active = !u[idx].active; setComboOffers(u); }} style={{ background: combo.active ? COLORS.sage : COLORS.error, color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>{combo.active ? '✅' : '❌'}</button>
-                <button onClick={() => { if (window.confirm('Delete?')) setComboOffers(comboOffers.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1.5px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
+                <button onClick={() => { if (window.confirm('Delete?')) setComboOffers(comboOffers.filter((_, i) => i !== idx)); }} style={{ background: 'transparent', border: `1px solid ${COLORS.rust}`, color: COLORS.rust, padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Delete</button>
               </div>
             </div>
           ))}
           <button onClick={() => setComboOffers([...comboOffers, { id: 'combo' + Date.now(), name: 'New Combo', items: [{ id: 'f2', name: 'Pizza', price: 280, quantity: 1 }], totalPrice: 280, discount: 10, finalPrice: 252, image: '🍽️', active: true }])} style={{ ...primaryBtn, background: COLORS.gold, marginBottom: 20 }}>+ Add Combo</button>
           <button onClick={savePromotions} style={{ ...primaryBtn, width: '100%' }}>💾 Save All</button>
-        </div>
+        </>
       )}
-
-
+    </div>
+  );
+}
 
 // ==
 // 19. DEFAULT DATA
@@ -7002,8 +6971,24 @@ setDoc(doc(db, "settings", "menu"), { items: activeMenu }).catch(console.error);
           }
         }
         
-                  const hasOldCats = firestoreCats.some((c) => OLD_CATS.includes(c));
-
+        // ✅ CATEGORIES — Force new categories if old
+        if (ds.id === "categories") {
+          const firestoreCats = data.categories || [];
+          const OLD_CATS = ["Chinese Starter", "Drinks", "Chef's Special", "Fun Food", "Mughlai", 
+                            "Tandoori", "Soup", "Snacks", "Chinese Mains", "Chicken, Mutton, Fish & Egg",
+                            "Indian Bread", "Pulao", "Aloo, Dal & Sides", 
+                            "Biryani & Thali", "Momo", "Tea & Coffee"];
+          const hasOldCats = false; // migration ho chuka, ab admin ki categories reset nahi hongi
+          
+          if (hasOldCats || firestoreCats.length === 0) {
+            console.log("📂 Firestore has OLD categories. Using new CATEGORIES.");
+            setCategories(CATEGORIES);
+            setDoc(doc(db, "settings", "categories"), { categories: CATEGORIES }).catch(console.error);
+          } else {
+            console.log("📂 Using Firestore categories");
+            setCategories(firestoreCats);
+          }
+        }
         
         // ✅ GALLERY
         if (ds.id === "gallery" && data.images) setGallery(data.images);
