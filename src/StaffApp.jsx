@@ -1094,6 +1094,12 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
   const [gstRate, setGstRate] = useState(0);
   const [editPrice, setEditPrice] = useState(null);
   const [payMode, setPayMode] = useState("cash");
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 800);
+  useEffect(() => {
+    const f = () => setIsMobile(window.innerWidth < 800);
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
 
   // 🔥 existingOrder ke items ko cart me load karo (sirf bill mode me, add-more mode me nahi)
   useEffect(() => {
@@ -1309,8 +1315,8 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
         </div>
       )}
 
-      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 380px", gap: 12, overflow: "hidden", padding: 12 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, overflow: "hidden" }}>
+      <div style={{ flex: 1, display: isMobile ? "flex" : "grid", flexDirection: "column", gridTemplateColumns: "1fr 380px", gap: 12, overflow: isMobile ? "auto" : "hidden", padding: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, overflow: "hidden", height: isMobile ? "55vh" : undefined, flexShrink: 0 }}>
           <input placeholder="🔍 Search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ padding: "11px 16px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink }} />
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
             {categories.map((c) => (
@@ -1331,7 +1337,7 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
           </div>
         </div>
 
-        <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0, minHeight: isMobile ? 320 : undefined }}>
           <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.line}`, fontWeight: 800, fontSize: 15, color: C.ink }}>🛒 Cart</div>
           <div style={{ flex: 1, overflowY: "auto" }}>
             {cartItems.length === 0 && <div style={{ textAlign: "center", padding: 60, color: C.gray, fontSize: 13 }}>Menu se item tap karo</div>}
