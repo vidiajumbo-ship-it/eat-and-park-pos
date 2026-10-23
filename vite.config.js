@@ -9,6 +9,7 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    sourcemap: true,
     minify: 'esbuild',
     rollupOptions: {
       // Rollup engine force karne ke liye

@@ -1,7 +1,7 @@
 // src/firebase.js
 import { initializeApp } from "firebase/app";
 import { initializeAuth, browserSessionPersistence, onAuthStateChanged } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -14,15 +14,10 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = initializeAuth(app, { persistence: browserSessionPersistence });
-export const db = getFirestore(app);
 
-// Offline persistence (optional)
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code === 'failed-precondition') {
-    console.warn("Multiple tabs open — persistence disabled");
-  } else if (err.code === 'unimplemented') {
-    console.warn("Browser persistence support nahi karta");
-  }
+// Offline persistence (naya tareeka, multiple tabs support)
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
 
 // authReady promise — App.js isko await karta hai

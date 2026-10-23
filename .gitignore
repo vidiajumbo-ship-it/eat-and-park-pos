@@ -33,3 +33,4 @@ fix_app.py
 .env.r2
 .vercel
 .env*
+serviceAccountKey*.json
