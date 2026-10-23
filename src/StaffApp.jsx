@@ -34,8 +34,45 @@ const timeAgo = (ts) => {
   if (s < 60) return s + "s";
   const m = Math.floor(s / 60);
   if (m < 60) return m + "m";
-  return Math.floor(m / 60) + "h";
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + "h";
+  return Math.floor(h / 24) + "d";
 };
+
+// 🍽️ Total number of dine-in tables (change here to add/remove tables)
+const TABLE_COUNT = 12;
+
+// 📅 Compute date-range bounds for Dashboard → Orders navigation
+function getRangeBounds(range, customDate) {
+  const now = Date.now();
+  if (range === "today") {
+    const d = new Date(); d.setHours(0, 0, 0, 0);
+    return { start: d.getTime(), end: now };
+  }
+  if (range === "yesterday") {
+    const start = new Date(); start.setDate(start.getDate() - 1); start.setHours(0, 0, 0, 0);
+    const end = new Date(); end.setHours(0, 0, 0, 0);
+    return { start: start.getTime(), end: end.getTime() };
+  }
+  if (range === "7days") {
+    const d = new Date(); d.setDate(d.getDate() - 6); d.setHours(0, 0, 0, 0);
+    return { start: d.getTime(), end: now };
+  }
+  if (range === "30days") {
+    const d = new Date(); d.setDate(d.getDate() - 29); d.setHours(0, 0, 0, 0);
+    return { start: d.getTime(), end: now };
+  }
+  if (range === "month") {
+    const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0);
+    return { start: d.getTime(), end: now };
+  }
+  if (range === "custom" && customDate) {
+    const start = new Date(customDate + "T00:00:00").getTime();
+    return { start, end: start + 86400000 };
+  }
+  const d = new Date(); d.setHours(0, 0, 0, 0);
+  return { start: d.getTime(), end: now };
+}
 
 const STATUS = {
   new: { label: "New", color: "red", emoji: "🆕" },
@@ -81,6 +118,8 @@ function StaffAppInner() {
   const [addMoreMode, setAddMoreMode] = useState(false);
   const [reportRange, setReportRange] = useState("today");
   const [ordersFilter, setOrdersFilter] = useState("all");
+  // 🔥 Orders tab ke liye dashboard se pass kiya gaya range
+  const [ordersRange, setOrdersRange] = useState(null);
 
   const T = {
     en: { tables: "Tables", orders: "Orders", kitchen: "Kitchen", dashboard: "Dashboard", logout: "Logout", search: "Search", save: "Save", cancel: "Cancel", print: "Print", paid: "Paid", sendKot: "Send KOT", total: "TOTAL", subtotal: "Subtotal", available: "Available", occupied: "Occupied", revenue: "Revenue", active: "Active" },
@@ -164,12 +203,12 @@ function StaffAppInner() {
     return () => { unsubMenu(); unsubOrders(); };
   }, [user]);
 
-  // 🔔 Notification permission
+  // 🔔 Notification permission — only after login
   useEffect(() => {
-    if ("Notification" in window && Notification.permission === "default") {
+    if (user && "Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
     }
-  }, []);
+  }, [user]);
 
   const playSound = () => {
     try {
@@ -254,8 +293,6 @@ function StaffAppInner() {
   const activeOrders = orders.filter(o => o.status !== "served" && o.status !== "cancelled");
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
   const todayRevenue = orders.filter(o => o.paid && o.status !== "cancelled" && (o.paidAt || o.createdAt) >= startOfToday.getTime()).reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
-  const todayTotal = orders.length;
-  const paidCount = orders.filter(o => o.paid).length;
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "system-ui, sans-serif", display: "flex", flexDirection: "column", color: C.ink }}>
@@ -285,8 +322,8 @@ function StaffAppInner() {
           { id: "kot", label: "🍳 " + t("kitchen") + (newCount ? ` 🔴${newCount}` : "") },
           { id: "dashboard", label: "📊 " + t("dashboard") },
           { id: "stock", label: "📦 Stock" },
-        ].map((t) => (
-          <button key={t.id} onClick={() => { setActiveTab(t.id); setSelectedTable(null); }} style={{ padding: narrow ? "13px 14px" : "15px 20px", border: "none", background: "transparent", color: activeTab === t.id ? C.red : C.gray, fontWeight: 700, fontSize: 13, cursor: "pointer", borderBottom: activeTab === t.id ? `3px solid ${C.red}` : "3px solid transparent", whiteSpace: "nowrap" }}>{t.label}</button>
+        ].map((tab) => (
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSelectedTable(null); setOrdersRange(null); }} style={{ padding: narrow ? "13px 14px" : "15px 20px", border: "none", background: "transparent", color: activeTab === tab.id ? C.red : C.gray, fontWeight: 700, fontSize: 13, cursor: "pointer", borderBottom: activeTab === tab.id ? `3px solid ${C.red}` : "3px solid transparent", whiteSpace: "nowrap" }}>{tab.label}</button>
         ))}
       </div>
 
@@ -296,9 +333,9 @@ function StaffAppInner() {
           <TablesView
             C={C}
             orders={orders}
-            onTableClick={(t) => { setSelectedTable(t); setCart({}); setBillOrder(null); }}
-            onEditBill={(order) => { setBillOrder(order); setSelectedTable(order.table); setCart({}); }}
-            onAddMore={(order) => { setBillOrder(order); setSelectedTable(order.table); setAddMoreMode(true); }}
+            onTableClick={(tbl) => { setSelectedTable(tbl); setCart({}); setBillOrder(null); }}
+            onEditBill={(order) => { setBillOrder(order); setSelectedTable(order.table); setCart({}); setAddMoreMode(false); }}
+            onAddMore={(order) => { setBillOrder(order); setSelectedTable(order.table); setCart({}); setAddMoreMode(true); }}
             onMerge={(order) => setTableMerge(order)}
             onSplit={(order) => setSplitBillOrder(order)}
             onFeedback={(order) => setFeedbackOrder(order)}
@@ -309,7 +346,17 @@ function StaffAppInner() {
           />
         )}
         {activeTab === "orders" && (
-          <OrdersView C={C} orders={orders} menu={menu} waiterName={waiterName} isOwner={isOwner} filter={ordersFilter} setFilter={setOrdersFilter} />
+          <OrdersView
+            C={C}
+            orders={orders}
+            menu={menu}
+            waiterName={waiterName}
+            isOwner={isOwner}
+            filter={ordersFilter}
+            setFilter={setOrdersFilter}
+            rangeStart={ordersRange?.start}
+            rangeEnd={ordersRange?.end}
+          />
         )}
         {activeTab === "kot" && (
           <KOTView C={C} orders={orders} />
@@ -320,16 +367,22 @@ function StaffAppInner() {
             C={C}
             orders={orders}
             menu={menu}
-            onStatusClick={(status) => {
-              setOrdersFilter(status === "active" ? "all" : status);
+            onStatusClick={(status, bounds) => {
+              setOrdersFilter(status);
+              setOrdersRange(bounds || null);
               setActiveTab("orders");
             }}
             onOrderClick={(order) => {
-              // Order detail dekho — agar dine_in hai to table billing kholo
+              // Dine-in order → seedha bill kholo
               if (order.orderType === "dine_in" && order.table) {
+                setBillOrder(order);
                 setSelectedTable(Number(order.table));
+                setCart({});
+                setAddMoreMode(false);
               } else {
-                // Parcel order — Orders tab pe le jao
+                // Parcel — Orders tab pe dikhao
+                setOrdersFilter("all");
+                setOrdersRange(null);
                 setActiveTab("orders");
               }
             }}
@@ -364,10 +417,10 @@ function StaffAppInner() {
               { id: "kot", label: "🍳 Kitchen", icon: "🍳" },
               { id: "dashboard", label: "📊 Dashboard", icon: "📊" },
               { id: "stock", label: "📦 Stock", icon: "📦" },
-            ].map((t) => (
-              <button key={t.id} onClick={() => { setActiveTab(t.id); setSidebarOpen(false); setSelectedTable(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === t.id ? C.redLight : "transparent", color: activeTab === t.id ? C.red : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
-                <span style={{ fontSize: 20 }}>{t.icon}</span>
-                <span>{t.label.replace(/^\S+\s/, "")}</span>
+            ].map((tab) => (
+              <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.redLight : "transparent", color: activeTab === tab.id ? C.red : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
+                <span style={{ fontSize: 20 }}>{tab.icon}</span>
+                <span>{tab.label.replace(/^\S+\s/, "")}</span>
               </button>
             ))}
 
@@ -420,16 +473,16 @@ function StaffAppInner() {
 function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, onMerge, onSplit, onFeedback, search, setSearch, todayRevenue, activeOrders }) {
   const tableData = useMemo(() => {
     const map = {};
-    for (let i = 1; i <= 12; i++) map[i] = { table: i, order: null };
+    for (let i = 1; i <= TABLE_COUNT; i++) map[i] = { table: i, order: null };
     orders.filter(o => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled").forEach(o => {
-      const t = Number(o.table);
-      if (map[t]) map[t].order = o;
+      const tbl = Number(o.table);
+      if (map[tbl]) map[tbl].order = o;
     });
     return Object.values(map);
   }, [orders]);
 
   const filteredTables = search.trim()
-    ? tableData.filter(t => String(t.table).includes(search.trim()))
+    ? tableData.filter(tbl => String(tbl.table).includes(search.trim()))
     : tableData;
 
   return (
@@ -458,7 +511,7 @@ function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, onMerge, o
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontSize: 11, color: C.gray, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>Occupied</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: C.ink, marginTop: 4 }}>{tableData.filter(t => t.order).length}/{tableData.length}</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: C.ink, marginTop: 4 }}>{tableData.filter(tbl => tbl.order).length}/{tableData.length}</div>
             </div>
             <div style={{ fontSize: 28 }}>🍽️</div>
           </div>
@@ -474,30 +527,30 @@ function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, onMerge, o
         💡 Tip: Table pe tap karo → waiter assign karo → order lo
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
-        {filteredTables.map((t) => (
-          <div key={t.table} style={{ background: t.order ? C.redLight : C.card, border: `2px solid ${t.order ? C.red : C.line}`, borderRadius: 12, padding: 14, minHeight: 130, display: "flex", flexDirection: "column", justifyContent: "space-between", transition: "all 0.15s" }}>
-            <button onClick={() => onTableClick(t.table)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left", fontFamily: "inherit", color: C.ink }}>
+        {filteredTables.map((tbl) => (
+          <div key={tbl.table} style={{ background: tbl.order ? C.redLight : C.card, border: `2px solid ${tbl.order ? C.red : C.line}`, borderRadius: 12, padding: 14, minHeight: 130, display: "flex", flexDirection: "column", justifyContent: "space-between", transition: "all 0.15s" }}>
+            <button onClick={() => onTableClick(tbl.table)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", textAlign: "left", fontFamily: "inherit", color: C.ink }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ fontSize: 28, fontWeight: 900, color: t.order ? C.red : C.ink, lineHeight: 1, fontFamily: "monospace" }}>{t.table}</div>
-                <span style={{ fontSize: 20 }}>{t.order ? "🔴" : "🟢"}</span>
+                <div style={{ fontSize: 28, fontWeight: 900, color: tbl.order ? C.red : C.ink, lineHeight: 1, fontFamily: "monospace" }}>{tbl.table}</div>
+                <span style={{ fontSize: 20 }}>{tbl.order ? "🔴" : "🟢"}</span>
               </div>
-              {t.order ? (
+              {tbl.order ? (
                 <div style={{ marginTop: 6 }}>
-                  <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>#{t.order.id?.slice(1, 5).toUpperCase()}</div>
-                  <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{t.order.items?.length || 0} items · {inr(t.order.finalTotal || 0)}</div>
+                  <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>#{tbl.order.id?.slice(1, 5).toUpperCase()}</div>
+                  <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{tbl.order.items?.length || 0} items · {inr(tbl.order.finalTotal || 0)}</div>
                 </div>
               ) : (<div style={{ fontSize: 11, color: C.gray, fontWeight: 700, textTransform: "uppercase", marginTop: 6 }}>Available</div>)}
             </button>
-            {t.order ? (
+            {tbl.order ? (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 8 }}>
-                <button onClick={(e) => { e.stopPropagation(); onEditBill && onEditBill(t.order); }} style={{ padding: "6px", border: "none", borderRadius: 6, background: C.red, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>🧾 Bill</button>
-                <button onClick={(e) => { e.stopPropagation(); onAddMore && onAddMore(t.order); }} style={{ padding: "6px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>➕ Add</button>
-                <button onClick={(e) => { e.stopPropagation(); onMerge && onMerge(t.order); }} style={{ padding: "6px", border: `1.5px solid ${C.blue}`, borderRadius: 6, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>🔗 Merge</button>
-                <button onClick={(e) => { e.stopPropagation(); onSplit && onSplit(t.order); }} style={{ padding: "6px", border: `1.5px solid ${C.amber}`, borderRadius: 6, background: "transparent", color: C.amber, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>✂️ Split</button>
-                <button onClick={(e) => { e.stopPropagation(); onFeedback && onFeedback(t.order); }} style={{ padding: "6px", border: `1.5px solid ${C.gray}`, borderRadius: 6, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>⭐ Feedback</button>
+                <button onClick={(e) => { e.stopPropagation(); onEditBill && onEditBill(tbl.order); }} style={{ padding: "6px", border: "none", borderRadius: 6, background: C.red, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>🧾 Bill</button>
+                <button onClick={(e) => { e.stopPropagation(); onAddMore && onAddMore(tbl.order); }} style={{ padding: "6px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>➕ Add</button>
+                <button onClick={(e) => { e.stopPropagation(); onMerge && onMerge(tbl.order); }} style={{ padding: "6px", border: `1.5px solid ${C.blue}`, borderRadius: 6, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>🔗 Merge</button>
+                <button onClick={(e) => { e.stopPropagation(); onSplit && onSplit(tbl.order); }} style={{ padding: "6px", border: `1.5px solid ${C.amber}`, borderRadius: 6, background: "transparent", color: C.amber, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>✂️ Split</button>
+                <button onClick={(e) => { e.stopPropagation(); onFeedback && onFeedback(tbl.order); }} style={{ padding: "6px", border: `1.5px solid ${C.gray}`, borderRadius: 6, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>⭐ Feedback</button>
               </div>
             ) : (
-              <button onClick={(e) => { e.stopPropagation(); onTableClick(t.table); }} style={{ marginTop: 8, padding: "7px 4px", border: "none", borderRadius: 6, background: C.ink, color: "#fff", fontWeight: 800, fontSize: 10, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>➕ New Order</button>
+              <button onClick={(e) => { e.stopPropagation(); onTableClick(tbl.table); }} style={{ marginTop: 8, padding: "7px 4px", border: "none", borderRadius: 6, background: C.ink, color: "#fff", fontWeight: 800, fontSize: 10, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>➕ New Order</button>
             )}
           </div>
         ))}
@@ -507,18 +560,24 @@ function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, onMerge, o
 }
 
 // ═══════════════════════════════════════════════════════
-// 📋 ORDERS VIEW (with advance + print + mark paid)
+// 📋 ORDERS VIEW
 // ═══════════════════════════════════════════════════════
-function OrdersView({ C, orders, menu, waiterName, isOwner, filter, setFilter }) {
-  const active = orders.filter(o => o.status !== "served" && o.status !== "cancelled");
+function OrdersView({ C, orders, menu, waiterName, isOwner, filter, setFilter, rangeStart, rangeEnd }) {
+  // Range bounds — agar dashboard se pass nahi hua to default = today
+  const defaultStart = useMemo(() => {
+    const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime();
+  }, []);
+  const start = rangeStart ?? defaultStart;
+  const end = rangeEnd ?? Date.now();
 
-  const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
-  const todayAll = orders.filter(o => o.status !== "cancelled" && o.createdAt >= startToday.getTime());
+  const rangeAll = orders.filter(o => o.status !== "cancelled" && o.createdAt >= start && o.createdAt < end);
+
   const filtered =
-    filter === "all" ? active
-    : filter === "paid" ? todayAll.filter(o => o.paid)
-    : filter === "served" ? todayAll.filter(o => o.status === "served")
-    : active.filter(o => o.status === filter);
+    filter === "all" ? rangeAll
+    : filter === "active" ? rangeAll.filter(o => o.status !== "served")
+    : filter === "paid" ? rangeAll.filter(o => o.paid)
+    : filter === "served" ? rangeAll.filter(o => o.status === "served")
+    : rangeAll.filter(o => o.status === filter);
 
   const advanceOrder = async (order) => {
     const idx = STATUS_FLOW.indexOf(order.status);
@@ -540,12 +599,14 @@ function OrdersView({ C, orders, menu, waiterName, isOwner, filter, setFilter })
     } catch (e) { alert("❌ " + e.message); }
   };
 
+  const filterLabel = filter.charAt(0).toUpperCase() + filter.slice(1);
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.ink }}>Active Orders ({filtered.length})</h2>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.ink }}>{filterLabel} Orders ({filtered.length})</h2>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {["all", ...STATUS_FLOW, "paid"].map(f => (
+          {["all", "active", ...STATUS_FLOW, "paid"].map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${filter === f ? C.red : C.line}`, background: filter === f ? C.red : C.card, color: filter === f ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", textTransform: "capitalize", fontFamily: "inherit" }}>{f}</button>
           ))}
         </div>
@@ -643,44 +704,41 @@ function KOTView({ C, orders }) {
 // 📊 DASHBOARD VIEW
 // ═══════════════════════════════════════════════════════
 function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
-  // ─── DATE FILTER STATE ───
   const todayStr = new Date().toISOString().slice(0, 10);
   const [range, setRange] = useState("today");
   const [customDate, setCustomDate] = useState(todayStr);
 
-  // ─── FILTER ORDERS BY RANGE ───
   const filtered = useMemo(() => {
     const now = new Date();
     if (range === "today") {
-      const start = new Date(); start.setHours(0, 0, 0, 0);
-      return orders.filter(o => o.createdAt >= start.getTime());
+      const s = new Date(); s.setHours(0, 0, 0, 0);
+      return orders.filter(o => o.createdAt >= s.getTime());
     }
     if (range === "yesterday") {
-      const start = new Date(); start.setDate(start.getDate() - 1); start.setHours(0, 0, 0, 0);
-      const end = new Date(); end.setHours(0, 0, 0, 0);
-      return orders.filter(o => o.createdAt >= start.getTime() && o.createdAt < end.getTime());
+      const s = new Date(); s.setDate(s.getDate() - 1); s.setHours(0, 0, 0, 0);
+      const e = new Date(); e.setHours(0, 0, 0, 0);
+      return orders.filter(o => o.createdAt >= s.getTime() && o.createdAt < e.getTime());
     }
     if (range === "7days") {
-      const start = new Date(); start.setDate(start.getDate() - 6); start.setHours(0, 0, 0, 0);
-      return orders.filter(o => o.createdAt >= start.getTime());
+      const s = new Date(); s.setDate(s.getDate() - 6); s.setHours(0, 0, 0, 0);
+      return orders.filter(o => o.createdAt >= s.getTime());
     }
     if (range === "30days") {
-      const start = new Date(); start.setDate(start.getDate() - 29); start.setHours(0, 0, 0, 0);
-      return orders.filter(o => o.createdAt >= start.getTime());
+      const s = new Date(); s.setDate(s.getDate() - 29); s.setHours(0, 0, 0, 0);
+      return orders.filter(o => o.createdAt >= s.getTime());
     }
     if (range === "month") {
-      const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
-      return orders.filter(o => o.createdAt >= start.getTime());
+      const s = new Date(); s.setDate(1); s.setHours(0, 0, 0, 0);
+      return orders.filter(o => o.createdAt >= s.getTime());
     }
     if (range === "custom" && customDate) {
-      const start = new Date(customDate + "T00:00:00").getTime();
-      const end = start + 86400000;
-      return orders.filter(o => o.createdAt >= start && o.createdAt < end);
+      const s = new Date(customDate + "T00:00:00").getTime();
+      const e = s + 86400000;
+      return orders.filter(o => o.createdAt >= s && o.createdAt < e);
     }
     return orders;
   }, [orders, range, customDate]);
 
-  // ─── CALCULATIONS ON FILTERED ───
   const todayRevenue = filtered.filter(o => o.paid && o.status !== "cancelled").reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
   const todayTotal = filtered.length;
   const paidCount = filtered.filter(o => o.paid).length;
@@ -730,9 +788,9 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
         {[
           { label: "Revenue", value: inr(todayRevenue), color: C.green, icon: "💰", click: null },
-          { label: "Total Orders", value: todayTotal, color: C.red, icon: "📋", click: () => onStatusClick && onStatusClick("all") },
-          { label: "Paid", value: paidCount, color: C.green, icon: "✅", click: () => onStatusClick && onStatusClick("paid") },
-          { label: "Active", value: activeOrders, color: C.amber, icon: "🔥", click: () => onStatusClick && onStatusClick("active") },
+          { label: "Total Orders", value: todayTotal, color: C.red, icon: "📋", click: () => onStatusClick && onStatusClick("all", getRangeBounds(range, customDate)) },
+          { label: "Paid", value: paidCount, color: C.green, icon: "✅", click: () => onStatusClick && onStatusClick("paid", getRangeBounds(range, customDate)) },
+          { label: "Active", value: activeOrders, color: C.amber, icon: "🔥", click: () => onStatusClick && onStatusClick("active", getRangeBounds(range, customDate)) },
           { label: "Avg Order", value: inr(avgOrder), color: C.blue, icon: "📈", click: null },
         ].map((s, i) => (
           <div
@@ -774,7 +832,7 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
             return (
               <button
                 key={s}
-                onClick={() => onStatusClick && onStatusClick(s)}
+                onClick={() => onStatusClick && onStatusClick(s, getRangeBounds(range, customDate))}
                 disabled={count === 0}
                 style={{
                   background: C[st.color + "Light"] || C.light,
@@ -846,7 +904,7 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
         })()}
       </div>
 
-      {/* RECENT ORDERS — LAST 10 with details */}
+      {/* RECENT ORDERS */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>📋 Orders — {rangeLabel}</div>
@@ -856,7 +914,7 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
         {recentOrders.length === 0 && (
           <div style={{ textAlign: "center", padding: 40, color: C.gray }}>
             <div style={{ fontSize: 36, marginBottom: 8 }}>😌</div>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>Aaj koi order nahi</div>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Koi order nahi</div>
           </div>
         )}
 
@@ -920,23 +978,6 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
 // ═══════════════════════════════════════════════════════
 // 🖨️ KOT PRINT
 // ═══════════════════════════════════════════════════════
-function printKOTThermal(order) {
-  // 80mm thermal printer style — narrower width
-  try {
-    const itemsHtml = (order.items || []).map(it => `<div style="border-bottom:1px dashed #000;padding:6px 0;font-size:16px"><b>${it.qty} × ${it.name}</b>${it.portion ? ` <i>(${it.portion})</i>` : ""}</div>`).join("");
-    const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
-    document.body.appendChild(iframe);
-    const w = iframe.contentWindow;
-    setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 30000);
-    w.document.open();
-    w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{size:80mm auto;margin:0}*{color:#000!important}body{font-family:'Courier New',monospace;width:72mm;margin:0 auto;padding:4px;font-size:15px}h2,h3{text-align:center;margin:3px 0;font-weight:900}h2{font-size:24px}.c{text-align:center;font-size:12px;font-weight:700}.big{font-size:18px;font-weight:900}</style></head><body><h2>KOT</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + order.table}</h3><div class="c">${now}</div><div class="c">#${order.id.slice(1, 9).toUpperCase()}</div>${order.waiter ? `<div class="c">Waiter: ${order.waiter}</div>` : ""}<div style="border-top:2px solid #000;margin:8px 0"></div>${itemsHtml}<div style="border-top:2px solid #000;margin:8px 0"></div><div class="c big">Total Items: ${(order.items || []).reduce((s, it) => s + it.qty, 0)}</div></body></html>`);
-    w.document.close();
-    setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
-  } catch (e) { alert("Print error: " + e.message); }
-}
-
 function printKOT(order) {
   try {
     const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left;font-size:14px">${it.qty} × ${it.name}${it.portion ? ` (${it.portion})` : ""}</td></tr>`).join("");
@@ -1108,18 +1149,22 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
     return () => window.removeEventListener("resize", f);
   }, []);
 
-  // 🔥 existingOrder ke items ko cart me load karo (sirf bill mode me, add-more mode me nahi)
+  // 🔥 existingOrder ke items, discount, GST, payMode ko restore karo
   useEffect(() => {
-    if (existingOrder && !addMoreMode) {
-      const initialCart = {};
-      (existingOrder.items || []).forEach(it => {
-        initialCart[it.itemId] = (initialCart[it.itemId] || 0) + it.qty;
-      });
-      setCart(initialCart);
+    if (existingOrder) {
+      setDiscount(existingOrder.billDiscountPct || 0);
+      setGstRate(existingOrder.gstRate || 0);
+      if (!addMoreMode) {
+        setPayMode(existingOrder.payment || "cash");
+        const initialCart = {};
+        (existingOrder.items || []).forEach(it => {
+          initialCart[it.itemId] = (initialCart[it.itemId] || 0) + it.qty;
+        });
+        setCart(initialCart);
+      }
     }
   }, [existingOrder?.id, addMoreMode]);
 
-  // existingOrder ke items ka total (editing ke liye)
   const existingItems = existingOrder?.items || [];
   const existingSubtotal = existingItems.reduce((s, it) => s + (it.price * it.qty), 0);
 
@@ -1127,17 +1172,75 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
   const filtered = useMemo(() => menu.filter(m => m.available && (category === "All" || m.category === category) && (!search.trim() || m.name.toLowerCase().includes(search.toLowerCase()))), [menu, category, search]);
 
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
-  const cartSubtotal = cartItems.reduce((s, [id, q]) => { const m = menu.find(x => x.id === id); return s + (m?.price || 0) * q; }, 0);
-  // add-more mode me: running + new. Baaki me cart hi final hai.
+
+  // Cart me item price resolve karo — menu se pehle, warna existing order se
+  const resolveItem = (id) => {
+    const m = menu.find(x => x.id === id);
+    if (m) return m;
+    const ex = existingItems.find(e => e.itemId === id);
+    if (ex) return ex;
+    return null;
+  };
+
+  const cartSubtotal = cartItems.reduce((s, [id, q]) => { const m = resolveItem(id); return s + (m?.price || 0) * q; }, 0);
   const grossSub = addMoreMode ? existingSubtotal + cartSubtotal : cartSubtotal;
 
-  // Running orders for this table
   useEffect(() => {
     const running = orders.filter(o => o.orderType === "dine_in" && Number(o.table) === Number(table) && o.status !== "served" && o.status !== "cancelled");
     setRunningOrders(running);
   }, [orders, table]);
 
   const setQty = (id, q) => { setCart(prev => { const next = { ...prev }; if (q <= 0) delete next[id]; else next[id] = q; return next; }); };
+
+  // ═══ Unified cart → bill saver (returns computed totals) ═══
+  const applyCartChanges = async () => {
+    if (!existingOrder) throw new Error("No existing order to update");
+    const existing = existingOrder.items || [];
+    const existingMap = {};
+    existing.forEach(it => { existingMap[it.itemId] = (existingMap[it.itemId] || 0) + it.qty; });
+    const nextKotNo = Math.max(1, ...(existingOrder.kots || []).map(k => k.kotNumber || 1)) + 1;
+
+    const finalItems = [];
+    Object.entries(cart).forEach(([id, qty]) => {
+      if (qty <= 0) return;
+      const m = menu.find(x => x.id === id);
+      const ex = existing.find(e => e.itemId === id);
+      if (m) {
+        finalItems.push({
+          itemId: id, name: m.name, portion: m.portion || "",
+          price: m.price, qty,
+          kotNumber: existingMap[id] ? (ex?.kotNumber || 1) : nextKotNo,
+        });
+      } else if (ex) {
+        // Menu item deleted/unavailable — use saved data
+        finalItems.push({
+          itemId: id, name: ex.name, portion: ex.portion || "",
+          price: ex.price, qty,
+          kotNumber: ex.kotNumber || 1,
+        });
+      }
+    });
+
+    if (finalItems.length === 0) {
+      throw new Error("Bill me kam se kam 1 item hona chahiye");
+    }
+
+    const sub = finalItems.reduce((s, it) => s + it.price * it.qty, 0);
+    const discAmt = Math.round((sub * discount) / 100);
+    const gstAmt = Math.round(((sub - discAmt) * gstRate) / 100);
+    const finalTotal = Math.max(0, sub - discAmt) + gstAmt;
+
+    await updateDoc(doc(db, "orders", existingOrder.id), {
+      items: finalItems,
+      subtotal: sub,
+      billDiscountPct: discount, billDiscount: discAmt,
+      gstRate, gstAmount: gstAmt, finalTotal,
+      payment: payMode,
+      billEditedAt: Date.now(),
+    });
+
+    return { finalItems, sub, discAmt, gstAmt, finalTotal };
+  };
 
   const handlePlaceOrder = async () => {
     if (cartItems.length === 0 || placing) return;
@@ -1148,7 +1251,7 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
       try {
         const base = existingOrder;
         const baseKots = base.kots?.length ? base.kots : [{ id: uid("kot"), kotNumber: 1, items: base.items || [], createdAt: base.createdAt, status: base.status }];
-        const nextNo = Math.max(...baseKots.map(k => k.kotNumber || 1)) + 1;
+        const nextNo = Math.max(1, ...baseKots.map(k => k.kotNumber || 1)) + 1;
         const newItems = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty, kotNumber: nextNo }; });
         const addedTotal = newItems.reduce((s, it) => s + it.price * it.qty, 0);
         const runKot = { id: uid("kot"), kotNumber: nextNo, items: newItems, createdAt: Date.now(), status: "new", isRunning: true };
@@ -1196,95 +1299,60 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
     } catch (e) { alert("❌ " + e.message); } finally { setPlacing(false); }
   };
 
-  // 💾 SAVE BILL (existing order ke liye)
+  // 💾 SAVE BILL — cart ke saare edits ko persist karo
   const handleSaveBill = async () => {
-    if (!existingOrder || placing) return;
+    if (!existingOrder || addMoreMode || placing) return;
     setPlacing(true);
     try {
-      // existing items + any new items in cart
-      const existing = existingOrder.items || [];
-      const existingMap = {};
-      existing.forEach(it => { existingMap[it.itemId] = (existingMap[it.itemId] || 0) + it.qty; });
-
-      // Build final items array — cart me jo hai wahi final
-      const finalItems = [];
-      Object.entries(cart).forEach(([id, qty]) => {
-        if (qty <= 0) return;
-        const m = menu.find(x => x.id === id);
-        if (!m) return;
-        finalItems.push({
-          itemId: id, name: m.name, portion: m.portion || "",
-          price: m.price, qty, kotNumber: existingMap[id] ? (existing.find(e => e.itemId === id)?.kotNumber || 1) : (Math.max(...(existingOrder.kots || [{ kotNumber: 1 }]).map(k => k.kotNumber || 1)) + 1),
-        });
-      });
-
-      const sub = finalItems.reduce((s, it) => s + it.price * it.qty, 0);
-      const discAmt = Math.round((sub * discount) / 100);
-      const gstAmt = Math.round(((sub - discAmt) * gstRate) / 100);
-      const finalTotal = Math.max(0, sub - discAmt) + gstAmt;
-
-      await updateDoc(doc(db, "orders", existingOrder.id), {
-        items: finalItems,
-        subtotal: sub,
-        billDiscountPct: discount, billDiscount: discAmt,
-        gstRate, gstAmount: gstAmt, finalTotal,
-        payment: payMode,
-        billEditedAt: Date.now(),
-      });
+      await applyCartChanges();
       alert("✅ Bill saved!");
       onBack();
     } catch (e) { alert("❌ " + e.message); } finally { setPlacing(false); }
   };
 
-  // ✅ MARK PAID + PRINT
+  // ✅ MARK PAID + PRINT — pehle cart changes save, phir paid
   const handlePaidPrint = async () => {
-    if (!existingOrder || placing) return;
+    if (!existingOrder || addMoreMode || placing) return;
     setPlacing(true);
     try {
       if (payMode === "due") {
+        if (cartItems.length === 0) {
+          alert("Bill me kam se kam 1 item hona chahiye");
+          setPlacing(false);
+          return;
+        }
         const dn = window.prompt("Customer ka naam (due)?", "");
         if (dn === null) { setPlacing(false); return; }
         const dp = window.prompt("Phone number?", "") || "";
-        const s0 = Number(existingOrder.subtotal) || 0;
-        const d0 = Math.round((s0 * discount) / 100);
-        const g0 = Math.round(((s0 - d0) * gstRate) / 100);
-        const f0 = Math.max(0, s0 - d0) + g0;
+        const applied = await applyCartChanges();
         await updateDoc(doc(db, "orders", existingOrder.id), {
-          billDiscountPct: discount, billDiscount: d0,
-          gstRate, gstAmount: g0, finalTotal: f0,
           payment: "due", paid: false, paymentStatus: "due", status: "served",
-          dueName: dn || "Unknown", duePhone: dp, dueAt: Date.now(), billEditedAt: Date.now(),
+          dueName: dn || "Unknown", duePhone: dp, dueAt: Date.now(),
         });
-        logAudit("due_created", { orderId: existingOrder.id, total: f0, name: dn || "" });
-        printBill({ ...existingOrder, finalTotal: f0, subtotal: s0, gstAmount: g0, billDiscount: d0, payment: "due", paid: false });
+        logAudit("due_created", { orderId: existingOrder.id, total: applied.finalTotal, name: dn || "" });
+        printBill({ ...existingOrder, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: "due", paid: false });
         alert("📒 Due me save ho gaya");
         onBack();
         return;
       }
-      const sub = Number(existingOrder.subtotal) || 0;
-      const discAmt = Math.round((sub * discount) / 100);
-      const gstAmt = Math.round(((sub - discAmt) * gstRate) / 100);
-      const finalTotal = Math.max(0, sub - discAmt) + gstAmt;
+      const applied = await applyCartChanges();
       await updateDoc(doc(db, "orders", existingOrder.id), {
-        billDiscountPct: discount, billDiscount: discAmt,
-        gstRate, gstAmount: gstAmt, finalTotal,
-        payment: payMode, paid: true, paymentStatus: "paid", paidAt: Date.now(),
-        billEditedAt: Date.now(),
+        paid: true, paymentStatus: "paid", paidAt: Date.now(),
       });
-      printBill({ ...existingOrder, finalTotal, subtotal: sub, gstAmount: gstAmt, billDiscount: discAmt, payment: payMode, paid: true });
+      printBill({ ...existingOrder, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: true });
       alert("✅ Paid & Bill printing...");
       onBack();
     } catch (e) { alert("❌ " + e.message); } finally { setPlacing(false); }
   };
 
-  // Running KOT — existing order me items add karo
+  // Running KOT me items add karo (from banner)
   const addRunningItems = async (orderId) => {
     if (cartItems.length === 0) return;
     try {
       const baseOrder = orders.find(o => o.id === orderId);
       if (!baseOrder) return;
       const baseKots = baseOrder.kots?.length ? baseOrder.kots : [{ id: uid("kot"), kotNumber: 1, items: baseOrder.items || [], createdAt: baseOrder.createdAt, status: baseOrder.status }];
-      const nextNo = Math.max(...baseKots.map(k => k.kotNumber || 1)) + 1;
+      const nextNo = Math.max(1, ...baseKots.map(k => k.kotNumber || 1)) + 1;
       const newItems = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty, kotNumber: nextNo }; });
       const addedTotal = newItems.reduce((s, it) => s + it.price * it.qty, 0);
       const runKot = { id: uid("kot"), kotNumber: nextNo, items: newItems, createdAt: Date.now(), status: "new", isRunning: true };
@@ -1317,7 +1385,7 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
         <div style={{ width: 60 }} />
       </div>
 
-      {runningOrders.length > 0 && (
+      {runningOrders.length > 0 && !existingOrder && (
         <div style={{ background: C.amberLight, padding: "10px 16px", borderBottom: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <div style={{ fontSize: 13, color: C.ink, fontWeight: 700 }}>⚠️ Table {table} already has {runningOrders.length} running order(s)</div>
           <button onClick={() => addRunningItems(runningOrders[0].id)} disabled={cartItems.length === 0} style={{ background: cartItems.length === 0 ? C.line : C.blue, color: "#fff", border: "none", padding: "8px 14px", borderRadius: 6, fontWeight: 800, fontSize: 12, cursor: cartItems.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit" }}>➕ Add to Running KOT</button>
@@ -1343,6 +1411,12 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
                 </button>
               );
             })}
+            {filtered.length === 0 && (
+              <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 40, color: C.gray }}>
+                <div style={{ fontSize: 36, marginBottom: 8 }}>🍽️</div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{menu.length === 0 ? "Menu load ho raha hai..." : "Koi matching item nahi"}</div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1351,17 +1425,16 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
           <div style={{ flex: 1, overflowY: "auto" }}>
             {cartItems.length === 0 && <div style={{ textAlign: "center", padding: 60, color: C.gray, fontSize: 13 }}>Menu se item tap karo</div>}
             {cartItems.map(([id, q]) => {
-              const m = menu.find(x => x.id === id);
+              const m = resolveItem(id);
               if (!m) return null;
-              // Check karo — existing item hai ya naya add kiya
-              const existing = existingItems.filter(e => e.itemId === id).reduce((s, e) => s + e.qty, 0);
-              const isNew = !addMoreMode && existing === 0;
+              const existingQty = existingItems.filter(e => e.itemId === id).reduce((s, e) => s + e.qty, 0);
+              const isNew = !addMoreMode && existingQty === 0;
               return (
                 <div key={id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderBottom: `1px solid ${C.line}`, background: isNew ? C.greenLight : "transparent", minHeight: 32 }}>
                   <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 5 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: "0 1 auto", minWidth: 0 }}>{m.name}</span>
-                    {!addMoreMode && existing > 0 && <span style={{ background: C.blue, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>R{existing}</span>}
-                    {!addMoreMode && existing === 0 && <span style={{ background: C.green, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>NEW</span>}
+                    {!addMoreMode && existingQty > 0 && <span style={{ background: C.blue, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>R{existingQty}</span>}
+                    {!addMoreMode && existingQty === 0 && <span style={{ background: C.green, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>NEW</span>}
                     <span style={{ fontSize: 10, color: C.gray, fontFamily: "monospace", flexShrink: 0 }}>₹{m.price}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", border: `1px solid ${C.red}`, borderRadius: 4, overflow: "hidden", height: 24 }}>
@@ -1376,53 +1449,67 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
             })}
           </div>
           <div style={{ borderTop: `2px solid ${C.line}`, padding: 8, background: C.light, maxHeight: "65vh", overflowY: "auto" }}>
-            {/* DISCOUNT row — compact */}
-            <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>DISC</span>
-              {[0, 5, 10, 20].map(d => (
-                <button key={d} onClick={() => (isOwner ? setDiscount(d) : alert("Discount sirf owner de sakta hai"))} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${discount === d ? C.green : C.line}`, background: discount === d ? C.greenLight : C.card, color: discount === d ? C.green : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{d === 0 ? "0" : `${d}%`}</button>
-              ))}
-              <input type="number" min={0} max={100} disabled={!isOwner} value={discount || ""} onChange={(e) => setDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} placeholder="%" style={{ width: 44, padding: "3px 6px", border: `1px solid ${C.line}`, borderRadius: 4, fontSize: 10, background: C.card, color: C.ink, fontWeight: 700, textAlign: "center", outline: "none" }} />
-            </div>
+            {/* DISCOUNT row — hidden in addMoreMode */}
+            {!addMoreMode && (
+              <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>DISC</span>
+                {[0, 5, 10, 20].map(d => (
+                  <button key={d} onClick={() => (isOwner ? setDiscount(d) : alert("Discount sirf owner de sakta hai"))} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${discount === d ? C.green : C.line}`, background: discount === d ? C.greenLight : C.card, color: discount === d ? C.green : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{d === 0 ? "0" : `${d}%`}</button>
+                ))}
+                <input type="number" min={0} max={100} disabled={!isOwner} value={discount || ""} onChange={(e) => setDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} placeholder="%" style={{ width: 44, padding: "3px 6px", border: `1px solid ${C.line}`, borderRadius: 4, fontSize: 10, background: C.card, color: C.ink, fontWeight: 700, textAlign: "center", outline: "none" }} />
+              </div>
+            )}
 
-            {/* GST row — compact */}
-            <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>GST</span>
-              {[0, 5, 12, 18].map(g => (
-                <button key={g} onClick={() => setGstRate(g)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${gstRate === g ? C.red : C.line}`, background: gstRate === g ? C.redLight : C.card, color: gstRate === g ? C.red : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{g === 0 ? "No" : `${g}%`}</button>
-              ))}
-            </div>
+            {/* GST row — hidden in addMoreMode */}
+            {!addMoreMode && (
+              <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>GST</span>
+                {[0, 5, 12, 18].map(g => (
+                  <button key={g} onClick={() => setGstRate(g)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${gstRate === g ? C.red : C.line}`, background: gstRate === g ? C.redLight : C.card, color: gstRate === g ? C.red : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{g === 0 ? "No" : `${g}%`}</button>
+                ))}
+              </div>
+            )}
 
-            {/* PAY row — compact */}
-            <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>PAY</span>
-              {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["due", "Due"]].map(([id, label]) => (
-                <button key={id} onClick={() => setPayMode(id)} style={{ padding: "3px 9px", borderRadius: 4, border: `1px solid ${payMode === id ? C.red : C.line}`, background: payMode === id ? C.red : C.card, color: payMode === id ? "#fff" : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
-              ))}
-            </div>
+            {/* PAY row — hidden in addMoreMode */}
+            {!addMoreMode && (
+              <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>PAY</span>
+                {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["due", "Due"]].map(([id, label]) => (
+                  <button key={id} onClick={() => setPayMode(id)} style={{ padding: "3px 9px", borderRadius: 4, border: `1px solid ${payMode === id ? C.red : C.line}`, background: payMode === id ? C.red : C.card, color: payMode === id ? "#fff" : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
+                ))}
+              </div>
+            )}
 
             {/* TOTALS — compact */}
             <div style={{ background: C.card, borderRadius: 6, padding: 8, marginBottom: 6 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11 }}>
-                <span style={{ color: C.gray }}>Running ({existingItems.length})</span>
-                <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>₹{existingSubtotal}</span>
-              </div>
-              {cartItems.length > 0 && (
+              {addMoreMode && (
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11 }}>
+                  <span style={{ color: C.gray }}>Running ({existingItems.length})</span>
+                  <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>₹{existingSubtotal}</span>
+                </div>
+              )}
+              {addMoreMode && (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.green }}>
                   <span>New ({cartItems.length})</span>
                   <span style={{ fontFamily: "monospace", fontWeight: 700 }}>+₹{cartSubtotal}</span>
                 </div>
               )}
-              {discount > 0 && (
+              {!addMoreMode && discount > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.green }}>
                   <span>Disc {discount}%</span>
                   <span style={{ fontFamily: "monospace" }}>-₹{Math.round(grossSub * discount / 100)}</span>
                 </div>
               )}
-              {gstRate > 0 && (
+              {!addMoreMode && gstRate > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.red }}>
                   <span>GST {gstRate}%</span>
                   <span style={{ fontFamily: "monospace" }}>+₹{Math.round(grossSub * (1 - discount / 100) * gstRate / 100)}</span>
+                </div>
+              )}
+              {!addMoreMode && discount === 0 && gstRate === 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11 }}>
+                  <span style={{ color: C.gray }}>Subtotal</span>
+                  <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>₹{grossSub}</span>
                 </div>
               )}
             </div>
@@ -1431,18 +1518,18 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
               <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, letterSpacing: 0.5 }}>TOTAL</span>
               <span style={{ color: "#fff", fontSize: 20, fontWeight: 900, fontFamily: "monospace" }}>
                 {(() => {
-                  const gross = grossSub;
-                  const discAmt = Math.round(gross * discount / 100);
-                  const gstAmt = Math.round((gross - discAmt) * gstRate / 100);
-                  return "₹" + (Math.max(0, gross - discAmt) + gstAmt).toFixed(0);
+                  if (addMoreMode) return "₹" + grossSub.toFixed(0);
+                  const discAmt = Math.round(grossSub * discount / 100);
+                  const gstAmt = Math.round((grossSub - discAmt) * gstRate / 100);
+                  return "₹" + (Math.max(0, grossSub - discAmt) + gstAmt).toFixed(0);
                 })()}
               </span>
             </div>
 
-            {/* ACTION BUTTONS — context ke hisaab se */}
+            {/* ACTION BUTTONS */}
             {existingOrder && !addMoreMode && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 6 }}>
-                <button onClick={handleSaveBill} disabled={placing} style={{ padding: 10, border: "none", borderRadius: 6, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>💾 Save</button>
+                <button onClick={handleSaveBill} disabled={placing} style={{ padding: 10, border: "none════", borderRadius: ════6, background: C.blue,════ color: "#fff",════ fontWeight: 800, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>💾 Save</button>
                 <button onClick={handlePaidPrint} disabled={placing} style={{ padding: 10, border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>✓ Paid</button>
               </div>
             )}
@@ -1488,11 +1575,11 @@ function printHtml(title, bodyHtml, opts = {}) {
   } catch (e) { alert("Print error: " + e.message); }
 }
 
-// ───────── UPI link (RESTAURANT.upi me apna UPI ID daalo) ─────────
+// ───────── UPI link ─────────
 const upiUri = (total, billNo) =>
   `upi://pay?pa=${RESTAURANT.upi}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${total}&cu=INR&tn=${encodeURIComponent("Bill " + billNo)}`;
 
-// ───────── 🖨️ BILL PRINT (NEW — UPI QR ke saath) ─────────
+// ───────── 🖨️ BILL PRINT ─────────
 function printBill(order) {
   try {
     const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left">${it.name}${it.portion ? ` (${it.portion})` : ""}</td><td style="text-align:center">${it.qty}</td><td style="text-align:right">₹${it.price}</td><td style="text-align:right">₹${it.price * it.qty}</td></tr>`).join("");
@@ -1546,7 +1633,7 @@ function whatsappBill(order) {
   window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
 }
 
-// ───────── ✂️ Split bill — dono bill print ─────────
+// ───────── ✂️ Split bill print ─────────
 function printSplitBills(order, selected) {
   const items = order.items || [];
   const a = items.filter((_, i) => selected[i]);
@@ -1566,7 +1653,7 @@ function printSplitBills(order, selected) {
   if (b.length) setTimeout(() => printBill(make(b)), 3500);
 }
 
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════
 // 📈 REPORTS: top items + payment split + CSV + Close Day
 // ═══════════════════════════════════════════════════════
 function ReportsExtra({ C, orders, rangeLabel }) {
@@ -1697,7 +1784,7 @@ function DueLedger({ C, orders }) {
 }
 
 // ═══════════════════════════════════════════════════════
-// 📦 STOCK PANEL (Out of stock toggle)
+// 📦 STOCK PANEL
 // ═══════════════════════════════════════════════════════
 function StockPanel({ C, menu }) {
   const [q, setQ] = useState("");
@@ -1745,9 +1832,8 @@ function StockPanel({ C, menu }) {
   );
 }
 
-
 // ═══════════════════════════════════════════════════════
-// 🛡️ ERROR BOUNDARY — crash hone par blank screen nahi, Reload button dikhega
+// 🛡️ ERROR BOUNDARY
 // ═══════════════════════════════════════════════════════
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { err: null }; }
