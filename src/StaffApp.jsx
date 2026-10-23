@@ -57,7 +57,7 @@ const RESTAURANT = {
 // ═══════════════════════════════════════════════════════
 // 🚀 MAIN APP
 // ═══════════════════════════════════════════════════════
-export default function StaffApp() {
+function StaffAppInner() {
   const [user, setUser] = useState(null);
   const [staffData, setStaffData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -144,7 +144,7 @@ export default function StaffApp() {
             if (newOnes.length > 0) {
               playSound();
               newOnes.forEach(o => {
-                if (Notification.permission === "granted") {
+                if (typeof Notification !== "undefined" && Notification.permission === "granted") {
                   try { new Notification("🛎️ New Order", { body: `Table ${o.table} · ₹${o.finalTotal || 0}` }); } catch(e) {}
                 }
               });
@@ -1121,6 +1121,8 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
 
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
   const cartSubtotal = cartItems.reduce((s, [id, q]) => { const m = menu.find(x => x.id === id); return s + (m?.price || 0) * q; }, 0);
+  // add-more mode me: running + new. Baaki me cart hi final hai.
+  const grossSub = addMoreMode ? existingSubtotal + cartSubtotal : cartSubtotal;
 
   // Running orders for this table
   useEffect(() => {
@@ -1407,13 +1409,13 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
               {discount > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.green }}>
                   <span>Disc {discount}%</span>
-                  <span style={{ fontFamily: "monospace" }}>-₹{Math.round((existingSubtotal + cartSubtotal) * discount / 100)}</span>
+                  <span style={{ fontFamily: "monospace" }}>-₹{Math.round(grossSub * discount / 100)}</span>
                 </div>
               )}
               {gstRate > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.red }}>
                   <span>GST {gstRate}%</span>
-                  <span style={{ fontFamily: "monospace" }}>+₹{Math.round((existingSubtotal + cartSubtotal) * (1 - discount / 100) * gstRate / 100)}</span>
+                  <span style={{ fontFamily: "monospace" }}>+₹{Math.round(grossSub * (1 - discount / 100) * gstRate / 100)}</span>
                 </div>
               )}
             </div>
@@ -1422,7 +1424,7 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
               <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, letterSpacing: 0.5 }}>TOTAL</span>
               <span style={{ color: "#fff", fontSize: 20, fontWeight: 900, fontFamily: "monospace" }}>
                 {(() => {
-                  const gross = existingSubtotal + (addMoreMode ? cartSubtotal : 0);
+                  const gross = grossSub;
                   const discAmt = Math.round(gross * discount / 100);
                   const gstAmt = Math.round((gross - discAmt) * gstRate / 100);
                   return "₹" + (Math.max(0, gross - discAmt) + gstAmt).toFixed(0);
@@ -1733,5 +1735,36 @@ function StockPanel({ C, menu }) {
         </div>
       ))}
     </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════
+// 🛡️ ERROR BOUNDARY — crash hone par blank screen nahi, Reload button dikhega
+// ═══════════════════════════════════════════════════════
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) { console.error("Staff app crash:", err, info); }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "system-ui, sans-serif", background: "#F9FAFB" }}>
+        <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 16, padding: 24, maxWidth: 360, textAlign: "center" }}>
+          <div style={{ fontSize: 44, marginBottom: 8 }}>⚠️</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#111827", marginBottom: 6 }}>Kuch gadbad ho gayi</div>
+          <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 16, wordBreak: "break-word" }}>{String(this.state.err?.message || this.state.err)}</div>
+          <button onClick={() => window.location.reload()} style={{ width: "100%", padding: 13, border: "none", borderRadius: 10, background: "#DC2626", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>🔄 Reload</button>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default function StaffApp() {
+  return (
+    <ErrorBoundary>
+      <StaffAppInner />
+    </ErrorBoundary>
   );
 }
