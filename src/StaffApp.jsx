@@ -91,6 +91,12 @@ function StaffAppInner() {
   const C = darkMode ? DARK : LIGHT;
   // ⚠️ Firestore `staff/<uid>` doc me role: "owner" likho apne account ke liye, warna cancel/discount band rahega
   const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role || "").toLowerCase());
+  const [narrow, setNarrow] = useState(window.innerWidth < 700);
+  useEffect(() => {
+    const f = () => setNarrow(window.innerWidth < 700);
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("staff_dark", darkMode ? "1" : "0");
@@ -246,7 +252,8 @@ function StaffAppInner() {
 
   // ─── MAIN UI ───
   const activeOrders = orders.filter(o => o.status !== "served" && o.status !== "cancelled");
-  const todayRevenue = orders.filter(o => o.paid && o.status !== "cancelled").reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  const todayRevenue = orders.filter(o => o.paid && o.status !== "cancelled" && (o.paidAt || o.createdAt) >= startOfToday.getTime()).reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
   const todayTotal = orders.length;
   const paidCount = orders.filter(o => o.paid).length;
 
@@ -254,19 +261,19 @@ function StaffAppInner() {
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "system-ui, sans-serif", display: "flex", flexDirection: "column", color: C.ink }}>
       <style>{`@keyframes lateBlink{0%,100%{opacity:1}50%{opacity:.55}}`}</style>
       {/* TOP BAR */}
-      <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 16px rgba(220,38,38,0.25)", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", padding: narrow ? "10px 12px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 16px rgba(220,38,38,0.25)", position: "sticky", top: 0, zIndex: 50 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: narrow ? 8 : 14, minWidth: 0 }}>
           <button onClick={() => setSidebarOpen(true)} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 38, height: 38, borderRadius: 8, fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>☰</button>
-          <div style={{ width: 42, height: 42, background: "rgba(255,255,255,0.2)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 16, letterSpacing: "-0.01em" }}>Eat & Park Staff</div>
-            <div style={{ fontSize: 11, opacity: 0.9, marginTop: 1 }}>{staffData?.name || "Staff"} · {staffData?.role || "waiter"}</div>
+          {!narrow && <div style={{ width: 42, height: 42, background: "rgba(255,255,255,0.2)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: narrow ? 14 : 16, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>Eat & Park</div>
+            <div style={{ fontSize: 11, opacity: 0.9, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{staffData?.name || "Staff"} · {staffData?.role || "waiter"}</div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: narrow ? 5 : 8, alignItems: "center", flexShrink: 0 }}>
           <button onClick={() => { const n = lang === "en" ? "hi" : "en"; setLang(n); localStorage.setItem("staff_lang", n); }} title="Language" style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 44, height: 38, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 800 }}>{lang === "en" ? "EN" : "हि"}</button>
           <button onClick={() => setDarkMode(d => !d)} title="Toggle theme" style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 38, height: 38, borderRadius: 8, fontSize: 16, cursor: "pointer" }}>{darkMode ? "☀️" : "🌙"}</button>
-          <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: "9px 16px", borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Logout</button>
+          <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: narrow ? "9px 10px" : "9px 16px", borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Logout</button>
         </div>
       </div>
 
@@ -279,7 +286,7 @@ function StaffAppInner() {
           { id: "dashboard", label: "📊 " + t("dashboard") },
           { id: "stock", label: "📦 Stock" },
         ].map((t) => (
-          <button key={t.id} onClick={() => { setActiveTab(t.id); setSelectedTable(null); }} style={{ padding: "15px 20px", border: "none", background: "transparent", color: activeTab === t.id ? C.red : C.gray, fontWeight: 700, fontSize: 13, cursor: "pointer", borderBottom: activeTab === t.id ? `3px solid ${C.red}` : "3px solid transparent", whiteSpace: "nowrap" }}>{t.label}</button>
+          <button key={t.id} onClick={() => { setActiveTab(t.id); setSelectedTable(null); }} style={{ padding: narrow ? "13px 14px" : "15px 20px", border: "none", background: "transparent", color: activeTab === t.id ? C.red : C.gray, fontWeight: 700, fontSize: 13, cursor: "pointer", borderBottom: activeTab === t.id ? `3px solid ${C.red}` : "3px solid transparent", whiteSpace: "nowrap" }}>{t.label}</button>
         ))}
       </div>
 
