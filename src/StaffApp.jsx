@@ -7,9 +7,9 @@ import {
   query, where, orderBy, runTransaction, arrayUnion, arrayRemove
 } from "firebase/firestore";
 
-// ═══════════════════════════════════════════════════════
-// 🎨 COLORS — Light + Dark theme
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// COLORS - Light + Dark theme
+// ---------------------------------------------------------------------------
 const LIGHT = {
   bg: "#F9FAFB", card: "#fff", cardAlt: "#F3F4F6", ink: "#111827",
   gray: "#6B7280", light: "#F9FAFB", line: "#E5E7EB",
@@ -39,10 +39,10 @@ const timeAgo = (ts) => {
   return Math.floor(h / 24) + "d";
 };
 
-// 🍽️ Total number of dine-in tables (change here to add/remove tables)
+// Total number of dine-in tables (change here to add/remove tables)
 const TABLE_COUNT = 12;
 
-// 📅 Compute date-range bounds for Dashboard → Orders navigation
+// Compute date-range bounds for Dashboard -> Orders navigation
 function getRangeBounds(range, customDate) {
   const now = Date.now();
   if (range === "today") {
@@ -85,15 +85,15 @@ const STATUS_FLOW = ["new", "preparing", "ready", "served"];
 
 const RESTAURANT = {
   name: "Eat & Park",
-  address: "Girja More, Ara – Buxar Main Road, Pakri, Ara",
+  address: "Girja More, Ara - Buxar Main Road, Pakri, Ara",
   phones: ["7303267750", "8271918062"],
   gstin: "",
-  upi: "", // apna UPI ID likho, e.g. "7303267750@ybl". Khaali = QR nahi chhapega
+  upi: "",
 };
 
-// ═══════════════════════════════════════════════════════
-// 🚀 MAIN APP
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// MAIN APP
+// ---------------------------------------------------------------------------
 function StaffAppInner() {
   const [user, setUser] = useState(null);
   const [staffData, setStaffData] = useState(null);
@@ -118,7 +118,6 @@ function StaffAppInner() {
   const [addMoreMode, setAddMoreMode] = useState(false);
   const [reportRange, setReportRange] = useState("today");
   const [ordersFilter, setOrdersFilter] = useState("all");
-  // 🔥 Orders tab ke liye dashboard se pass kiya gaya range
   const [ordersRange, setOrdersRange] = useState(null);
 
   const T = {
@@ -128,7 +127,6 @@ function StaffAppInner() {
   const t = (k) => (T[lang] && T[lang][k]) || (T.en[k] || k);
 
   const C = darkMode ? DARK : LIGHT;
-  // ⚠️ Firestore `staff/<uid>` doc me role: "owner" likho apne account ke liye, warna cancel/discount band rahega
   const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role || "").toLowerCase());
   const [narrow, setNarrow] = useState(window.innerWidth < 700);
   useEffect(() => {
@@ -173,7 +171,6 @@ function StaffAppInner() {
       if (snap.exists() && Array.isArray(snap.data().items)) setMenu(snap.data().items);
     });
 
-    // Last 30 days ka data load karo
     const startRange = new Date();
     startRange.setDate(startRange.getDate() - 30);
     startRange.setHours(0, 0, 0, 0);
@@ -190,7 +187,7 @@ function StaffAppInner() {
               playSound();
               newOnes.forEach(o => {
                 if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-                  try { new Notification("🛎️ New Order", { body: `Table ${o.table} · ₹${o.finalTotal || 0}` }); } catch(e) {}
+                  try { new Notification("New Order", { body: `Table ${o.table} - Rs ${o.finalTotal || 0}` }); } catch(e) {}
                 }
               });
             }
@@ -203,7 +200,7 @@ function StaffAppInner() {
     return () => { unsubMenu(); unsubOrders(); };
   }, [user]);
 
-  // 🔔 Notification permission — only after login
+  // Notification permission - only after login
   useEffect(() => {
     if (user && "Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
@@ -218,7 +215,6 @@ function StaffAppInner() {
     } catch (e) {}
   };
 
-  // 🔔 New order pending → har 8 sec sound jab tak Start na dabe
   const newCount = orders.filter(o => o.status === "new" && Date.now() - o.createdAt < 6 * 3600 * 1000).length;
   useEffect(() => {
     document.title = (newCount ? `(${newCount}) ` : "") + "Eat & Park Staff";
@@ -267,7 +263,7 @@ function StaffAppInner() {
           <div style={{ textAlign: "center", marginBottom: 28 }}>
             <div style={{ width: 80, height: 80, margin: "0 auto 12px", background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, boxShadow: `0 8px 24px ${C.red}40` }}>🍽️</div>
             <div style={{ fontSize: 26, fontWeight: 800, color: C.ink, letterSpacing: "-0.02em" }}>Eat & Park</div>
-            <div style={{ fontSize: 13, color: C.gray, marginTop: 4, fontWeight: 600 }}>Staff POS · Sign In</div>
+            <div style={{ fontSize: 13, color: C.gray, marginTop: 4, fontWeight: 600 }}>Staff POS - Sign In</div>
           </div>
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 11, fontWeight: 800, color: C.gray, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Email</label>
@@ -275,21 +271,21 @@ function StaffAppInner() {
           </div>
           <div style={{ marginBottom: 20 }}>
             <label style={{ fontSize: 11, fontWeight: 800, color: C.gray, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" style={{ width: "100%", padding: "13px 16px", border: `1.5px solid ${C.line}`, borderRadius: 10, fontSize: 14, boxSizing: "border-box", outline: "none", background: C.card, color: C.ink }} required />
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="********" style={{ width: "100%", padding: "13px 16px", border: `1.5px solid ${C.line}`, borderRadius: 10, fontSize: 14, boxSizing: "border-box", outline: "none", background: C.card, color: C.ink }} required />
           </div>
           {loginError && (
-            <div style={{ background: C.redLight, color: C.red, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, marginBottom: 18 }}>⚠️ {loginError}</div>
+            <div style={{ background: C.redLight, color: C.red, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, marginBottom: 18 }}>Warning: {loginError}</div>
           )}
-          <button type="submit" style={{ width: "100%", padding: "15px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", boxShadow: `0 8px 20px ${C.red}40`, letterSpacing: 0.3 }}>🔓 Sign In</button>
+          <button type="submit" style={{ width: "100%", padding: "15px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", boxShadow: `0 8px 20px ${C.red}40`, letterSpacing: 0.3 }}>Sign In</button>
           <div style={{ textAlign: "center", marginTop: 22, fontSize: 12, color: C.gray }}>
-            <a href="/" style={{ color: C.blue, textDecoration: "none", fontWeight: 700 }}>← Back to Customer App</a>
+            <a href="/" style={{ color: C.blue, textDecoration: "none", fontWeight: 700 }}>Back to Customer App</a>
           </div>
         </form>
       </div>
     );
   }
 
-  // ─── MAIN UI ───
+  // MAIN UI
   const activeOrders = orders.filter(o => o.status !== "served" && o.status !== "cancelled");
   const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
   const todayRevenue = orders.filter(o => o.paid && o.status !== "cancelled" && (o.paidAt || o.createdAt) >= startOfToday.getTime()).reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
@@ -304,12 +300,12 @@ function StaffAppInner() {
           {!narrow && <div style={{ width: 42, height: 42, background: "rgba(255,255,255,0.2)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>}
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: narrow ? 14 : 16, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>Eat & Park</div>
-            <div style={{ fontSize: 11, opacity: 0.9, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{staffData?.name || "Staff"} · {staffData?.role || "waiter"}</div>
+            <div style={{ fontSize: 11, opacity: 0.9, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{staffData?.name || "Staff"} - {staffData?.role || "waiter"}</div>
           </div>
         </div>
         <div style={{ display: "flex", gap: narrow ? 5 : 8, alignItems: "center", flexShrink: 0 }}>
           <button onClick={() => { const n = lang === "en" ? "hi" : "en"; setLang(n); localStorage.setItem("staff_lang", n); }} title="Language" style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 44, height: 38, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 800 }}>{lang === "en" ? "EN" : "हि"}</button>
-          <button onClick={() => setDarkMode(d => !d)} title="Toggle theme" style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 38, height: 38, borderRadius: 8, fontSize: 16, cursor: "pointer" }}>{darkMode ? "☀️" : "🌙"}</button>
+          <button onClick={() => setDarkMode(d => !d)} title="Toggle theme" style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 38, height: 38, borderRadius: 8, fontSize: 16, cursor: "pointer" }}>{darkMode ? "Light" : "Dark"}</button>
           <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: narrow ? "9px 10px" : "9px 16px", borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Logout</button>
         </div>
       </div>
@@ -317,11 +313,11 @@ function StaffAppInner() {
       {/* TABS */}
       <div style={{ background: C.card, borderBottom: `1px solid ${C.line}`, padding: "0 16px", display: "flex", gap: 4, overflowX: "auto" }}>
         {[
-          { id: "tables", label: "🍽️ " + t("tables") },
-          { id: "orders", label: "📋 " + t("orders") + (newCount ? ` 🔴${newCount}` : "") },
-          { id: "kot", label: "🍳 " + t("kitchen") + (newCount ? ` 🔴${newCount}` : "") },
-          { id: "dashboard", label: "📊 " + t("dashboard") },
-          { id: "stock", label: "📦 Stock" },
+          { id: "tables", label: t("tables") },
+          { id: "orders", label: t("orders") + (newCount ? ` (${newCount})` : "") },
+          { id: "kot", label: t("kitchen") + (newCount ? ` (${newCount})` : "") },
+          { id: "dashboard", label: t("dashboard") },
+          { id: "stock", label: "Stock" },
         ].map((tab) => (
           <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSelectedTable(null); setOrdersRange(null); }} style={{ padding: narrow ? "13px 14px" : "15px 20px", border: "none", background: "transparent", color: activeTab === tab.id ? C.red : C.gray, fontWeight: 700, fontSize: 13, cursor: "pointer", borderBottom: activeTab === tab.id ? `3px solid ${C.red}` : "3px solid transparent", whiteSpace: "nowrap" }}>{tab.label}</button>
         ))}
@@ -333,7 +329,7 @@ function StaffAppInner() {
           <TablesView
             C={C}
             orders={orders}
-            onTableClick={(tbl) => { setSelectedTable(tbl); setCart({}); setBillOrder(null); }}
+            onTableClick={(tbl) => { setSelectedTable(tbl); setCart({}); setBillOrder(null); setAddMoreMode(false); }}
             onEditBill={(order) => { setBillOrder(order); setSelectedTable(order.table); setCart({}); setAddMoreMode(false); }}
             onAddMore={(order) => { setBillOrder(order); setSelectedTable(order.table); setCart({}); setAddMoreMode(true); }}
             onMerge={(order) => setTableMerge(order)}
@@ -373,14 +369,12 @@ function StaffAppInner() {
               setActiveTab("orders");
             }}
             onOrderClick={(order) => {
-              // Dine-in order → seedha bill kholo
               if (order.orderType === "dine_in" && order.table) {
                 setBillOrder(order);
                 setSelectedTable(Number(order.table));
                 setCart({});
                 setAddMoreMode(false);
               } else {
-                // Parcel — Orders tab pe dikhao
                 setOrdersFilter("all");
                 setOrdersRange(null);
                 setActiveTab("orders");
@@ -402,7 +396,7 @@ function StaffAppInner() {
                   <div style={{ fontSize: 11, color: C.gray }}>Staff Panel</div>
                 </div>
               </div>
-              <button onClick={() => setSidebarOpen(false)} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.gray }}>✕</button>
+              <button onClick={() => setSidebarOpen(false)} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.gray }}>X</button>
             </div>
 
             <div style={{ background: `linear-gradient(135deg, ${C.red}10 0%, ${C.red}05 100%)`, border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
@@ -412,25 +406,22 @@ function StaffAppInner() {
             </div>
 
             {[
-              { id: "tables", label: "🍽️ Tables", icon: "🍽️" },
-              { id: "orders", label: "📋 Orders", icon: "📋" },
-              { id: "kot", label: "🍳 Kitchen", icon: "🍳" },
-              { id: "dashboard", label: "📊 Dashboard", icon: "📊" },
-              { id: "stock", label: "📦 Stock", icon: "📦" },
+              { id: "tables", label: "Tables" },
+              { id: "orders", label: "Orders" },
+              { id: "kot", label: "Kitchen" },
+              { id: "dashboard", label: "Dashboard" },
+              { id: "stock", label: "Stock" },
             ].map((tab) => (
               <button key={tab.id} onClick={() => { setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.redLight : "transparent", color: activeTab === tab.id ? C.red : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
-                <span style={{ fontSize: 20 }}>{tab.icon}</span>
-                <span>{tab.label.replace(/^\S+\s/, "")}</span>
+                <span>{tab.label}</span>
               </button>
             ))}
 
             <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 16, paddingTop: 16 }}>
               <button onClick={() => { setDarkMode(d => !d); setSidebarOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: "transparent", color: C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", width: "100%", textAlign: "left", fontFamily: "inherit" }}>
-                <span style={{ fontSize: 20 }}>{darkMode ? "☀️" : "🌙"}</span>
                 <span>{darkMode ? "Light Mode" : "Dark Mode"}</span>
               </button>
               <a href="/" style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", color: C.blue, fontWeight: 700, fontSize: 14, textDecoration: "none", borderRadius: 10 }}>
-                <span style={{ fontSize: 20 }}>👤</span>
                 <span>Customer App</span>
               </a>
             </div>
@@ -447,7 +438,6 @@ function StaffAppInner() {
       {tableMerge && <TableMergeModal C={C} primaryOrder={tableMerge} allOrders={orders} onClose={() => setTableMerge(null)} />}
       {splitBillOrder && <SplitBillModal C={C} order={splitBillOrder} onClose={() => setSplitBillOrder(null)} />}
 
-      {/* BILLING MODAL */}
       {selectedTable && (
         <BillingView
           C={C}
@@ -467,9 +457,9 @@ function StaffAppInner() {
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// 🍽️ TABLES VIEW (with search + stats)
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// TABLES VIEW
+// ---------------------------------------------------------------------------
 function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, onMerge, onSplit, onFeedback, search, setSearch, todayRevenue, activeOrders }) {
   const tableData = useMemo(() => {
     const map = {};
@@ -487,7 +477,6 @@ function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, onMerge, o
 
   return (
     <div>
-      {/* STATS */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
         <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -520,11 +509,11 @@ function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, onMerge, o
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.ink }}>Tables</h2>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="🔍 Table number..." style={{ padding: "9px 14px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, outline: "none", width: 180, background: C.card, color: C.ink }} />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search table number..." style={{ padding: "9px 14px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, outline: "none", width: 180, background: C.card, color: C.ink }} />
       </div>
 
       <div style={{ background: C.blueLight, border: `1px solid ${C.blue}`, borderRadius: 10, padding: 10, marginBottom: 12, fontSize: 12, color: C.blue, fontWeight: 700 }}>
-        💡 Tip: Table pe tap karo → waiter assign karo → order lo
+        Tip: Table pe tap karo, waiter assign karo, order lo
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
         {filteredTables.map((tbl) => (
@@ -537,20 +526,20 @@ function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, onMerge, o
               {tbl.order ? (
                 <div style={{ marginTop: 6 }}>
                   <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>#{tbl.order.id?.slice(1, 5).toUpperCase()}</div>
-                  <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{tbl.order.items?.length || 0} items · {inr(tbl.order.finalTotal || 0)}</div>
+                  <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{tbl.order.items?.length || 0} items - {inr(tbl.order.finalTotal || 0)}</div>
                 </div>
               ) : (<div style={{ fontSize: 11, color: C.gray, fontWeight: 700, textTransform: "uppercase", marginTop: 6 }}>Available</div>)}
             </button>
             {tbl.order ? (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 8 }}>
-                <button onClick={(e) => { e.stopPropagation(); onEditBill && onEditBill(tbl.order); }} style={{ padding: "6px", border: "none", borderRadius: 6, background: C.red, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>🧾 Bill</button>
-                <button onClick={(e) => { e.stopPropagation(); onAddMore && onAddMore(tbl.order); }} style={{ padding: "6px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>➕ Add</button>
-                <button onClick={(e) => { e.stopPropagation(); onMerge && onMerge(tbl.order); }} style={{ padding: "6px", border: `1.5px solid ${C.blue}`, borderRadius: 6, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>🔗 Merge</button>
-                <button onClick={(e) => { e.stopPropagation(); onSplit && onSplit(tbl.order); }} style={{ padding: "6px", border: `1.5px solid ${C.amber}`, borderRadius: 6, background: "transparent", color: C.amber, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>✂️ Split</button>
-                <button onClick={(e) => { e.stopPropagation(); onFeedback && onFeedback(tbl.order); }} style={{ padding: "6px", border: `1.5px solid ${C.gray}`, borderRadius: 6, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>⭐ Feedback</button>
+                <button onClick={(e) => { e.stopPropagation(); onEditBill && onEditBill(tbl.order); }} style={{ padding: "6px", border: "none", borderRadius: 6, background: C.red, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Bill</button>
+                <button onClick={(e) => { e.stopPropagation(); onAddMore && onAddMore(tbl.order); }} style={{ padding: "6px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Add</button>
+                <button onClick={(e) => { e.stopPropagation(); onMerge && onMerge(tbl.order); }} style={{ padding: "6px", border: `1.5px solid ${C.blue}`, borderRadius: 6, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Merge</button>
+                <button onClick={(e) => { e.stopPropagation(); onSplit && onSplit(tbl.order); }} style={{ padding: "6px", border: `1.5px solid ${C.amber}`, borderRadius: 6, background: "transparent", color: C.amber, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Split</button>
+                <button onClick={(e) => { e.stopPropagation(); onFeedback && onFeedback(tbl.order); }} style={{ padding: "6px", border: `1.5px solid ${C.gray}`, borderRadius: 6, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>Feedback</button>
               </div>
             ) : (
-              <button onClick={(e) => { e.stopPropagation(); onTableClick(tbl.table); }} style={{ marginTop: 8, padding: "7px 4px", border: "none", borderRadius: 6, background: C.ink, color: "#fff", fontWeight: 800, fontSize: 10, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>➕ New Order</button>
+              <button onClick={(e) => { e.stopPropagation(); onTableClick(tbl.table); }} style={{ marginTop: 8, padding: "7px 4px", border: "none", borderRadius: 6, background: C.ink, color: "#fff", fontWeight: 800, fontSize: 10, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>New Order</button>
             )}
           </div>
         ))}
@@ -559,11 +548,10 @@ function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, onMerge, o
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// 📋 ORDERS VIEW
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// ORDERS VIEW
+// ---------------------------------------------------------------------------
 function OrdersView({ C, orders, menu, waiterName, isOwner, filter, setFilter, rangeStart, rangeEnd }) {
-  // Range bounds — agar dashboard se pass nahi hua to default = today
   const defaultStart = useMemo(() => {
     const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime();
   }, []);
@@ -585,7 +573,7 @@ function OrdersView({ C, orders, menu, waiterName, isOwner, filter, setFilter, r
     const next = STATUS_FLOW[idx + 1];
     try {
       await updateDoc(doc(db, "orders", order.id), { status: next });
-    } catch (e) { alert("❌ " + e.message); }
+    } catch (e) { alert("Error: " + e.message); }
   };
 
   const markPaid = async (order) => {
@@ -596,7 +584,7 @@ function OrdersView({ C, orders, menu, waiterName, isOwner, filter, setFilter, r
         paidAt: Date.now(),
         paidBy: waiterName || "Staff",
       });
-    } catch (e) { alert("❌ " + e.message); }
+    } catch (e) { alert("Error: " + e.message); }
   };
 
   const filterLabel = filter.charAt(0).toUpperCase() + filter.slice(1);
@@ -620,35 +608,35 @@ function OrdersView({ C, orders, menu, waiterName, isOwner, filter, setFilter, r
           return (
             <div key={o.id} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>{o.orderType === "parcel" ? "🛍️ Parcel" : `🍽️ Table ${o.table}`}</div>
-                <span style={{ background: stBg, color: stColor, padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", gap: 4 }}>{st.emoji} {st.label}</span>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>{o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`}</div>
+                <span style={{ background: stBg, color: stColor, padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", gap: 4 }}>{st.label}</span>
               </div>
               <div style={{ fontSize: 12, color: C.gray, marginBottom: 10, display: "flex", gap: 12 }}>
                 <span>#{o.id?.slice(1, 5).toUpperCase()}</span>
                 <span>{timeAgo(o.createdAt)} ago</span>
-                {o.waiter && <span>🧑‍🍳 {o.waiter}</span>}
+                {o.waiter && <span>{o.waiter}</span>}
               </div>
               <div style={{ fontSize: 13, color: C.ink, lineHeight: 1.6, marginBottom: 10 }}>
-                {(o.items || []).map((it, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span>{it.qty}× {it.name}</span><span style={{ color: C.gray, fontFamily: "monospace" }}>{inr(it.price * it.qty)}</span></div>))}
+                {(o.items || []).map((it, i) => (<div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span>{it.qty}x {it.name}</span><span style={{ color: C.gray, fontFamily: "monospace" }}>{inr(it.price * it.qty)}</span></div>))}
               </div>
               <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 10, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: C.gray, fontWeight: 600 }}>Total</span>
                 <span style={{ fontSize: 18, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</span>
               </div>
-              {o.paid && <div style={{ background: C.greenLight, color: C.green, padding: "6px 10px", borderRadius: 6, fontSize: 11, fontWeight: 800, marginBottom: 10, textAlign: "center" }}>✅ PAID</div>}
+              {o.paid && <div style={{ background: C.greenLight, color: C.green, padding: "6px 10px", borderRadius: 6, fontSize: 11, fontWeight: 800, marginBottom: 10, textAlign: "center" }}>PAID</div>}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                 {o.status !== "served" && (
                   <button onClick={() => advanceOrder(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: stColor, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
-                    {o.status === "new" ? "👨‍🍳 Start" : o.status === "preparing" ? "✅ Ready" : "🍽️ Serve"}
+                    {o.status === "new" ? "Start" : o.status === "preparing" ? "Ready" : "Serve"}
                   </button>
                 )}
                 {!o.paid && (
-                  <button onClick={() => markPaid(o)} style={{ padding: "9px", border: `1.5px solid ${C.green}`, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>💰 Paid</button>
+                  <button onClick={() => markPaid(o)} style={{ padding: "9px", border: `1.5px solid ${C.green}`, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Paid</button>
                 )}
-                <button onClick={() => printKOT(o)} style={{ padding: "9px", border: `1.5px solid ${C.blue}`, borderRadius: 8, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>🍳 KOT</button>
-                <button onClick={() => printBill(o)} style={{ padding: "9px", border: `1.5px solid ${C.red}`, borderRadius: 8, background: "transparent", color: C.red, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>🖨️ Bill</button>
-                <button onClick={() => whatsappBill(o)} style={{ padding: "9px", border: `1.5px solid ${C.green}`, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>💬 WhatsApp</button>
-                <button onClick={async () => { if (!isOwner) { alert("Sirf owner cancel kar sakta hai"); return; } if (window.confirm("Cancel order?")) { try { await updateDoc(doc(db, "orders", o.id), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); logAudit("cancel_order", { orderId: o.id, table: o.table || "", total: o.finalTotal || 0 }); } catch (e) { alert(e.message); } } }} style={{ padding: "9px", border: `1.5px solid ${C.gray}`, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>❌ Cancel Order</button>
+                <button onClick={() => printKOT(o)} style={{ padding: "9px", border: `1.5px solid ${C.blue}`, borderRadius: 8, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>KOT</button>
+                <button onClick={() => printBill(o)} style={{ padding: "9px", border: `1.5px solid ${C.red}`, borderRadius: 8, background: "transparent", color: C.red, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Bill</button>
+                <button onClick={() => whatsappBill(o)} style={{ padding: "9px", border: `1.5px solid ${C.green}`, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>WhatsApp</button>
+                <button onClick={async () => { if (!isOwner) { alert("Sirf owner cancel kar sakta hai"); return; } if (window.confirm("Cancel order?")) { try { await updateDoc(doc(db, "orders", o.id), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); logAudit("cancel_order", { orderId: o.id, table: o.table || "", total: o.finalTotal || 0 }); } catch (e) { alert(e.message); } } }} style={{ padding: "9px", border: `1.5px solid ${C.gray}`, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>Cancel Order</button>
               </div>
             </div>
           );
@@ -659,9 +647,9 @@ function OrdersView({ C, orders, menu, waiterName, isOwner, filter, setFilter, r
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// 🍳 KITCHEN VIEW
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// KITCHEN VIEW
+// ---------------------------------------------------------------------------
 function KOTView({ C, orders }) {
   const kotOrders = orders.filter(o => o.status === "new" || o.status === "preparing");
   const [, setTick] = useState(0);
@@ -683,13 +671,13 @@ function KOTView({ C, orders }) {
           return (
             <div key={o.id} style={{ background: isNew ? C.redLight : C.amberLight, border: `2px solid ${late ? C.red : isNew ? C.red : C.amber}`, borderRadius: 12, padding: 16, animation: late ? "lateBlink 1s infinite" : "none" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ fontWeight: 800, fontSize: 17, color: C.ink }}>{o.orderType === "parcel" ? "🛍️ Parcel" : `🍽️ Table ${o.table}`}</div>
-                <span style={{ fontSize: 12, color: late ? C.red : C.gray, fontWeight: 800 }}>{late ? "⏰ " : "⏱️ "}{mins}m</span>
+                <div style={{ fontWeight: 800, fontSize: 17, color: C.ink }}>{o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`}</div>
+                <span style={{ fontSize: 12, color: late ? C.red : C.gray, fontWeight: 800 }}>{mins}m</span>
               </div>
-              {(o.items || []).map((it, i) => (<div key={i} style={{ fontSize: 15, fontWeight: 700, padding: "6px 0", borderBottom: `1px dashed ${C.line}`, color: C.ink }}>{it.qty}× {it.name} {it.portion ? <span style={{ color: C.gray, fontWeight: 500 }}>({it.portion})</span> : ""}</div>))}
+              {(o.items || []).map((it, i) => (<div key={i} style={{ fontSize: 15, fontWeight: 700, padding: "6px 0", borderBottom: `1px dashed ${C.line}`, color: C.ink }}>{it.qty}x {it.name} {it.portion ? <span style={{ color: C.gray, fontWeight: 500 }}>({it.portion})</span> : ""}</div>))}
               <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-                <button onClick={() => advanceOrder(o)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 8, background: isNew ? C.red : C.amber, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>{isNew ? "👨‍🍳 Start Cooking" : "✅ Mark Ready"}</button>
-                <button onClick={() => printKOT(o)} style={{ padding: "10px 14px", border: `1.5px solid ${C.line}`, borderRadius: 8, background: "transparent", color: C.ink, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>🖨️</button>
+                <button onClick={() => advanceOrder(o)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 8, background: isNew ? C.red : C.amber, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>{isNew ? "Start Cooking" : "Mark Ready"}</button>
+                <button onClick={() => printKOT(o)} style={{ padding: "10px 14px", border: `1.5px solid ${C.line}`, borderRadius: 8, background: "transparent", color: C.ink, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Print</button>
               </div>
             </div>
           );
@@ -700,16 +688,15 @@ function KOTView({ C, orders }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// 📊 DASHBOARD VIEW
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// DASHBOARD VIEW
+// ---------------------------------------------------------------------------
 function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
   const todayStr = new Date().toISOString().slice(0, 10);
   const [range, setRange] = useState("today");
   const [customDate, setCustomDate] = useState(todayStr);
 
   const filtered = useMemo(() => {
-    const now = new Date();
     if (range === "today") {
       const s = new Date(); s.setHours(0, 0, 0, 0);
       return orders.filter(o => o.createdAt >= s.getTime());
@@ -763,15 +750,14 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.ink }}>📊 Dashboard</h2>
-          <div style={{ fontSize: 12, color: C.gray, marginTop: 2, fontWeight: 700 }}>{rangeLabel} · {todayTotal} orders</div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.ink }}>Dashboard</h2>
+          <div style={{ fontSize: 12, color: C.gray, marginTop: 2, fontWeight: 700 }}>{rangeLabel} - {todayTotal} orders</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <input type="date" value={customDate} onChange={(e) => { setCustomDate(e.target.value); setRange("custom"); }} style={{ padding: "8px 12px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, background: C.card, color: C.ink, fontWeight: 700, outline: "none" }} />
         </div>
       </div>
 
-      {/* RANGE BUTTONS */}
       <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
         {[
           { id: "today", label: "Today" },
@@ -784,7 +770,6 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
         ))}
       </div>
 
-      {/* STATS CARDS — clickable */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
         {[
           { label: "Revenue", value: inr(todayRevenue), color: C.green, icon: "💰", click: null },
@@ -813,16 +798,15 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
               <span style={{ fontSize: 26 }}>{s.icon}</span>
             </div>
             <div style={{ fontSize: 26, fontWeight: 900, color: s.color, fontFamily: "monospace" }}>{s.value}</div>
-            {s.click && <div style={{ fontSize: 10, color: C.gray, marginTop: 6, fontWeight: 700 }}>👆 Tap for details</div>}
+            {s.click && <div style={{ fontSize: 10, color: C.gray, marginTop: 6, fontWeight: 700 }}>Tap for details</div>}
           </div>
         ))}
       </div>
 
-      {/* ORDER STATUS — CLICKABLE cards */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>Order Status</div>
-          <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>👆 Tap any card to see orders</div>
+          <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>Tap any card to see orders</div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {STATUS_FLOW.map(s => {
@@ -849,17 +833,16 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
                 <div style={{ fontSize: 28, marginBottom: 6 }}>{st.emoji}</div>
                 <div style={{ fontSize: 24, fontWeight: 900, color }}>{count}</div>
                 <div style={{ fontSize: 11, color: C.gray, fontWeight: 700, textTransform: "uppercase", marginTop: 4 }}>{st.label}</div>
-                {count > 0 && <div style={{ fontSize: 10, color, fontWeight: 800, marginTop: 6 }}>Tap →</div>}
+                {count > 0 && <div style={{ fontSize: 10, color, fontWeight: 800, marginTop: 6 }}>Tap</div>}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* REPORTS CHART */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>📈 Orders by Hour — {rangeLabel}</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>Orders by Hour - {rangeLabel}</div>
         </div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 120 }}>
           {Array.from({ length: 24 }, (_, h) => {
@@ -869,7 +852,7 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
             return (
               <div key={h} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                 <div style={{ width: "100%", height: 100, display: "flex", alignItems: "flex-end" }}>
-                  <div title={`${h}:00 — ${count} orders`} style={{ width: "100%", height: `${height}%`, minHeight: count > 0 ? 4 : 0, background: `linear-gradient(180deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 3, transition: "all 0.3s" }} />
+                  <div title={`${h}:00 - ${count} orders`} style={{ width: "100%", height: `${height}%`, minHeight: count > 0 ? 4 : 0, background: `linear-gradient(180deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 3, transition: "all 0.3s" }} />
                 </div>
                 {h % 4 === 0 && <div style={{ fontSize: 9, color: C.gray, fontWeight: 700 }}>{h}</div>}
               </div>
@@ -881,9 +864,8 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
       <ReportsExtra C={C} orders={filtered} rangeLabel={rangeLabel} />
       <DueLedger C={C} orders={orders} />
 
-      {/* STAFF PERFORMANCE */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginBottom: 16 }}>🧑‍🍳 Staff Performance — {rangeLabel}</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginBottom: 16 }}>Staff Performance - {rangeLabel}</div>
         {(() => {
           const byWaiter = {};
           filtered.forEach(o => { const w = o.waiter || "Staff"; byWaiter[w] = (byWaiter[w] || 0) + (Number(o.finalTotal) || 0); });
@@ -904,10 +886,9 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
         })()}
       </div>
 
-      {/* RECENT ORDERS */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>📋 Orders — {rangeLabel}</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>Orders - {rangeLabel}</div>
           <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>{filtered.length} total</div>
         </div>
 
@@ -949,22 +930,22 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
                       <span style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`}</span>
-                      <span style={{ background: bg, color, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>{st.emoji} {st.label}</span>
-                      {o.paid && <span style={{ background: C.greenLight, color: C.green, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>✅ PAID</span>}
+                      <span style={{ background: bg, color, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>{st.label}</span>
+                      {o.paid && <span style={{ background: C.greenLight, color: C.green, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>PAID</span>}
                     </div>
                     <div style={{ fontSize: 11, color: C.gray, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      #{(o.id || "").slice(1, 5).toUpperCase()} · {timeAgo(o.createdAt)} ago · {(o.items || []).length} items
-                      {o.waiter ? ` · 🧑‍🍳 ${o.waiter}` : ""}
+                      #{(o.id || "").slice(1, 5).toUpperCase()} - {timeAgo(o.createdAt)} ago - {(o.items || []).length} items
+                      {o.waiter ? ` - ${o.waiter}` : ""}
                     </div>
                     <div style={{ fontSize: 11, color: C.gray, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {(o.items || []).slice(0, 3).map(it => `${it.qty}× ${it.name}`).join(", ")}
+                      {(o.items || []).slice(0, 3).map(it => `${it.qty}x ${it.name}`).join(", ")}
                       {(o.items || []).length > 3 ? ` +${o.items.length - 3} more` : ""}
                     </div>
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
                   <div style={{ fontSize: 16, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</div>
-                  <div style={{ fontSize: 10, color: C.gray, marginTop: 3, fontWeight: 700 }}>Tap →</div>
+                  <div style={{ fontSize: 10, color: C.gray, marginTop: 3, fontWeight: 700 }}>Tap</div>
                 </div>
               </button>
             );
@@ -975,12 +956,12 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// 🖨️ KOT PRINT
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// KOT PRINT
+// ---------------------------------------------------------------------------
 function printKOT(order) {
   try {
-    const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left;font-size:14px">${it.qty} × ${it.name}${it.portion ? ` (${it.portion})` : ""}</td></tr>`).join("");
+    const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left;font-size:14px">${it.qty} x ${it.name}${it.portion ? ` (${it.portion})` : ""}</td></tr>`).join("");
     const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
     const iframe = document.createElement("iframe");
     iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
@@ -989,7 +970,7 @@ function printKOT(order) {
     setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 30000);
     w.document.open();
     w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:10px}h2,h3{text-align:center;margin:4px 0;font-weight:900}h2{font-size:26px}h3{font-size:18px}.row{border-bottom:1px dashed #000;padding:6px 0}.c{text-align:center;font-size:12px;font-weight:700}.big{font-size:16px;font-weight:800}</style></head><body>
-<h2>🍳 KOT</h2>
+<h2>KOT</h2>
 <h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + order.table}</h3>
 <div class="c">${now}</div>
 <div class="c">#${order.id.slice(1, 9).toUpperCase()}</div>
@@ -999,16 +980,16 @@ ${order.waiter ? `<div class="c">Waiter: ${order.waiter}</div>` : ""}
 <div style="border-top:2px solid #000;margin:10px 0"></div>
 <div class="c big">Total Items: ${(order.items || []).reduce((s, it) => s + it.qty, 0)}</div>
 ${order.notes ? `<div class="c" style="margin-top:8px;border-top:1px dashed #000;padding-top:6px;font-size:12px">Note: ${order.notes}</div>` : ""}
-<div class="c" style="margin-top:14px;font-size:11px">— Kitchen Copy —</div>
+<div class="c" style="margin-top:14px;font-size:11px">- Kitchen Copy -</div>
 </body></html>`);
     w.document.close();
     setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
   } catch (e) { alert("Print error: " + e.message); }
 }
 
-// ═══════════════════════════════════════════════════════
-// ⭐ CUSTOMER FEEDBACK MODAL
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// CUSTOMER FEEDBACK MODAL
+// ---------------------------------------------------------------------------
 function FeedbackModal({ C, order, onClose }) {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
@@ -1026,9 +1007,9 @@ function FeedbackModal({ C, order, onClose }) {
         waiter: order.waiter || "Staff",
         createdAt: Date.now(),
       });
-      alert("✅ Feedback diya! Dhanyawaad.");
+      alert("Feedback diya! Dhanyawaad.");
       onClose();
-    } catch (e) { alert("❌ " + e.message); } finally { setSaving(false); }
+    } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
   };
 
   return (
@@ -1036,7 +1017,7 @@ function FeedbackModal({ C, order, onClose }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 24, width: "100%", maxWidth: 380, textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <div style={{ fontSize: 48, marginBottom: 8 }}>⭐</div>
         <div style={{ fontSize: 20, fontWeight: 800, color: C.ink, marginBottom: 4 }}>Customer Feedback</div>
-        <div style={{ fontSize: 12, color: C.gray, marginBottom: 20 }}>Table {order.table} · #{order.id.slice(1, 5).toUpperCase()}</div>
+        <div style={{ fontSize: 12, color: C.gray, marginBottom: 20 }}>Table {order.table} - #{order.id.slice(1, 5).toUpperCase()}</div>
         <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 16 }}>
           {[1, 2, 3, 4, 5].map(n => (
             <button key={n} onClick={() => setRating(n)} style={{ background: "transparent", border: "none", fontSize: 36, cursor: "pointer", filter: rating >= n ? "none" : "grayscale(1) opacity(0.4)", transition: "all 0.15s" }}>⭐</button>
@@ -1045,16 +1026,16 @@ function FeedbackModal({ C, order, onClose }) {
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Comment (optional)..." rows={2} style={{ width: "100%", padding: 10, border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, boxSizing: "border-box", marginBottom: 16, background: C.card, color: C.ink, resize: "none", outline: "none" }} />
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${C.line}`, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Skip</button>
-          <button onClick={submit} disabled={saving || !rating} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: saving || !rating ? "not-allowed" : "pointer", opacity: saving || !rating ? 0.5 : 1 }}>{saving ? "⏳" : "Submit"}</button>
+          <button onClick={submit} disabled={saving || !rating} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: saving || !rating ? "not-allowed" : "pointer", opacity: saving || !rating ? 0.5 : 1 }}>{saving ? "..." : "Submit"}</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// 🔗 TABLE MERGE MODAL
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// TABLE MERGE MODAL
+// ---------------------------------------------------------------------------
 function TableMergeModal({ C, primaryOrder, allOrders, onClose }) {
   const [selectedId, setSelectedId] = useState("");
   const otherOrders = allOrders.filter(o => o.id !== primaryOrder.id && o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled");
@@ -1072,14 +1053,14 @@ function TableMergeModal({ C, primaryOrder, allOrders, onClose }) {
       };
       await updateDoc(doc(db, "orders", primaryOrder.id), merged);
       await updateDoc(doc(db, "orders", other.id), { status: "cancelled", cancelledAt: Date.now(), cancelledReason: "Merged into " + primaryOrder.table });
-      alert("✅ Merged!");
+      alert("Merged!");
       onClose();
-    } catch (e) { alert("❌ " + e.message); }
+    } catch (e) { alert("Error: " + e.message); }
   };
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 24, width: "100%", maxWidth: 400 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: C.ink, marginBottom: 8 }}>🔗 Merge Table</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: C.ink, marginBottom: 8 }}>Merge Table</div>
         <div style={{ fontSize: 12, color: C.gray, marginBottom: 16 }}>Is order (Table {primaryOrder.table}) me dusra table merge karo</div>
         {otherOrders.length === 0 && <div style={{ padding: 20, textAlign: "center", color: C.gray }}>Koi aur running order nahi</div>}
         {otherOrders.map(o => (
@@ -1090,16 +1071,16 @@ function TableMergeModal({ C, primaryOrder, allOrders, onClose }) {
         ))}
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${C.line}`, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-          <button onClick={merge} disabled={!selectedId} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: !selectedId ? "not-allowed" : "pointer", opacity: !selectedId ? 0.5 : 1 }}>🔗 Merge</button>
+          <button onClick={merge} disabled={!selectedId} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: !selectedId ? "not-allowed" : "pointer", opacity: !selectedId ? 0.5 : 1 }}>Merge</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// 🍽️ SPLIT BILL MODAL
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// SPLIT BILL MODAL
+// ---------------------------------------------------------------------------
 function SplitBillModal({ C, order, onClose }) {
   const items = order.items || [];
   const [split1, setSplit1] = useState({});
@@ -1109,11 +1090,11 @@ function SplitBillModal({ C, order, onClose }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 24, width: "100%", maxWidth: 450, maxHeight: "90vh", overflowY: "auto" }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: C.ink, marginBottom: 8 }}>✂️ Split Bill</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: C.ink, marginBottom: 8 }}>Split Bill</div>
         <div style={{ fontSize: 12, color: C.gray, marginBottom: 16 }}>Jo items pehle bande ko dena hai unpe tick karo</div>
         {items.map((it, i) => (
           <button key={i} onClick={() => toggleItem(i)} style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: 10, marginBottom: 6, border: `2px solid ${split1[i] ? C.blue : C.line}`, borderRadius: 8, background: split1[i] ? C.blueLight : "transparent", cursor: "pointer", fontFamily: "inherit" }}>
-            <span style={{ fontWeight: 700, color: C.ink, textAlign: "left" }}>{split1[i] ? "☑️" : "☐"} {it.qty}× {it.name}</span>
+            <span style={{ fontWeight: 700, color: C.ink, textAlign: "left" }}>{split1[i] ? "[x]" : "[ ]"} {it.qty}x {it.name}</span>
             <span style={{ color: C.red, fontWeight: 800 }}>{inr(it.price * it.qty)}</span>
           </button>
         ))}
@@ -1123,16 +1104,16 @@ function SplitBillModal({ C, order, onClose }) {
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${C.line}`, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Close</button>
-          <button onClick={() => { if (!Object.values(split1).some(Boolean)) { alert("Kam se kam 1 item tick karo"); return; } printSplitBills(order, split1); onClose(); }} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.blue, color: "#fff", fontWeight: 800, cursor: "pointer" }}>🖨️ Print Both</button>
+          <button onClick={() => { if (!Object.values(split1).some(Boolean)) { alert("Kam se kam 1 item tick karo"); return; } printSplitBills(order, split1); onClose(); }} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.blue, color: "#fff", fontWeight: 800, cursor: "pointer" }}>Print Both</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// 🧾 BILLING VIEW
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// BILLING VIEW
+// ---------------------------------------------------------------------------
 function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existingOrder, addMoreMode, onBack, isOwner }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
@@ -1140,7 +1121,6 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
   const [runningOrders, setRunningOrders] = useState([]);
   const [discount, setDiscount] = useState(0);
   const [gstRate, setGstRate] = useState(0);
-  const [editPrice, setEditPrice] = useState(null);
   const [payMode, setPayMode] = useState("cash");
   const [isMobile, setIsMobile] = useState(window.innerWidth < 800);
   useEffect(() => {
@@ -1149,7 +1129,7 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
     return () => window.removeEventListener("resize", f);
   }, []);
 
-  // 🔥 existingOrder ke items, discount, GST, payMode ko restore karo
+  // Restore existing order's items, discount, GST, payMode
   useEffect(() => {
     if (existingOrder) {
       setDiscount(existingOrder.billDiscountPct || 0);
@@ -1173,7 +1153,7 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
 
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
 
-  // Cart me item price resolve karo — menu se pehle, warna existing order se
+  // Resolve item from menu or existing order
   const resolveItem = (id) => {
     const m = menu.find(x => x.id === id);
     if (m) return m;
@@ -1192,7 +1172,7 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
 
   const setQty = (id, q) => { setCart(prev => { const next = { ...prev }; if (q <= 0) delete next[id]; else next[id] = q; return next; }); };
 
-  // ═══ Unified cart → bill saver (returns computed totals) ═══
+  // Unified cart -> bill saver
   const applyCartChanges = async () => {
     if (!existingOrder) throw new Error("No existing order to update");
     const existing = existingOrder.items || [];
@@ -1212,7 +1192,6 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
           kotNumber: existingMap[id] ? (ex?.kotNumber || 1) : nextKotNo,
         });
       } else if (ex) {
-        // Menu item deleted/unavailable — use saved data
         finalItems.push({
           itemId: id, name: ex.name, portion: ex.portion || "",
           price: ex.price, qty,
@@ -1245,7 +1224,7 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
   const handlePlaceOrder = async () => {
     if (cartItems.length === 0 || placing) return;
 
-    // ═══ RUNNING ORDER MODE ═══
+    // RUNNING ORDER MODE
     if (existingOrder && addMoreMode) {
       setPlacing(true);
       try {
@@ -1266,13 +1245,13 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
           lastKotAt: Date.now(),
         });
         printKOT({ ...base, items: newItems, kots: [runKot] });
-        alert(`✅ KOT #${nextNo} added & printing...`);
+        alert(`KOT #${nextNo} added & printing...`);
         onBack();
-      } catch (e) { alert("❌ " + e.message); } finally { setPlacing(false); }
+      } catch (e) { alert("Error: " + e.message); } finally { setPlacing(false); }
       return;
     }
 
-    // ═══ NEW ORDER MODE ═══
+    // NEW ORDER MODE
     setPlacing(true);
     try {
       const items = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty, kotNumber: 1 }; });
@@ -1294,23 +1273,23 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
       };
       await setDoc(doc(db, "orders", orderId), order);
       printKOT(order);
-      alert("✅ Order placed! KOT printing...");
+      alert("Order placed! KOT printing...");
       onBack();
-    } catch (e) { alert("❌ " + e.message); } finally { setPlacing(false); }
+    } catch (e) { alert("Error: " + e.message); } finally { setPlacing(false); }
   };
 
-  // 💾 SAVE BILL — cart ke saare edits ko persist karo
+  // Save bill - persist all cart edits
   const handleSaveBill = async () => {
     if (!existingOrder || addMoreMode || placing) return;
     setPlacing(true);
     try {
       await applyCartChanges();
-      alert("✅ Bill saved!");
+      alert("Bill saved!");
       onBack();
-    } catch (e) { alert("❌ " + e.message); } finally { setPlacing(false); }
+    } catch (e) { alert("Error: " + e.message); } finally { setPlacing(false); }
   };
 
-  // ✅ MARK PAID + PRINT — pehle cart changes save, phir paid
+  // Mark paid + print - saves cart changes first
   const handlePaidPrint = async () => {
     if (!existingOrder || addMoreMode || placing) return;
     setPlacing(true);
@@ -1331,7 +1310,7 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
         });
         logAudit("due_created", { orderId: existingOrder.id, total: applied.finalTotal, name: dn || "" });
         printBill({ ...existingOrder, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: "due", paid: false });
-        alert("📒 Due me save ho gaya");
+        alert("Due me save ho gaya");
         onBack();
         return;
       }
@@ -1340,12 +1319,12 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
         paid: true, paymentStatus: "paid", paidAt: Date.now(),
       });
       printBill({ ...existingOrder, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: true });
-      alert("✅ Paid & Bill printing...");
+      alert("Paid & Bill printing...");
       onBack();
-    } catch (e) { alert("❌ " + e.message); } finally { setPlacing(false); }
+    } catch (e) { alert("Error: " + e.message); } finally { setPlacing(false); }
   };
 
-  // Running KOT me items add karo (from banner)
+  // Add running items (from banner)
   const addRunningItems = async (orderId) => {
     if (cartItems.length === 0) return;
     try {
@@ -1367,34 +1346,34 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
         lastKotAt: Date.now(),
       });
       printKOT({ ...baseOrder, items: newItems, kots: [runKot] });
-      alert(`✅ KOT #${nextNo} added & printing...`);
+      alert(`KOT #${nextNo} added & printing...`);
       onBack();
-    } catch (e) { alert("❌ " + e.message); }
+    } catch (e) { alert("Error: " + e.message); }
   };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 100, display: "flex", flexDirection: "column" }}>
       <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: "9px 16px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>← Back</button>
+        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: "9px 16px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Back</button>
         <div style={{ fontWeight: 800, fontSize: 16 }}>
           {existingOrder
-            ? (addMoreMode ? `➕ Add to Table ${table}` : `🧾 Bill · Table ${table} · ${existingItems.length} items`)
-            : `🍽️ New Order · Table ${table}`}
-          {existingOrder && ` · Total ₹${existingSubtotal}`}
+            ? (addMoreMode ? `Add to Table ${table}` : `Bill - Table ${table} - ${existingItems.length} items`)
+            : `New Order - Table ${table}`}
+          {existingOrder && ` - Total ${inr(existingSubtotal)}`}
         </div>
         <div style={{ width: 60 }} />
       </div>
 
       {runningOrders.length > 0 && !existingOrder && (
         <div style={{ background: C.amberLight, padding: "10px 16px", borderBottom: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <div style={{ fontSize: 13, color: C.ink, fontWeight: 700 }}>⚠️ Table {table} already has {runningOrders.length} running order(s)</div>
-          <button onClick={() => addRunningItems(runningOrders[0].id)} disabled={cartItems.length === 0} style={{ background: cartItems.length === 0 ? C.line : C.blue, color: "#fff", border: "none", padding: "8px 14px", borderRadius: 6, fontWeight: 800, fontSize: 12, cursor: cartItems.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit" }}>➕ Add to Running KOT</button>
+          <div style={{ fontSize: 13, color: C.ink, fontWeight: 700 }}>Warning: Table {table} already has {runningOrders.length} running order(s)</div>
+          <button onClick={() => addRunningItems(runningOrders[0].id)} disabled={cartItems.length === 0} style={{ background: cartItems.length === 0 ? C.line : C.blue, color: "#fff", border: "none", padding: "8px 14px", borderRadius: 6, fontWeight: 800, fontSize: 12, cursor: cartItems.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Add to Running KOT</button>
         </div>
       )}
 
       <div style={{ flex: 1, display: isMobile ? "flex" : "grid", flexDirection: "column", gridTemplateColumns: "1fr 380px", gap: 12, overflow: isMobile ? "auto" : "hidden", padding: 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, overflow: "hidden", height: isMobile ? "55vh" : undefined, flexShrink: 0 }}>
-          <input placeholder="🔍 Search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ padding: "11px 16px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink }} />
+          <input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ padding: "11px 16px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink }} />
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
             {categories.map((c) => (
               <button key={c} onClick={() => setCategory(c)} style={{ padding: "7px 16px", borderRadius: 20, border: `1px solid ${category === c ? C.red : C.line}`, background: category === c ? C.red : C.card, color: category === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit" }}>{c}</button>
@@ -1406,7 +1385,7 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
               return (
                 <button key={m.id} onClick={() => setQty(m.id, q + 1)} style={{ textAlign: "left", padding: 12, borderRadius: 10, border: `1.5px solid ${q > 0 ? C.green : C.line}`, background: C.card, cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: 68, transition: "all 0.15s", color: C.ink }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, marginBottom: 6 }}>{m.name}</div>
-                  <div style={{ fontSize: 14, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>₹{m.price}</div>
+                  <div style={{ fontSize: 14, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(m.price)}</div>
                   {q > 0 && <span style={{ position: "absolute", top: 8, right: 8, background: C.green, color: "#fff", borderRadius: 10, padding: "2px 9px", fontSize: 11, fontWeight: 800 }}>{q}</span>}
                 </button>
               );
@@ -1421,7 +1400,7 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
         </div>
 
         <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0, minHeight: isMobile ? 320 : undefined }}>
-          <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.line}`, fontWeight: 800, fontSize: 15, color: C.ink }}>🛒 Cart</div>
+          <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.line}`, fontWeight: 800, fontSize: 15, color: C.ink }}>Cart</div>
           <div style={{ flex: 1, overflowY: "auto" }}>
             {cartItems.length === 0 && <div style={{ textAlign: "center", padding: 60, color: C.gray, fontSize: 13 }}>Menu se item tap karo</div>}
             {cartItems.map(([id, q]) => {
@@ -1435,21 +1414,20 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
                     <span style={{ fontSize: 11, fontWeight: 700, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: "0 1 auto", minWidth: 0 }}>{m.name}</span>
                     {!addMoreMode && existingQty > 0 && <span style={{ background: C.blue, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>R{existingQty}</span>}
                     {!addMoreMode && existingQty === 0 && <span style={{ background: C.green, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>NEW</span>}
-                    <span style={{ fontSize: 10, color: C.gray, fontFamily: "monospace", flexShrink: 0 }}>₹{m.price}</span>
+                    <span style={{ fontSize: 10, color: C.gray, fontFamily: "monospace", flexShrink: 0 }}>{inr(m.price)}</span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", border: `1px solid ${C.red}`, borderRadius: 4, overflow: "hidden", height: 24 }}>
-                    <button onClick={() => setQty(id, q - 1)} style={{ width: 22, height: 22, border: "none", background: C.redLight, color: C.red, fontSize: 13, fontWeight: 900, cursor: "pointer", padding: 0 }}>−</button>
+                    <button onClick={() => setQty(id, q - 1)} style={{ width: 22, height: 22, border: "none", background: C.redLight, color: C.red, fontSize: 13, fontWeight: 900, cursor: "pointer", padding: 0 }}>-</button>
                     <span style={{ width: 24, textAlign: "center", fontWeight: 900, fontSize: 11, color: C.red }}>{q}</span>
                     <button onClick={() => setQty(id, q + 1)} style={{ width: 22, height: 22, border: "none", background: C.red, color: "#fff", fontSize: 13, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
                   </div>
-                  <div style={{ width: 52, textAlign: "right", fontWeight: 800, fontSize: 11, color: C.red, fontFamily: "monospace", flexShrink: 0 }}>₹{m.price * q}</div>
-                  <button onClick={() => setQty(id, 0)} style={{ background: "transparent", border: "none", color: C.gray, fontSize: 11, cursor: "pointer", padding: 2, flexShrink: 0 }}>✕</button>
+                  <div style={{ width: 52, textAlign: "right", fontWeight: 800, fontSize: 11, color: C.red, fontFamily: "monospace", flexShrink: 0 }}>{inr(m.price * q)}</div>
+                  <button onClick={() => setQty(id, 0)} style={{ background: "transparent", border: "none", color: C.gray, fontSize: 11, cursor: "pointer", padding: 2, flexShrink: 0 }}>x</button>
                 </div>
               );
             })}
           </div>
           <div style={{ borderTop: `2px solid ${C.line}`, padding: 8, background: C.light, maxHeight: "65vh", overflowY: "auto" }}>
-            {/* DISCOUNT row — hidden in addMoreMode */}
             {!addMoreMode && (
               <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>DISC</span>
@@ -1460,7 +1438,6 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
               </div>
             )}
 
-            {/* GST row — hidden in addMoreMode */}
             {!addMoreMode && (
               <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>GST</span>
@@ -1470,7 +1447,6 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
               </div>
             )}
 
-            {/* PAY row — hidden in addMoreMode */}
             {!addMoreMode && (
               <div style={{ display: "flex", gap: 4, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>PAY</span>
@@ -1480,36 +1456,35 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
               </div>
             )}
 
-            {/* TOTALS — compact */}
             <div style={{ background: C.card, borderRadius: 6, padding: 8, marginBottom: 6 }}>
               {addMoreMode && (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11 }}>
                   <span style={{ color: C.gray }}>Running ({existingItems.length})</span>
-                  <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>₹{existingSubtotal}</span>
+                  <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>{inr(existingSubtotal)}</span>
                 </div>
               )}
               {addMoreMode && (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.green }}>
                   <span>New ({cartItems.length})</span>
-                  <span style={{ fontFamily: "monospace", fontWeight: 700 }}>+₹{cartSubtotal}</span>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700 }}>+{inr(cartSubtotal)}</span>
                 </div>
               )}
               {!addMoreMode && discount > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.green }}>
                   <span>Disc {discount}%</span>
-                  <span style={{ fontFamily: "monospace" }}>-₹{Math.round(grossSub * discount / 100)}</span>
+                  <span style={{ fontFamily: "monospace" }}>-{inr(Math.round(grossSub * discount / 100))}</span>
                 </div>
               )}
               {!addMoreMode && gstRate > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.red }}>
                   <span>GST {gstRate}%</span>
-                  <span style={{ fontFamily: "monospace" }}>+₹{Math.round(grossSub * (1 - discount / 100) * gstRate / 100)}</span>
+                  <span style={{ fontFamily: "monospace" }}>+{inr(Math.round(grossSub * (1 - discount / 100) * gstRate / 100))}</span>
                 </div>
               )}
               {!addMoreMode && discount === 0 && gstRate === 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11 }}>
                   <span style={{ color: C.gray }}>Subtotal</span>
-                  <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>₹{grossSub}</span>
+                  <span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>{inr(grossSub)}</span>
                 </div>
               )}
             </div>
@@ -1518,31 +1493,30 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
               <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, letterSpacing: 0.5 }}>TOTAL</span>
               <span style={{ color: "#fff", fontSize: 20, fontWeight: 900, fontFamily: "monospace" }}>
                 {(() => {
-                  if (addMoreMode) return "₹" + grossSub.toFixed(0);
+                  if (addMoreMode) return inr(grossSub);
                   const discAmt = Math.round(grossSub * discount / 100);
                   const gstAmt = Math.round((grossSub - discAmt) * gstRate / 100);
-                  return "₹" + (Math.max(0, grossSub - discAmt) + gstAmt).toFixed(0);
+                  return inr(Math.max(0, grossSub - discAmt) + gstAmt);
                 })()}
               </span>
             </div>
 
-            {/* ACTION BUTTONS */}
             {existingOrder && !addMoreMode && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 6 }}>
-                <button onClick={handleSaveBill} disabled={placing} style={{ padding: 10, border: "none════", borderRadius: ════6, background: C.blue,════ color: "#fff",════ fontWeight: 800, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>💾 Save</button>
-                <button onClick={handlePaidPrint} disabled={placing} style={{ padding: 10, border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>✓ Paid</button>
+                <button onClick={handleSaveBill} disabled={placing} style={{ padding: 10, border: "none", borderRadius: 6, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Save</button>
+                <button onClick={handlePaidPrint} disabled={placing} style={{ padding: 10, border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Paid</button>
               </div>
             )}
 
             {addMoreMode && (
               <button onClick={handlePlaceOrder} disabled={cartItems.length === 0 || placing} style={{ width: "100%", padding: 15, marginTop: 10, border: "none", borderRadius: 10, background: cartItems.length === 0 ? C.line : `linear-gradient(135deg, ${C.green} 0%, #15803D 100%)`, color: cartItems.length === 0 ? C.gray : "#fff", fontWeight: 800, fontSize: 15, cursor: cartItems.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
-                {placing ? "⏳ Adding..." : "➕ Add Items to Running KOT"}
+                {placing ? "Adding..." : "Add Items to Running KOT"}
               </button>
             )}
 
             {!existingOrder && (
               <button onClick={handlePlaceOrder} disabled={cartItems.length === 0 || placing} style={{ width: "100%", padding: 15, marginTop: 10, border: "none", borderRadius: 10, background: cartItems.length === 0 ? C.line : `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: cartItems.length === 0 ? C.gray : "#fff", fontWeight: 800, fontSize: 15, cursor: cartItems.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: cartItems.length === 0 ? "none" : `0 6px 16px ${C.red}40` }}>
-                {placing ? "⏳ Placing..." : "🍳 Send KOT"}
+                {placing ? "Placing..." : "Send KOT"}
               </button>
             )}
           </div>
@@ -1552,14 +1526,18 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
   );
 }
 
-// ───────── Audit log (cancel / due / paid ka record) ─────────
+// ---------------------------------------------------------------------------
+// Audit log
+// ---------------------------------------------------------------------------
 const logAudit = async (action, details = {}) => {
   try {
     await addDoc(collection(db, "auditLog"), { action, ...details, by: auth.currentUser?.uid || "", at: Date.now() });
   } catch (e) { /* rules block kare to app na ruke */ }
 };
 
-// ───────── Generic print helper ─────────
+// ---------------------------------------------------------------------------
+// Generic print helper
+// ---------------------------------------------------------------------------
 function printHtml(title, bodyHtml, opts = {}) {
   try {
     const css = opts.css || "@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}h2{text-align:center;margin:4px 0}table{width:100%;border-collapse:collapse;font-size:13px}td{padding:4px 2px}.line{border-top:2px dashed #000;margin:8px 0}.c{text-align:center;font-size:11px}";
@@ -1575,21 +1553,23 @@ function printHtml(title, bodyHtml, opts = {}) {
   } catch (e) { alert("Print error: " + e.message); }
 }
 
-// ───────── UPI link ─────────
+// UPI link
 const upiUri = (total, billNo) =>
   `upi://pay?pa=${RESTAURANT.upi}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${total}&cu=INR&tn=${encodeURIComponent("Bill " + billNo)}`;
 
-// ───────── 🖨️ BILL PRINT ─────────
+// ---------------------------------------------------------------------------
+// BILL PRINT
+// ---------------------------------------------------------------------------
 function printBill(order) {
   try {
-    const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left">${it.name}${it.portion ? ` (${it.portion})` : ""}</td><td style="text-align:center">${it.qty}</td><td style="text-align:right">₹${it.price}</td><td style="text-align:right">₹${it.price * it.qty}</td></tr>`).join("");
+    const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left">${it.name}${it.portion ? ` (${it.portion})` : ""}</td><td style="text-align:center">${it.qty}</td><td style="text-align:right">Rs ${it.price}</td><td style="text-align:right">Rs ${it.price * it.qty}</td></tr>`).join("");
     const sub = order.subtotal || (order.items || []).reduce((s, it) => s + it.price * it.qty, 0);
     const total = order.finalTotal || sub;
     const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
     const billNo = order.id.slice(1, 9).toUpperCase();
     const showQr = !!RESTAURANT.upi && !order.paid && order.payment !== "due" && total > 0;
     const qrHtml = showQr
-      ? `<div class="c" style="margin-top:8px">Scan &amp; Pay ₹${total}<br/><img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(upiUri(total, billNo))}" width="170" height="170" /></div>`
+      ? `<div class="c" style="margin-top:8px">Scan &amp; Pay Rs ${total}<br/><img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(upiUri(total, billNo))}" width="170" height="170" /></div>`
       : "";
     const css = "@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}h2{text-align:center;font-size:24px;font-weight:900;margin:4px 0}h4{text-align:center;font-size:15px;margin:4px 0}.c{text-align:center;font-size:10px}.line{border-top:2px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:4px 2px}th{border-bottom:2px solid #000;text-align:left;font-size:12px}.grand td{font-size:18px;font-weight:900;border-top:3px solid #000;padding-top:8px}.badge{display:inline-block;padding:3px 10px;border:2px solid #000;border-radius:10px;font-size:12px;margin:2px}";
     const body = `
@@ -1605,11 +1585,11 @@ ${order.waiter ? `<div class="c">Waiter: ${order.waiter}</div>` : ""}
 <table><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>${itemsHtml}</tbody></table>
 <div class="line"></div>
 <table>
-<tr><td>Subtotal</td><td style="text-align:right">₹${sub}</td></tr>
-${order.gstAmount ? `<tr><td>GST</td><td style="text-align:right">+₹${order.gstAmount}</td></tr>` : ""}
-${order.deliveryFee ? `<tr><td>Delivery</td><td style="text-align:right">+₹${order.deliveryFee}</td></tr>` : ""}
-${order.billDiscount ? `<tr><td>Discount</td><td style="text-align:right">-₹${order.billDiscount}</td></tr>` : ""}
-<tr class="grand"><td>GRAND TOTAL</td><td style="text-align:right">₹${total}</td></tr>
+<tr><td>Subtotal</td><td style="text-align:right">Rs ${sub}</td></tr>
+${order.gstAmount ? `<tr><td>GST</td><td style="text-align:right">+Rs ${order.gstAmount}</td></tr>` : ""}
+${order.deliveryFee ? `<tr><td>Delivery</td><td style="text-align:right">+Rs ${order.deliveryFee}</td></tr>` : ""}
+${order.billDiscount ? `<tr><td>Discount</td><td style="text-align:right">-Rs ${order.billDiscount}</td></tr>` : ""}
+<tr class="grand"><td>GRAND TOTAL</td><td style="text-align:right">Rs ${total}</td></tr>
 </table>
 <div class="line"></div>
 <div class="c"><span class="badge">${(order.payment || "cash").toUpperCase()}</span><span class="badge">${order.paid ? "PAID" : order.payment === "due" ? "DUE" : "PENDING"}</span></div>
@@ -1620,20 +1600,24 @@ ${qrHtml}
   } catch (e) { alert("Print error: " + e.message); }
 }
 
-// ───────── 💬 WhatsApp bill ─────────
+// ---------------------------------------------------------------------------
+// WhatsApp bill
+// ---------------------------------------------------------------------------
 function whatsappBill(order) {
   let phone = String(order.customer?.phone || order.duePhone || "").replace(/\D/g, "");
   if (phone.length < 10) phone = (window.prompt("Customer WhatsApp number (10 digit)?", "") || "").replace(/\D/g, "");
   if (phone.length < 10) return;
   if (phone.length === 10) phone = "91" + phone;
-  const lines = (order.items || []).map(it => `${it.qty} x ${it.name} - ₹${it.price * it.qty}`).join("\n");
+  const lines = (order.items || []).map(it => `${it.qty} x ${it.name} - Rs ${it.price * it.qty}`).join("\n");
   const sub = order.subtotal || (order.items || []).reduce((s, it) => s + it.price * it.qty, 0);
   const total = order.finalTotal || sub;
-  const msg = `*${RESTAURANT.name}*\nBill #${order.id.slice(1, 9).toUpperCase()}\n\n${lines}\n\n*Total: ₹${total}*\n\nThank you! Visit again 🙏`;
+  const msg = `*${RESTAURANT.name}*\nBill #${order.id.slice(1, 9).toUpperCase()}\n\n${lines}\n\n*Total: Rs ${total}*\n\nThank you! Visit again`;
   window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
 }
 
-// ───────── ✂️ Split bill print ─────────
+// ---------------------------------------------------------------------------
+// Split bill print
+// ---------------------------------------------------------------------------
 function printSplitBills(order, selected) {
   const items = order.items || [];
   const a = items.filter((_, i) => selected[i]);
@@ -1653,9 +1637,9 @@ function printSplitBills(order, selected) {
   if (b.length) setTimeout(() => printBill(make(b)), 3500);
 }
 
-// ═══════════════════════════════════════
-// 📈 REPORTS: top items + payment split + CSV + Close Day
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// REPORTS: top items + payment split + CSV + Close Day
+// ---------------------------------------------------------------------------
 function ReportsExtra({ C, orders, rangeLabel }) {
   const valid = orders.filter(o => o.status !== "cancelled");
   const paidOrders = valid.filter(o => o.paid);
@@ -1699,7 +1683,7 @@ function ReportsExtra({ C, orders, rangeLabel }) {
 
   const closeDay = () => {
     const row = (k, v) => `<tr><td>${k}</td><td style="text-align:right">${v}</td></tr>`;
-    printHtml("Day Close", `<h2>${RESTAURANT.name}</h2><div class="c">DAY CLOSING — ${rangeLabel}</div><div class="c">${new Date().toLocaleString("en-IN")}</div><div class="line"></div><table>${row("Total orders", orders.length)}${row("Cancelled", cancelled)}${row("Paid orders", paidOrders.length)}</table><div class="line"></div><table>${row("Cash", inr(pay.cash))}${row("UPI", inr(pay.upi))}${row("Card", inr(pay.card))}${row("<b>Total collected</b>", "<b>" + inr(collected) + "</b>")}${row("Due pending", inr(dueTotal))}</table><div class="line"></div><div class="c">— End of report —</div>`);
+    printHtml("Day Close", `<h2>${RESTAURANT.name}</h2><div class="c">DAY CLOSING - ${rangeLabel}</div><div class="c">${new Date().toLocaleString("en-IN")}</div><div class="line"></div><table>${row("Total orders", orders.length)}${row("Cancelled", cancelled)}${row("Paid orders", paidOrders.length)}</table><div class="line"></div><table>${row("Cash", inr(pay.cash))}${row("UPI", inr(pay.upi))}${row("Card", inr(pay.card))}${row("<b>Total collected</b>", "<b>" + inr(collected) + "</b>")}${row("Due pending", inr(dueTotal))}</table><div class="line"></div><div class="c">- End of report -</div>`);
   };
 
   const box = { background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 24 };
@@ -1707,14 +1691,14 @@ function ReportsExtra({ C, orders, rangeLabel }) {
     <>
       <div style={box}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>💳 Payment Split — {rangeLabel}</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>Payment Split - {rangeLabel}</div>
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={exportCsv} style={{ padding: "7px 12px", borderRadius: 8, border: `1.5px solid ${C.blue}`, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>⬇️ CSV</button>
-            <button onClick={closeDay} style={{ padding: "7px 12px", borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>🔒 Close Day</button>
+            <button onClick={exportCsv} style={{ padding: "7px 12px", borderRadius: 8, border: `1.5px solid ${C.blue}`, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>CSV</button>
+            <button onClick={closeDay} style={{ padding: "7px 12px", borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Close Day</button>
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 }}>
-          {[["💵 Cash", pay.cash, C.green], ["📱 UPI", pay.upi, C.blue], ["💳 Card", pay.card, C.amber], ["📒 Due", dueTotal, C.red]].map(([l, v, c]) => (
+          {[["Cash", pay.cash, C.green], ["UPI", pay.upi, C.blue], ["Card", pay.card, C.amber], ["Due", dueTotal, C.red]].map(([l, v, c]) => (
             <div key={l} style={{ background: C.cardAlt, borderRadius: 10, padding: 12 }}>
               <div style={{ fontSize: 11, color: C.gray, fontWeight: 800 }}>{l}</div>
               <div style={{ fontSize: 18, fontWeight: 900, color: c, fontFamily: "monospace", marginTop: 4 }}>{inr(v)}</div>
@@ -1724,13 +1708,13 @@ function ReportsExtra({ C, orders, rangeLabel }) {
       </div>
 
       <div style={box}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginBottom: 14 }}>🏆 Top Selling Items — {rangeLabel}</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginBottom: 14 }}>Top Selling Items - {rangeLabel}</div>
         {topItems.length === 0 && <div style={{ textAlign: "center", padding: 16, color: C.gray, fontSize: 13 }}>Koi paid sale nahi</div>}
         {topItems.map(([name, d], i) => (
           <div key={name} style={{ marginBottom: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>#{i + 1} {name}</span>
-              <span style={{ fontSize: 12, fontWeight: 800, color: C.gray, fontFamily: "monospace" }}>{d.qty} sold · {inr(d.amt)}</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: C.gray, fontFamily: "monospace" }}>{d.qty} sold - {inr(d.amt)}</span>
             </div>
             <div style={{ background: C.line, height: 6, borderRadius: 3, overflow: "hidden" }}>
               <div style={{ width: `${(d.qty / maxQty) * 100}%`, height: "100%", background: C.red, borderRadius: 3 }} />
@@ -1742,9 +1726,9 @@ function ReportsExtra({ C, orders, rangeLabel }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// 📒 DUE (UDHAAR) LEDGER
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// DUE (UDHAAR) LEDGER
+// ---------------------------------------------------------------------------
 function DueLedger({ C, orders }) {
   const dues = orders.filter(o => o.paymentStatus === "due" && o.status !== "cancelled" && !o.paid);
   const total = dues.reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
@@ -1753,29 +1737,29 @@ function DueLedger({ C, orders }) {
     try {
       await updateDoc(doc(db, "orders", o.id), { paid: true, paymentStatus: "paid", payment: mode, paidAt: Date.now(), settledFromDue: true });
       logAudit("due_settled", { orderId: o.id, total: o.finalTotal || 0, mode });
-    } catch (e) { alert("❌ " + e.message); }
+    } catch (e) { alert("Error: " + e.message); }
   };
 
   if (dues.length === 0) return null;
   return (
     <div style={{ background: C.card, border: `1px solid ${C.red}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>📒 Due Ledger (last 30 days)</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>Due Ledger (last 30 days)</div>
         <div style={{ fontSize: 16, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(total)}</div>
       </div>
       {dues.sort((a, b) => b.createdAt - a.createdAt).map(o => (
         <div key={o.id} style={{ background: C.cardAlt, borderRadius: 10, padding: 12, marginBottom: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{o.dueName || "Unknown"} {o.duePhone ? `· ${o.duePhone}` : ""}</div>
-              <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{o.orderType === "parcel" ? "Parcel" : "Table " + o.table} · {new Date(o.dueAt || o.createdAt).toLocaleDateString("en-IN")} · #{(o.id || "").slice(1, 5).toUpperCase()}</div>
+              <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{o.dueName || "Unknown"} {o.duePhone ? `- ${o.duePhone}` : ""}</div>
+              <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{o.orderType === "parcel" ? "Parcel" : "Table " + o.table} - {new Date(o.dueAt || o.createdAt).toLocaleDateString("en-IN")} - #{(o.id || "").slice(1, 5).toUpperCase()}</div>
             </div>
             <div style={{ fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</div>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-            <button onClick={() => settle(o, "cash")} style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>💵 Received Cash</button>
-            <button onClick={() => settle(o, "upi")} style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>📱 Received UPI</button>
-            <button onClick={() => whatsappBill(o)} style={{ padding: "8px 12px", border: `1.5px solid ${C.green}`, borderRadius: 6, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>💬</button>
+            <button onClick={() => settle(o, "cash")} style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Received Cash</button>
+            <button onClick={() => settle(o, "upi")} style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Received UPI</button>
+            <button onClick={() => whatsappBill(o)} style={{ padding: "8px 12px", border: `1.5px solid ${C.green}`, borderRadius: 6, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>WA</button>
           </div>
         </div>
       ))}
@@ -1783,9 +1767,9 @@ function DueLedger({ C, orders }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// 📦 STOCK PANEL
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// STOCK PANEL
+// ---------------------------------------------------------------------------
 function StockPanel({ C, menu }) {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState("");
@@ -1799,7 +1783,7 @@ function StockPanel({ C, menu }) {
         const items = (snap.data().items || []).map(m => m.id === id ? { ...m, available: !m.available } : m);
         tx.update(ref, { items });
       });
-    } catch (e) { alert("❌ " + e.message); } finally { setBusy(""); }
+    } catch (e) { alert("Error: " + e.message); } finally { setBusy(""); }
   };
 
   const list = menu.filter(m => !q.trim() || m.name.toLowerCase().includes(q.toLowerCase()));
@@ -1810,10 +1794,10 @@ function StockPanel({ C, menu }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.ink }}>📦 Stock</h2>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.ink }}>Stock</h2>
           <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 2 }}>{outCount} item out of stock</div>
         </div>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Item search..." style={{ padding: "9px 14px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, outline: "none", width: 200, background: C.card, color: C.ink }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Item search..." style={{ padding: "9px 14px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, outline: "none", width: 200, background: C.card, color: C.ink }} />
       </div>
       {cats.map(cat => (
         <div key={cat} style={{ marginBottom: 18 }}>
@@ -1822,7 +1806,7 @@ function StockPanel({ C, menu }) {
             {list.filter(m => m.category === cat).map(m => (
               <button key={m.id} onClick={() => toggle(m.id)} disabled={busy === m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderRadius: 10, border: `2px solid ${m.available ? C.green : C.red}`, background: m.available ? C.card : C.redLight, cursor: "pointer", fontFamily: "inherit", opacity: busy === m.id ? 0.5 : 1, textAlign: "left" }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{m.name}</span>
-                <span style={{ fontSize: 11, fontWeight: 900, color: m.available ? C.green : C.red, whiteSpace: "nowrap" }}>{m.available ? "✅ In" : "⛔ Out"}</span>
+                <span style={{ fontSize: 11, fontWeight: 900, color: m.available ? C.green : C.red, whiteSpace: "nowrap" }}>{m.available ? "In" : "Out"}</span>
               </button>
             ))}
           </div>
@@ -1832,9 +1816,9 @@ function StockPanel({ C, menu }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════
-// 🛡️ ERROR BOUNDARY
-// ═══════════════════════════════════════════════════════
+// ---------------------------------------------------------------------------
+// ERROR BOUNDARY
+// ---------------------------------------------------------------------------
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { err: null }; }
   static getDerivedStateFromError(err) { return { err }; }
@@ -1844,10 +1828,10 @@ class ErrorBoundary extends React.Component {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "system-ui, sans-serif", background: "#F9FAFB" }}>
         <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 16, padding: 24, maxWidth: 360, textAlign: "center" }}>
-          <div style={{ fontSize: 44, marginBottom: 8 }}>⚠️</div>
+          <div style={{ fontSize: 44, marginBottom: 8 }}>Warning</div>
           <div style={{ fontSize: 18, fontWeight: 800, color: "#111827", marginBottom: 6 }}>Kuch gadbad ho gayi</div>
           <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 16, wordBreak: "break-word" }}>{String(this.state.err?.message || this.state.err)}</div>
-          <button onClick={() => window.location.reload()} style={{ width: "100%", padding: 13, border: "none", borderRadius: 10, background: "#DC2626", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>🔄 Reload</button>
+          <button onClick={() => window.location.reload()} style={{ width: "100%", padding: 13, border: "none", borderRadius: 10, background: "#DC2626", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>Reload</button>
         </div>
       </div>
     );
