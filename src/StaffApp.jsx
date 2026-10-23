@@ -51,6 +51,7 @@ const RESTAURANT = {
   address: "Girja More, Ara – Buxar Main Road, Pakri, Ara",
   phones: ["7303267750", "8271918062"],
   gstin: "",
+  upi: "", // apna UPI ID likho, e.g. "7303267750@ybl". Khaali = QR nahi chhapega
 };
 
 // ═══════════════════════════════════════════════════════
@@ -79,6 +80,7 @@ export default function StaffApp() {
   const [billOrder, setBillOrder] = useState(null);
   const [addMoreMode, setAddMoreMode] = useState(false);
   const [reportRange, setReportRange] = useState("today");
+  const [ordersFilter, setOrdersFilter] = useState("all");
 
   const T = {
     en: { tables: "Tables", orders: "Orders", kitchen: "Kitchen", dashboard: "Dashboard", logout: "Logout", search: "Search", save: "Save", cancel: "Cancel", print: "Print", paid: "Paid", sendKot: "Send KOT", total: "TOTAL", subtotal: "Subtotal", available: "Available", occupied: "Occupied", revenue: "Revenue", active: "Active" },
@@ -87,6 +89,8 @@ export default function StaffApp() {
   const t = (k) => (T[lang] && T[lang][k]) || (T.en[k] || k);
 
   const C = darkMode ? DARK : LIGHT;
+  // ⚠️ Firestore `staff/<uid>` doc me role: "owner" likho apne account ke liye, warna cancel/discount band rahega
+  const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role || "").toLowerCase());
 
   useEffect(() => {
     localStorage.setItem("staff_dark", darkMode ? "1" : "0");
@@ -169,6 +173,15 @@ export default function StaffApp() {
     } catch (e) {}
   };
 
+  // 🔔 New order pending → har 8 sec sound jab tak Start na dabe
+  const newCount = orders.filter(o => o.status === "new" && Date.now() - o.createdAt < 6 * 3600 * 1000).length;
+  useEffect(() => {
+    document.title = (newCount ? `(${newCount}) ` : "") + "Eat & Park Staff";
+    if (!user || newCount === 0) return;
+    const iv = setInterval(() => playSound(), 8000);
+    return () => clearInterval(iv);
+  }, [newCount, user]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError("");
@@ -239,6 +252,7 @@ export default function StaffApp() {
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "system-ui, sans-serif", display: "flex", flexDirection: "column", color: C.ink }}>
+      <style>{`@keyframes lateBlink{0%,100%{opacity:1}50%{opacity:.55}}`}</style>
       {/* TOP BAR */}
       <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", padding: "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 16px rgba(220,38,38,0.25)", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -260,9 +274,10 @@ export default function StaffApp() {
       <div style={{ background: C.card, borderBottom: `1px solid ${C.line}`, padding: "0 16px", display: "flex", gap: 4, overflowX: "auto" }}>
         {[
           { id: "tables", label: "🍽️ " + t("tables") },
-          { id: "orders", label: "📋 " + t("orders") },
-          { id: "kot", label: "🍳 " + t("kitchen") },
+          { id: "orders", label: "📋 " + t("orders") + (newCount ? ` 🔴${newCount}` : "") },
+          { id: "kot", label: "🍳 " + t("kitchen") + (newCount ? ` 🔴${newCount}` : "") },
           { id: "dashboard", label: "📊 " + t("dashboard") },
+          { id: "stock", label: "📦 Stock" },
         ].map((t) => (
           <button key={t.id} onClick={() => { setActiveTab(t.id); setSelectedTable(null); }} style={{ padding: "15px 20px", border: "none", background: "transparent", color: activeTab === t.id ? C.red : C.gray, fontWeight: 700, fontSize: 13, cursor: "pointer", borderBottom: activeTab === t.id ? `3px solid ${C.red}` : "3px solid transparent", whiteSpace: "nowrap" }}>{t.label}</button>
         ))}
@@ -277,6 +292,9 @@ export default function StaffApp() {
             onTableClick={(t) => { setSelectedTable(t); setCart({}); setBillOrder(null); }}
             onEditBill={(order) => { setBillOrder(order); setSelectedTable(order.table); setCart({}); }}
             onAddMore={(order) => { setBillOrder(order); setSelectedTable(order.table); setAddMoreMode(true); }}
+            onMerge={(order) => setTableMerge(order)}
+            onSplit={(order) => setSplitBillOrder(order)}
+            onFeedback={(order) => setFeedbackOrder(order)}
             search={searchTable}
             setSearch={setSearchTable}
             todayRevenue={todayRevenue}
@@ -284,29 +302,20 @@ export default function StaffApp() {
           />
         )}
         {activeTab === "orders" && (
-          <OrdersView C={C} orders={orders} menu={menu} waiterName={waiterName} />
+          <OrdersView C={C} orders={orders} menu={menu} waiterName={waiterName} isOwner={isOwner} filter={ordersFilter} setFilter={setOrdersFilter} />
         )}
         {activeTab === "kot" && (
           <KOTView C={C} orders={orders} />
         )}
+        {activeTab === "stock" && <StockPanel C={C} menu={menu} />}
         {activeTab === "dashboard" && (
           <DashboardView
             C={C}
             orders={orders}
             menu={menu}
             onStatusClick={(status) => {
-              // Orders tab pe jao + filter set karo
-              if (status === "all") {
-                setActiveTab("orders");
-              } else if (status === "paid") {
-                setActiveTab("orders");
-                // paid filter — handled in OrdersView
-              } else if (status === "active") {
-                setActiveTab("orders");
-              } else {
-                // status (new / preparing / ready / served)
-                setActiveTab("orders");
-              }
+              setOrdersFilter(status === "active" ? "all" : status);
+              setActiveTab("orders");
             }}
             onOrderClick={(order) => {
               // Order detail dekho — agar dine_in hai to table billing kholo
@@ -347,6 +356,7 @@ export default function StaffApp() {
               { id: "orders", label: "📋 Orders", icon: "📋" },
               { id: "kot", label: "🍳 Kitchen", icon: "🍳" },
               { id: "dashboard", label: "📊 Dashboard", icon: "📊" },
+              { id: "stock", label: "📦 Stock", icon: "📦" },
             ].map((t) => (
               <button key={t.id} onClick={() => { setActiveTab(t.id); setSidebarOpen(false); setSelectedTable(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === t.id ? C.redLight : "transparent", color: activeTab === t.id ? C.red : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
                 <span style={{ fontSize: 20 }}>{t.icon}</span>
@@ -373,6 +383,10 @@ export default function StaffApp() {
         </div>
       )}
 
+      {feedbackOrder && <FeedbackModal C={C} order={feedbackOrder} onClose={() => setFeedbackOrder(null)} />}
+      {tableMerge && <TableMergeModal C={C} primaryOrder={tableMerge} allOrders={orders} onClose={() => setTableMerge(null)} />}
+      {splitBillOrder && <SplitBillModal C={C} order={splitBillOrder} onClose={() => setSplitBillOrder(null)} />}
+
       {/* BILLING MODAL */}
       {selectedTable && (
         <BillingView
@@ -384,6 +398,7 @@ export default function StaffApp() {
           setCart={setCart}
           waiterName={waiterName}
           existingOrder={billOrder}
+          isOwner={isOwner}
           addMoreMode={addMoreMode}
           onBack={() => { setSelectedTable(null); setCart({}); setBillOrder(null); setAddMoreMode(false); }}
         />
@@ -395,7 +410,7 @@ export default function StaffApp() {
 // ═══════════════════════════════════════════════════════
 // 🍽️ TABLES VIEW (with search + stats)
 // ═══════════════════════════════════════════════════════
-function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, search, setSearch, todayRevenue, activeOrders }) {
+function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, onMerge, onSplit, onFeedback, search, setSearch, todayRevenue, activeOrders }) {
   const tableData = useMemo(() => {
     const map = {};
     for (let i = 1; i <= 12; i++) map[i] = { table: i, order: null };
@@ -470,6 +485,9 @@ function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, search, se
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 8 }}>
                 <button onClick={(e) => { e.stopPropagation(); onEditBill && onEditBill(t.order); }} style={{ padding: "6px", border: "none", borderRadius: 6, background: C.red, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>🧾 Bill</button>
                 <button onClick={(e) => { e.stopPropagation(); onAddMore && onAddMore(t.order); }} style={{ padding: "6px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>➕ Add</button>
+                <button onClick={(e) => { e.stopPropagation(); onMerge && onMerge(t.order); }} style={{ padding: "6px", border: `1.5px solid ${C.blue}`, borderRadius: 6, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>🔗 Merge</button>
+                <button onClick={(e) => { e.stopPropagation(); onSplit && onSplit(t.order); }} style={{ padding: "6px", border: `1.5px solid ${C.amber}`, borderRadius: 6, background: "transparent", color: C.amber, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>✂️ Split</button>
+                <button onClick={(e) => { e.stopPropagation(); onFeedback && onFeedback(t.order); }} style={{ padding: "6px", border: `1.5px solid ${C.gray}`, borderRadius: 6, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>⭐ Feedback</button>
               </div>
             ) : (
               <button onClick={(e) => { e.stopPropagation(); onTableClick(t.table); }} style={{ marginTop: 8, padding: "7px 4px", border: "none", borderRadius: 6, background: C.ink, color: "#fff", fontWeight: 800, fontSize: 10, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>➕ New Order</button>
@@ -484,11 +502,16 @@ function TablesView({ C, orders, onTableClick, onEditBill, onAddMore, search, se
 // ═══════════════════════════════════════════════════════
 // 📋 ORDERS VIEW (with advance + print + mark paid)
 // ═══════════════════════════════════════════════════════
-function OrdersView({ C, orders, menu, waiterName }) {
+function OrdersView({ C, orders, menu, waiterName, isOwner, filter, setFilter }) {
   const active = orders.filter(o => o.status !== "served" && o.status !== "cancelled");
-  const [filter, setFilter] = useState("all");
 
-  const filtered = filter === "all" ? active : active.filter(o => o.status === filter);
+  const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+  const todayAll = orders.filter(o => o.status !== "cancelled" && o.createdAt >= startToday.getTime());
+  const filtered =
+    filter === "all" ? active
+    : filter === "paid" ? todayAll.filter(o => o.paid)
+    : filter === "served" ? todayAll.filter(o => o.status === "served")
+    : active.filter(o => o.status === filter);
 
   const advanceOrder = async (order) => {
     const idx = STATUS_FLOW.indexOf(order.status);
@@ -514,8 +537,8 @@ function OrdersView({ C, orders, menu, waiterName }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
         <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.ink }}>Active Orders ({filtered.length})</h2>
-        <div style={{ display: "flex", gap: 6 }}>
-          {["all", ...STATUS_FLOW].map(f => (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {["all", ...STATUS_FLOW, "paid"].map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${filter === f ? C.red : C.line}`, background: filter === f ? C.red : C.card, color: filter === f ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", textTransform: "capitalize", fontFamily: "inherit" }}>{f}</button>
           ))}
         </div>
@@ -556,7 +579,8 @@ function OrdersView({ C, orders, menu, waiterName }) {
                 )}
                 <button onClick={() => printKOT(o)} style={{ padding: "9px", border: `1.5px solid ${C.blue}`, borderRadius: 8, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>🍳 KOT</button>
                 <button onClick={() => printBill(o)} style={{ padding: "9px", border: `1.5px solid ${C.red}`, borderRadius: 8, background: "transparent", color: C.red, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>🖨️ Bill</button>
-                <button onClick={async () => { if (window.confirm("Cancel order?")) { try { await updateDoc(doc(db, "orders", o.id), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); } catch (e) { alert(e.message); } } }} style={{ padding: "9px", border: `1.5px solid ${C.gray}`, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>❌ Cancel Order</button>
+                <button onClick={() => whatsappBill(o)} style={{ padding: "9px", border: `1.5px solid ${C.green}`, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>💬 WhatsApp</button>
+                <button onClick={async () => { if (!isOwner) { alert("Sirf owner cancel kar sakta hai"); return; } if (window.confirm("Cancel order?")) { try { await updateDoc(doc(db, "orders", o.id), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" }); logAudit("cancel_order", { orderId: o.id, table: o.table || "", total: o.finalTotal || 0 }); } catch (e) { alert(e.message); } } }} style={{ padding: "9px", border: `1.5px solid ${C.gray}`, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>❌ Cancel Order</button>
               </div>
             </div>
           );
@@ -572,6 +596,8 @@ function OrdersView({ C, orders, menu, waiterName }) {
 // ═══════════════════════════════════════════════════════
 function KOTView({ C, orders }) {
   const kotOrders = orders.filter(o => o.status === "new" || o.status === "preparing");
+  const [, setTick] = useState(0);
+  useEffect(() => { const iv = setInterval(() => setTick(x => x + 1), 30000); return () => clearInterval(iv); }, []);
   const advanceOrder = async (order) => {
     const idx = STATUS_FLOW.indexOf(order.status);
     if (idx < 0 || idx >= STATUS_FLOW.length - 1) return;
@@ -584,11 +610,13 @@ function KOTView({ C, orders }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
         {kotOrders.map((o) => {
           const isNew = o.status === "new";
+          const mins = Math.floor((Date.now() - o.createdAt) / 60000);
+          const late = mins >= 15;
           return (
-            <div key={o.id} style={{ background: isNew ? C.redLight : C.amberLight, border: `2px solid ${isNew ? C.red : C.amber}`, borderRadius: 12, padding: 16 }}>
+            <div key={o.id} style={{ background: isNew ? C.redLight : C.amberLight, border: `2px solid ${late ? C.red : isNew ? C.red : C.amber}`, borderRadius: 12, padding: 16, animation: late ? "lateBlink 1s infinite" : "none" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div style={{ fontWeight: 800, fontSize: 17, color: C.ink }}>{o.orderType === "parcel" ? "🛍️ Parcel" : `🍽️ Table ${o.table}`}</div>
-                <span style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>{timeAgo(o.createdAt)}</span>
+                <span style={{ fontSize: 12, color: late ? C.red : C.gray, fontWeight: 800 }}>{late ? "⏰ " : "⏱️ "}{mins}m</span>
               </div>
               {(o.items || []).map((it, i) => (<div key={i} style={{ fontSize: 15, fontWeight: 700, padding: "6px 0", borderBottom: `1px dashed ${C.line}`, color: C.ink }}>{it.qty}× {it.name} {it.portion ? <span style={{ color: C.gray, fontWeight: 500 }}>({it.portion})</span> : ""}</div>))}
               <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
@@ -785,6 +813,9 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
         </div>
       </div>
 
+      <ReportsExtra C={C} orders={filtered} rangeLabel={rangeLabel} />
+      <DueLedger C={C} orders={orders} />
+
       {/* STAFF PERFORMANCE */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
         <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginBottom: 16 }}>🧑‍🍳 Staff Performance — {rangeLabel}</div>
@@ -846,7 +877,7 @@ function DashboardView({ C, orders, menu, onStatusClick, onOrderClick }) {
                   transition: "all 0.15s ease",
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = C[st.color + "Light"] || C.light; }}
-                onMouseLeave={(e) => { e.currentTarget.currentTarget.style.background = C.cardAlt; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = C.cardAlt; }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 24 }}>{o.orderType === "parcel" ? "🛍️" : "🍽️"}</div>
@@ -921,51 +952,6 @@ ${order.waiter ? `<div class="c">Waiter: ${order.waiter}</div>` : ""}
 <div class="c big">Total Items: ${(order.items || []).reduce((s, it) => s + it.qty, 0)}</div>
 ${order.notes ? `<div class="c" style="margin-top:8px;border-top:1px dashed #000;padding-top:6px;font-size:12px">Note: ${order.notes}</div>` : ""}
 <div class="c" style="margin-top:14px;font-size:11px">— Kitchen Copy —</div>
-</body></html>`);
-    w.document.close();
-    setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
-  } catch (e) { alert("Print error: " + e.message); }
-}
-
-// ═══════════════════════════════════════════════════════
-// 🖨️ BILL PRINT
-// ═══════════════════════════════════════════════════════
-function printBill(order) {
-  try {
-    const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left">${it.name}${it.portion ? ` (${it.portion})` : ""}</td><td style="text-align:center">${it.qty}</td><td style="text-align:right">₹${it.price}</td><td style="text-align:right">₹${it.price * it.qty}</td></tr>`).join("");
-    const sub = order.subtotal || (order.items || []).reduce((s, it) => s + it.price * it.qty, 0);
-    const total = order.finalTotal || sub;
-    const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-    const billNo = order.id.slice(1, 9).toUpperCase();
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
-    document.body.appendChild(iframe);
-    const w = iframe.contentWindow;
-    setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 30000);
-    w.document.open();
-    w.document.write(`<!doctype html><html><head><title>Bill ${billNo}</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}h2{text-align:center;font-size:24px;font-weight:900;margin:4px 0}h4{text-align:center;font-size:15px;margin:4px 0}.c{text-align:center;font-size:10px}.line{border-top:2px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:4px 2px}th{border-bottom:2px solid #000;text-align:left;font-size:12px}.grand td{font-size:18px;font-weight:900;border-top:3px solid #000;padding-top:8px}.badge{display:inline-block;padding:3px 10px;border:2px solid #000;border-radius:10px;font-size:12px;margin:2px}</style></head><body>
-<h2>${RESTAURANT.name}</h2>
-<div class="c">${RESTAURANT.address}</div>
-<div class="c">Ph: ${RESTAURANT.phones.join(" / ")}</div>
-<div class="line"></div>
-<div style="display:flex;justify-content:space-between;font-size:11px"><div>Bill: ${billNo}</div><div>${order.orderType === "parcel" ? "PARCEL" : "T-" + order.table}</div></div>
-<div class="c" style="margin-top:4px">${now}</div>
-${order.customer?.name && order.customer.name !== "Walk-in" ? `<div class="c">Customer: ${order.customer.name} ${order.customer.phone || ""}</div>` : ""}
-${order.waiter ? `<div class="c">Waiter: ${order.waiter}</div>` : ""}
-<div class="line"></div>
-<table><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>${itemsHtml}</tbody></table>
-<div class="line"></div>
-<table>
-<tr><td>Subtotal</td><td style="text-align:right">₹${sub}</td></tr>
-${order.gstAmount ? `<tr><td>GST</td><td style="text-align:right">+₹${order.gstAmount}</td></tr>` : ""}
-${order.deliveryFee ? `<tr><td>Delivery</td><td style="text-align:right">+₹${order.deliveryFee}</td></tr>` : ""}
-${order.billDiscount ? `<tr><td>Discount</td><td style="text-align:right">-₹${order.billDiscount}</td></tr>` : ""}
-<tr class="grand"><td>GRAND TOTAL</td><td style="text-align:right">₹${total}</td></tr>
-</table>
-<div class="line"></div>
-<div class="c"><span class="badge">${order.payment || "Cash"}</span><span class="badge">${order.paid ? "PAID" : "PENDING"}</span></div>
-<div class="c" style="margin-top:10px;font-size:11px">** Thank you, visit again **</div>
-<div class="c" style="font-size:10px">Eat & Park Restaurant</div>
 </body></html>`);
     w.document.close();
     setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
@@ -1089,7 +1075,7 @@ function SplitBillModal({ C, order, onClose }) {
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${C.line}`, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Close</button>
-          <button onClick={() => { alert("✅ Bill printed for both"); onClose(); }} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.blue, color: "#fff", fontWeight: 800, cursor: "pointer" }}>🖨️ Print Both</button>
+          <button onClick={() => { if (!Object.values(split1).some(Boolean)) { alert("Kam se kam 1 item tick karo"); return; } printSplitBills(order, split1); onClose(); }} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.blue, color: "#fff", fontWeight: 800, cursor: "pointer" }}>🖨️ Print Both</button>
         </div>
       </div>
     </div>
@@ -1099,7 +1085,7 @@ function SplitBillModal({ C, order, onClose }) {
 // ═══════════════════════════════════════════════════════
 // 🧾 BILLING VIEW
 // ═══════════════════════════════════════════════════════
-function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existingOrder, addMoreMode, onBack }) {
+function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existingOrder, addMoreMode, onBack, isOwner }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [placing, setPlacing] = useState(false);
@@ -1240,6 +1226,26 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
     if (!existingOrder || placing) return;
     setPlacing(true);
     try {
+      if (payMode === "due") {
+        const dn = window.prompt("Customer ka naam (due)?", "");
+        if (dn === null) { setPlacing(false); return; }
+        const dp = window.prompt("Phone number?", "") || "";
+        const s0 = Number(existingOrder.subtotal) || 0;
+        const d0 = Math.round((s0 * discount) / 100);
+        const g0 = Math.round(((s0 - d0) * gstRate) / 100);
+        const f0 = Math.max(0, s0 - d0) + g0;
+        await updateDoc(doc(db, "orders", existingOrder.id), {
+          billDiscountPct: discount, billDiscount: d0,
+          gstRate, gstAmount: g0, finalTotal: f0,
+          payment: "due", paid: false, paymentStatus: "due", status: "served",
+          dueName: dn || "Unknown", duePhone: dp, dueAt: Date.now(), billEditedAt: Date.now(),
+        });
+        logAudit("due_created", { orderId: existingOrder.id, total: f0, name: dn || "" });
+        printBill({ ...existingOrder, finalTotal: f0, subtotal: s0, gstAmount: g0, billDiscount: d0, payment: "due", paid: false });
+        alert("📒 Due me save ho gaya");
+        onBack();
+        return;
+      }
       const sub = Number(existingOrder.subtotal) || 0;
       const discAmt = Math.round((sub * discount) / 100);
       const gstAmt = Math.round(((sub - discAmt) * gstRate) / 100);
@@ -1359,9 +1365,9 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
             <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap", alignItems: "center" }}>
               <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>DISC</span>
               {[0, 5, 10, 20].map(d => (
-                <button key={d} onClick={() => setDiscount(d)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${discount === d ? C.green : C.line}`, background: discount === d ? C.greenLight : C.card, color: discount === d ? C.green : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{d === 0 ? "0" : `${d}%`}</button>
+                <button key={d} onClick={() => (isOwner ? setDiscount(d) : alert("Discount sirf owner de sakta hai"))} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${discount === d ? C.green : C.line}`, background: discount === d ? C.greenLight : C.card, color: discount === d ? C.green : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{d === 0 ? "0" : `${d}%`}</button>
               ))}
-              <input type="number" min={0} max={100} value={discount || ""} onChange={(e) => setDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} placeholder="%" style={{ width: 44, padding: "3px 6px", border: `1px solid ${C.line}`, borderRadius: 4, fontSize: 10, background: C.card, color: C.ink, fontWeight: 700, textAlign: "center", outline: "none" }} />
+              <input type="number" min={0} max={100} disabled={!isOwner} value={discount || ""} onChange={(e) => setDiscount(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} placeholder="%" style={{ width: 44, padding: "3px 6px", border: `1px solid ${C.line}`, borderRadius: 4, fontSize: 10, background: C.card, color: C.ink, fontWeight: 700, textAlign: "center", outline: "none" }} />
             </div>
 
             {/* GST row — compact */}
@@ -1440,6 +1446,286 @@ function BillingView({ C, table, menu, orders, cart, setCart, waiterName, existi
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ───────── Audit log (cancel / due / paid ka record) ─────────
+const logAudit = async (action, details = {}) => {
+  try {
+    await addDoc(collection(db, "auditLog"), { action, ...details, by: auth.currentUser?.uid || "", at: Date.now() });
+  } catch (e) { /* rules block kare to app na ruke */ }
+};
+
+// ───────── Generic print helper ─────────
+function printHtml(title, bodyHtml, opts = {}) {
+  try {
+    const css = opts.css || "@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}h2{text-align:center;margin:4px 0}table{width:100%;border-collapse:collapse;font-size:13px}td{padding:4px 2px}.line{border-top:2px dashed #000;margin:8px 0}.c{text-align:center;font-size:11px}";
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+    document.body.appendChild(iframe);
+    const w = iframe.contentWindow;
+    setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 30000);
+    w.document.open();
+    w.document.write(`<!doctype html><html><head><title>${title}</title><style>${css}</style></head><body>${bodyHtml}</body></html>`);
+    w.document.close();
+    setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, opts.delay || 400);
+  } catch (e) { alert("Print error: " + e.message); }
+}
+
+// ───────── UPI link (RESTAURANT.upi me apna UPI ID daalo) ─────────
+const upiUri = (total, billNo) =>
+  `upi://pay?pa=${RESTAURANT.upi}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${total}&cu=INR&tn=${encodeURIComponent("Bill " + billNo)}`;
+
+// ───────── 🖨️ BILL PRINT (NEW — UPI QR ke saath) ─────────
+function printBill(order) {
+  try {
+    const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left">${it.name}${it.portion ? ` (${it.portion})` : ""}</td><td style="text-align:center">${it.qty}</td><td style="text-align:right">₹${it.price}</td><td style="text-align:right">₹${it.price * it.qty}</td></tr>`).join("");
+    const sub = order.subtotal || (order.items || []).reduce((s, it) => s + it.price * it.qty, 0);
+    const total = order.finalTotal || sub;
+    const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const billNo = order.id.slice(1, 9).toUpperCase();
+    const showQr = !!RESTAURANT.upi && !order.paid && order.payment !== "due" && total > 0;
+    const qrHtml = showQr
+      ? `<div class="c" style="margin-top:8px">Scan &amp; Pay ₹${total}<br/><img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(upiUri(total, billNo))}" width="170" height="170" /></div>`
+      : "";
+    const css = "@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}h2{text-align:center;font-size:24px;font-weight:900;margin:4px 0}h4{text-align:center;font-size:15px;margin:4px 0}.c{text-align:center;font-size:10px}.line{border-top:2px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:4px 2px}th{border-bottom:2px solid #000;text-align:left;font-size:12px}.grand td{font-size:18px;font-weight:900;border-top:3px solid #000;padding-top:8px}.badge{display:inline-block;padding:3px 10px;border:2px solid #000;border-radius:10px;font-size:12px;margin:2px}";
+    const body = `
+<h2>${RESTAURANT.name}</h2>
+<div class="c">${RESTAURANT.address}</div>
+<div class="c">Ph: ${RESTAURANT.phones.join(" / ")}</div>
+<div class="line"></div>
+<div style="display:flex;justify-content:space-between;font-size:11px"><div>Bill: ${billNo}</div><div>${order.orderType === "parcel" ? "PARCEL" : "T-" + order.table}</div></div>
+<div class="c" style="margin-top:4px">${now}</div>
+${order.customer?.name && order.customer.name !== "Walk-in" ? `<div class="c">Customer: ${order.customer.name} ${order.customer.phone || ""}</div>` : ""}
+${order.waiter ? `<div class="c">Waiter: ${order.waiter}</div>` : ""}
+<div class="line"></div>
+<table><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>${itemsHtml}</tbody></table>
+<div class="line"></div>
+<table>
+<tr><td>Subtotal</td><td style="text-align:right">₹${sub}</td></tr>
+${order.gstAmount ? `<tr><td>GST</td><td style="text-align:right">+₹${order.gstAmount}</td></tr>` : ""}
+${order.deliveryFee ? `<tr><td>Delivery</td><td style="text-align:right">+₹${order.deliveryFee}</td></tr>` : ""}
+${order.billDiscount ? `<tr><td>Discount</td><td style="text-align:right">-₹${order.billDiscount}</td></tr>` : ""}
+<tr class="grand"><td>GRAND TOTAL</td><td style="text-align:right">₹${total}</td></tr>
+</table>
+<div class="line"></div>
+<div class="c"><span class="badge">${(order.payment || "cash").toUpperCase()}</span><span class="badge">${order.paid ? "PAID" : order.payment === "due" ? "DUE" : "PENDING"}</span></div>
+${qrHtml}
+<div class="c" style="margin-top:10px;font-size:11px">** Thank you, visit again **</div>
+<div class="c" style="font-size:10px">Eat &amp; Park Restaurant</div>`;
+    printHtml("Bill " + billNo, body, { css, delay: showQr ? 1800 : 400 });
+  } catch (e) { alert("Print error: " + e.message); }
+}
+
+// ───────── 💬 WhatsApp bill ─────────
+function whatsappBill(order) {
+  let phone = String(order.customer?.phone || order.duePhone || "").replace(/\D/g, "");
+  if (phone.length < 10) phone = (window.prompt("Customer WhatsApp number (10 digit)?", "") || "").replace(/\D/g, "");
+  if (phone.length < 10) return;
+  if (phone.length === 10) phone = "91" + phone;
+  const lines = (order.items || []).map(it => `${it.qty} x ${it.name} - ₹${it.price * it.qty}`).join("\n");
+  const sub = order.subtotal || (order.items || []).reduce((s, it) => s + it.price * it.qty, 0);
+  const total = order.finalTotal || sub;
+  const msg = `*${RESTAURANT.name}*\nBill #${order.id.slice(1, 9).toUpperCase()}\n\n${lines}\n\n*Total: ₹${total}*\n\nThank you! Visit again 🙏`;
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
+}
+
+// ───────── ✂️ Split bill — dono bill print ─────────
+function printSplitBills(order, selected) {
+  const items = order.items || [];
+  const a = items.filter((_, i) => selected[i]);
+  const b = items.filter((_, i) => !selected[i]);
+  const fullSub = items.reduce((s, it) => s + it.price * it.qty, 0) || 1;
+  const make = (list) => {
+    const sub = list.reduce((s, it) => s + it.price * it.qty, 0);
+    const r = sub / fullSub;
+    return {
+      ...order, items: list, subtotal: sub, deliveryFee: 0,
+      gstAmount: Math.round((order.gstAmount || 0) * r),
+      billDiscount: Math.round((order.billDiscount || 0) * r),
+      finalTotal: Math.round((Number(order.finalTotal) || fullSub) * r),
+    };
+  };
+  if (a.length) printBill(make(a));
+  if (b.length) setTimeout(() => printBill(make(b)), 3500);
+}
+
+// ═══════════════════════════════════════════════════════
+// 📈 REPORTS: top items + payment split + CSV + Close Day
+// ═══════════════════════════════════════════════════════
+function ReportsExtra({ C, orders, rangeLabel }) {
+  const valid = orders.filter(o => o.status !== "cancelled");
+  const paidOrders = valid.filter(o => o.paid);
+
+  const itemMap = {};
+  paidOrders.forEach(o => (o.items || []).forEach(it => {
+    const k = it.name + (it.portion ? ` (${it.portion})` : "");
+    if (!itemMap[k]) itemMap[k] = { qty: 0, amt: 0 };
+    itemMap[k].qty += it.qty;
+    itemMap[k].amt += it.price * it.qty;
+  }));
+  const topItems = Object.entries(itemMap).sort((a, b) => b[1].qty - a[1].qty).slice(0, 10);
+  const maxQty = topItems.length ? topItems[0][1].qty : 1;
+
+  const pay = { cash: 0, upi: 0, card: 0 };
+  paidOrders.forEach(o => {
+    const m = String(o.payment || "cash").toLowerCase();
+    pay[m] = (pay[m] || 0) + (Number(o.finalTotal) || 0);
+  });
+  const dueTotal = valid.filter(o => o.paymentStatus === "due").reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+  const collected = paidOrders.reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+  const cancelled = orders.length - valid.length;
+
+  const exportCsv = () => {
+    const rows = [["Bill", "Date", "Type", "Table", "Waiter", "Items", "Subtotal", "Discount", "GST", "Total", "Payment", "Paid"]];
+    orders.forEach(o => rows.push([
+      (o.id || "").slice(1, 9).toUpperCase(),
+      new Date(o.createdAt).toLocaleString("en-IN"),
+      o.orderType || "", o.table || "", o.waiter || "",
+      (o.items || []).map(it => `${it.qty}x ${it.name}`).join("; "),
+      o.subtotal || 0, o.billDiscount || 0, o.gstAmount || 0, o.finalTotal || 0,
+      o.payment || "", o.paid ? "Yes" : "No",
+    ]));
+    const csv = rows.map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `orders-${rangeLabel.replace(/\W+/g, "_")}.csv`;
+    a.click();
+  };
+
+  const closeDay = () => {
+    const row = (k, v) => `<tr><td>${k}</td><td style="text-align:right">${v}</td></tr>`;
+    printHtml("Day Close", `<h2>${RESTAURANT.name}</h2><div class="c">DAY CLOSING — ${rangeLabel}</div><div class="c">${new Date().toLocaleString("en-IN")}</div><div class="line"></div><table>${row("Total orders", orders.length)}${row("Cancelled", cancelled)}${row("Paid orders", paidOrders.length)}</table><div class="line"></div><table>${row("Cash", inr(pay.cash))}${row("UPI", inr(pay.upi))}${row("Card", inr(pay.card))}${row("<b>Total collected</b>", "<b>" + inr(collected) + "</b>")}${row("Due pending", inr(dueTotal))}</table><div class="line"></div><div class="c">— End of report —</div>`);
+  };
+
+  const box = { background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20, marginBottom: 24 };
+  return (
+    <>
+      <div style={box}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>💳 Payment Split — {rangeLabel}</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={exportCsv} style={{ padding: "7px 12px", borderRadius: 8, border: `1.5px solid ${C.blue}`, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>⬇️ CSV</button>
+            <button onClick={closeDay} style={{ padding: "7px 12px", borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>🔒 Close Day</button>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 }}>
+          {[["💵 Cash", pay.cash, C.green], ["📱 UPI", pay.upi, C.blue], ["💳 Card", pay.card, C.amber], ["📒 Due", dueTotal, C.red]].map(([l, v, c]) => (
+            <div key={l} style={{ background: C.cardAlt, borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 11, color: C.gray, fontWeight: 800 }}>{l}</div>
+              <div style={{ fontSize: 18, fontWeight: 900, color: c, fontFamily: "monospace", marginTop: 4 }}>{inr(v)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={box}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginBottom: 14 }}>🏆 Top Selling Items — {rangeLabel}</div>
+        {topItems.length === 0 && <div style={{ textAlign: "center", padding: 16, color: C.gray, fontSize: 13 }}>Koi paid sale nahi</div>}
+        {topItems.map(([name, d], i) => (
+          <div key={name} style={{ marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>#{i + 1} {name}</span>
+              <span style={{ fontSize: 12, fontWeight: 800, color: C.gray, fontFamily: "monospace" }}>{d.qty} sold · {inr(d.amt)}</span>
+            </div>
+            <div style={{ background: C.line, height: 6, borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ width: `${(d.qty / maxQty) * 100}%`, height: "100%", background: C.red, borderRadius: 3 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// 📒 DUE (UDHAAR) LEDGER
+// ═══════════════════════════════════════════════════════
+function DueLedger({ C, orders }) {
+  const dues = orders.filter(o => o.paymentStatus === "due" && o.status !== "cancelled" && !o.paid);
+  const total = dues.reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+
+  const settle = async (o, mode) => {
+    try {
+      await updateDoc(doc(db, "orders", o.id), { paid: true, paymentStatus: "paid", payment: mode, paidAt: Date.now(), settledFromDue: true });
+      logAudit("due_settled", { orderId: o.id, total: o.finalTotal || 0, mode });
+    } catch (e) { alert("❌ " + e.message); }
+  };
+
+  if (dues.length === 0) return null;
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.red}`, borderRadius: 14, padding: 20, marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink }}>📒 Due Ledger (last 30 days)</div>
+        <div style={{ fontSize: 16, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(total)}</div>
+      </div>
+      {dues.sort((a, b) => b.createdAt - a.createdAt).map(o => (
+        <div key={o.id} style={{ background: C.cardAlt, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{o.dueName || "Unknown"} {o.duePhone ? `· ${o.duePhone}` : ""}</div>
+              <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{o.orderType === "parcel" ? "Parcel" : "Table " + o.table} · {new Date(o.dueAt || o.createdAt).toLocaleDateString("en-IN")} · #{(o.id || "").slice(1, 5).toUpperCase()}</div>
+            </div>
+            <div style={{ fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</div>
+          </div>
+          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <button onClick={() => settle(o, "cash")} style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>💵 Received Cash</button>
+            <button onClick={() => settle(o, "upi")} style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>📱 Received UPI</button>
+            <button onClick={() => whatsappBill(o)} style={{ padding: "8px 12px", border: `1.5px solid ${C.green}`, borderRadius: 6, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>💬</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// 📦 STOCK PANEL (Out of stock toggle)
+// ═══════════════════════════════════════════════════════
+function StockPanel({ C, menu }) {
+  const [q, setQ] = useState("");
+  const [busy, setBusy] = useState("");
+
+  const toggle = async (id) => {
+    setBusy(id);
+    try {
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, "settings", "menu");
+        const snap = await tx.get(ref);
+        const items = (snap.data().items || []).map(m => m.id === id ? { ...m, available: !m.available } : m);
+        tx.update(ref, { items });
+      });
+    } catch (e) { alert("❌ " + e.message); } finally { setBusy(""); }
+  };
+
+  const list = menu.filter(m => !q.trim() || m.name.toLowerCase().includes(q.toLowerCase()));
+  const cats = Array.from(new Set(list.map(m => m.category)));
+  const outCount = menu.filter(m => !m.available).length;
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: C.ink }}>📦 Stock</h2>
+          <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 2 }}>{outCount} item out of stock</div>
+        </div>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Item search..." style={{ padding: "9px 14px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 13, outline: "none", width: 200, background: C.card, color: C.ink }} />
+      </div>
+      {cats.map(cat => (
+        <div key={cat} style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>{cat}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
+            {list.filter(m => m.category === cat).map(m => (
+              <button key={m.id} onClick={() => toggle(m.id)} disabled={busy === m.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderRadius: 10, border: `2px solid ${m.available ? C.green : C.red}`, background: m.available ? C.card : C.redLight, cursor: "pointer", fontFamily: "inherit", opacity: busy === m.id ? 0.5 : 1, textAlign: "left" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{m.name}</span>
+                <span style={{ fontSize: 11, fontWeight: 900, color: m.available ? C.green : C.red, whiteSpace: "nowrap" }}>{m.available ? "✅ In" : "⛔ Out"}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
