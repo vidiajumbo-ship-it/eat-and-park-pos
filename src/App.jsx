@@ -2362,7 +2362,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   cartRef.current = cart;
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
-  const visibleCategories = useMemo(() => {
+    const visibleCategories = useMemo(() => {
     const hidden = settings?.hiddenCategories || [];
     const actualMenuCats = Array.from(new Set(menu.map((m) => m.category).filter(Boolean)));
     const matched = categories.filter((c) => actualMenuCats.includes(c) && !hidden.includes(c));
