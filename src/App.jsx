@@ -2362,10 +2362,14 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   cartRef.current = cart;
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
-  const visibleCategories = useMemo(
-    () => categories.filter((c) => !(settings?.hiddenCategories || []).includes(c)),
-    [categories, settings?.hiddenCategories]
-  );
+  const visibleCategories = useMemo(() => {
+    const hidden = settings?.hiddenCategories || [];
+    const actualMenuCats = Array.from(new Set(menu.map((m) => m.category).filter(Boolean)));
+    const matched = categories.filter((c) => actualMenuCats.includes(c) && !hidden.includes(c));
+    const extras = actualMenuCats.filter((c) => !categories.includes(c) && !hidden.includes(c));
+    const finalCats = [...matched, ...extras];
+    return finalCats.length > 0 ? finalCats : actualMenuCats;
+  }, [categories, menu, settings?.hiddenCategories]);
   useEffect(() => {
     if (visibleCategories.length > 0 && !visibleCategories.includes(category)) setCategory(visibleCategories[0]);
   }, [visibleCategories, category]);
