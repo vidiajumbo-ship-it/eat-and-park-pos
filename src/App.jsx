@@ -5848,6 +5848,16 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
                 Switch to {settings?.menuMode === 'dussehra' ? 'Normal' : 'Dussehra'}
               </button>
             </div>)}
+            <button onClick={async () => {
+              const have = new Set(menu.map((m) => m.id));
+              const missing = DEFAULT_MENU.filter((d) => !have.has(d.id));
+              if (!missing.length) { alert("Kuch missing nahi hai."); return; }
+              if (!window.confirm(missing.length + " purane items wapas jodne hain? Abhi ke " + menu.length + " items waise hi rahenge.")) return;
+              try { const blob = new Blob([JSON.stringify(menu, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "menu-backup-" + Date.now() + ".json"; a.click(); } catch (e) { console.error(e); }
+              const merged = [...menu, ...missing];
+              try { await setDoc(doc(db, "settings", "menu"), { items: merged }); setMenuState(merged); alert("✅ " + missing.length + " items wapas aa gaye. Total: " + merged.length); }
+              catch (e) { console.error(e); alert("⚠️ Save nahi hua: " + e.message); }
+            }} style={{ width: '100%', background: '#2E7D32', color: '#fff', border: 'none', borderRadius: 12, padding: '14px 16px', fontWeight: 800, cursor: 'pointer', marginBottom: 16 }}>♻️ Purane items wapas jodo</button>
             {DUSSEHRA_ENABLED && (<DussehraRateEditor items={dussehraMenu} onSave={saveDussehraMenu} unavail={unavail} toggleAvail={toggleAvail} />)}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.vegMode ? COLORS.sageLight : '#fff', border: `1.5px solid ${settings?.vegMode ? COLORS.sage : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
               <div>
