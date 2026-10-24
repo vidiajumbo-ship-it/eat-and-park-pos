@@ -68,6 +68,7 @@ const timeAgo = (ts) => {
   return Math.floor(h / 24) + "d";
 };
 const TABLE_COUNT = 12;
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const STATUS = {
   new: { label: "New", color: "red", emoji: "🆕" },
@@ -601,7 +602,7 @@ function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, 
   const tableData = useMemo(() => {
     const map = {};
     for (let i = 1; i <= TABLE_COUNT; i++) map[i] = { table: i, order: null };
-    orders.filter(o => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled").forEach(o => {
+    orders.filter(o => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled" && !o.paid).forEach(o => {
       const t = Number(o.table);
       if (map[t]) map[t].order = o;
     });
@@ -648,7 +649,7 @@ function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, 
               </div>
               {t.order ? (
                 <div style={{ marginTop: 6 }}>
-                  <div style={{ fontSize: isMobile ? 10 : 11, color: C.gray, fontWeight: 700 }}>#{t.order.id?.slice(1,5).toUpperCase()}</div>
+                  <div style={{ fontSize: isMobile ? 10 : 11, color: C.gray, fontWeight: 700 }}>#{t.order.id?.slice(1,5).toUpperCase()} - {timeAgo(t.order.createdAt)}</div>
                   <div style={{ fontSize: isMobile ? 10 : 11, color: C.gray, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.order.items?.length || 0} items - {inr(t.order.finalTotal || 0)}</div>
                 </div>
               ) : <div style={{ fontSize: isMobile ? 10 : 11, color: C.gray, fontWeight: 700, textTransform: "uppercase", marginTop: 6 }}>Available</div>}
@@ -700,6 +701,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
   };
 
   const markPaid = async (order) => {
+    if (!window.confirm(`${order.orderType === "parcel" ? "Parcel" : "Table " + order.table} - ${inr(order.finalTotal || 0)} paid mark karna hai?`)) return;
     haptic(30);
     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff" } : o));
     try {
@@ -754,10 +756,10 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
                 <button onClick={() => whatsappBill(o)} style={{ padding: "9px", border: `1.5px solid ${C.green}`, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>WhatsApp</button>
                 <button onClick={async () => {
                   if (!isOwner) { toast("Sirf owner cancel kar sakta hai", "warning"); return; }
-                  if (!window.confirm("Cancel order?")) return;
+                  const reason = window.prompt("Cancel karne ka reason?", ""); if (reason === null) return;
                   try {
-                    await updateDoc(doc(db, "orders", o.id), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff" });
-                    logAudit("cancel_order", { orderId: o.id, table: o.table || "", total: o.finalTotal || 0 });
+                    await updateDoc(doc(db, "orders", o.id), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff", cancelledReason: reason || "" });
+                    logAudit("cancel_order", { orderId: o.id, table: o.table || "", total: o.finalTotal || 0, reason: reason || "" });
                     toast("Order cancelled", "success");
                   } catch (e) { toast(e.message, "error"); }
                 }} style={{ padding: "9px", border: `1.5px solid ${C.gray}`, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>Cancel Order</button>
@@ -960,7 +962,7 @@ function DashboardView({ C, isMobile, orders, menu, onStatusClick, onOrderClick 
 // ===========================================================================
 function printKOT(order) {
   try {
-    const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left;font-size:14px">${it.qty} x ${it.name}${it.portion ? ` (${it.portion})` : ""}</td></tr>`).join("");
+    const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left;font-size:14px">${it.qty} x ${esc(it.name)}${it.portion ? ` (${esc(it.portion)})` : ""}</td></tr>`).join("");
     const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
     const iframe = document.createElement("iframe");
     iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
@@ -971,7 +973,7 @@ function printKOT(order) {
     w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:10px}h2,h3{text-align:center;margin:4px 0;font-weight:900}h2{font-size:26px}h3{font-size:18px}.c{text-align:center;font-size:12px;font-weight:700}.big{font-size:16px;font-weight:800}</style></head><body>
 <h2>KOT</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + order.table}</h3>
 <div class="c">${now}</div><div class="c">#${order.id.slice(1,9).toUpperCase()}</div>
-${order.waiter ? `<div class="c">Waiter: ${order.waiter}</div>` : ""}
+${order.waiter ? `<div class="c">Waiter: ${esc(order.waiter)}</div>` : ""}
 <div style="border-top:2px solid #000;margin:10px 0"></div>
 <table style="width:100%"><tbody>${itemsHtml}</tbody></table>
 <div style="border-top:2px solid #000;margin:10px 0"></div>
@@ -1002,7 +1004,7 @@ const upiUri = (total, billNo) => `upi://pay?pa=${RESTAURANT.upi}&pn=${encodeURI
 
 function printBill(order) {
   try {
-    const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left">${it.name}${it.portion ? ` (${it.portion})` : ""}</td><td style="text-align:center">${it.qty}</td><td style="text-align:right">Rs ${it.price}</td><td style="text-align:right">Rs ${it.price * it.qty}</td></tr>`).join("");
+    const itemsHtml = (order.items || []).map(it => `<tr><td style="text-align:left">${esc(it.name)}${it.portion ? ` (${esc(it.portion)})` : ""}</td><td style="text-align:center">${it.qty}</td><td style="text-align:right">Rs ${it.price}</td><td style="text-align:right">Rs ${it.price * it.qty}</td></tr>`).join("");
     const sub = order.subtotal || (order.items || []).reduce((s, it) => s + it.price * it.qty, 0);
     const total = order.finalTotal || sub;
     const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -1013,7 +1015,7 @@ function printBill(order) {
     const body = `<h2>${RESTAURANT.name}</h2><div class="c">${RESTAURANT.address}</div><div class="c">Ph: ${RESTAURANT.phones.join(" / ")}</div><div class="line"></div>
 <div style="display:flex;justify-content:space-between;font-size:11px"><div>Bill: ${billNo}</div><div>${order.orderType === "parcel" ? "PARCEL" : "T-" + order.table}</div></div>
 <div class="c" style="margin-top:4px">${now}</div>
-${order.waiter ? `<div class="c">Waiter: ${order.waiter}</div>` : ""}
+${order.waiter ? `<div class="c">Waiter: ${esc(order.waiter)}</div>` : ""}
 <div class="line"></div>
 <table><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>${itemsHtml}</tbody></table>
 <div class="line"></div>
