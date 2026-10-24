@@ -504,7 +504,7 @@ function StaffAppInner() {
           { id: "orders", label: `📋 Orders${newCount ? ` (${newCount})` : ""}` },
           { id: "kot", label: `🍳 Kitchen${newCount ? ` (${newCount})` : ""}` },
           { id: "dashboard", label: "📊 Dashboard" },
-          { id: "stock", label: "📦 Stock" },
+          { id: "inventory", label: "🧾 Saman" },
         ].map(tab => (
           <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSelectedTable(null); setOrdersRange(null); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: activeTab === tab.id ? C.red : C.gray, fontWeight: 700, fontSize: isMobile ? 12 : 13, cursor: "pointer", borderBottom: activeTab === tab.id ? `3px solid ${C.red}` : "3px solid transparent", whiteSpace: "nowrap", flexShrink: 0 }}>{tab.label}</button>
         ))}
@@ -527,7 +527,7 @@ function StaffAppInner() {
           <OrdersView C={C} isMobile={isMobile} orders={orders} menu={menu} waiterName={waiterName} isOwner={isOwner} onAddMore={(order) => { setBillOrder(order); setSelectedTable(order.table || "parcel"); setCart({}); setAddMoreMode(true); }} onEditBill={(order) => { setBillOrder(order); setSelectedTable(order.table || "parcel"); setCart({}); setAddMoreMode(false); }} filter={ordersFilter} setFilter={setOrdersFilter} rangeStart={ordersRange?.start} rangeEnd={ordersRange?.end} setOrders={setOrders} onPaidSuccess={() => { setConfetti(true); setTimeout(() => setConfetti(false), 1800); }} />
         )}
         {activeTab === "kot" && <KOTView C={C} isMobile={isMobile} orders={orders} setOrders={setOrders} />}
-        {activeTab === "stock" && <StockPanel C={C} isMobile={isMobile} menu={menu} />}
+{activeTab === "inventory" && <InventoryPanel C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
         {activeTab === "dashboard" && (
           <DashboardView C={C} isMobile={isMobile} orders={orders} menu={menu}
             onStatusClick={(status, bounds) => { setOrdersFilter(status); setOrdersRange(bounds || null); setActiveTab("orders"); }}
@@ -554,7 +554,7 @@ function StaffAppInner() {
               <div style={{ fontWeight: 800, fontSize: 15, color: C.ink, marginTop: 4 }}>{staffData?.name || "Staff"}</div>
               <div style={{ fontSize: 12, color: C.gray, marginTop: 2 }}>{staffData?.role || "waiter"}</div>
             </div>
-            {[{ id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "stock", label: "Stock", icon: "📦" }].map(tab => (
+            {[{ id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }].map(tab => (
               <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.redLight : "transparent", color: activeTab === tab.id ? C.red : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
                 <span style={{ fontSize: 18 }}>{tab.icon}</span><span>{tab.label}</span>
               </button>
@@ -1621,6 +1621,462 @@ function DueLedger({ C, isMobile, orders }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+// ===========================================================================
+// INVENTORY (SAMAN) - kitchen raw-material stock register
+// Firestore: inventory/items (list), inventory/day_YYYY-MM-DD (entries), inventory/state (current stock)
+// Paste this whole block just ABOVE the "// ERROR BOUNDARY" section of your staff file.
+// ===========================================================================
+const INV_DEFAULT = [
+  ["मैदा", "आटा/मैदा/नूडल्स", "kg", 35, 7],
+  ["आटा", "आटा/मैदा/नूडल्स", "kg", 20, 4],
+  ["चाउमिन", "आटा/मैदा/नूडल्स", "pc", 10, 2],
+  ["पास्ता", "आटा/मैदा/नूडल्स", "pc", 4, 1],
+  ["ब्रेड क्रम्ब", "आटा/मैदा/नूडल्स", "pc", 5, 1],
+  ["आरारोट", "आटा/मैदा/नूडल्स", "kg", 0, 0],
+  ["रिफाइंड तेल", "तेल/चावल/नमक/चीनी", "L", 80, 16],
+  ["सरसों तेल", "तेल/चावल/नमक/चीनी", "kg", 4, 1],
+  ["बासमती / टेबल राइस", "तेल/चावल/नमक/चीनी", "kg", 45, 9],
+  ["नमक", "तेल/चावल/नमक/चीनी", "kg", 10, 2],
+  ["चीनी", "तेल/चावल/नमक/चीनी", "kg", 10, 2],
+  ["घी", "तेल/चावल/नमक/चीनी", "kg", 6, 2],
+  ["शहद", "तेल/चावल/नमक/चीनी", "kg", 1, 1],
+  ["चिली सॉस", "सॉस", "pc", 5, 1],
+  ["टमाटो सॉस", "सॉस", "pc", 5, 1],
+  ["सोया सॉस", "सॉस", "pc", 5, 1],
+  ["वेनिगर", "सॉस", "pc", 3, 1],
+  ["अजीनो मोटो", "सॉस", "kg", 0, 0],
+  ["केवड़ा जल", "सॉस", "pc", 0, 0],
+  ["सेज़वान सॉस", "सॉस", "pc", 4, 1],
+  ["ग्रीन चिली सॉस", "सॉस", "pc", 2, 1],
+  ["मेयोनीज़", "सॉस", "kg", 5, 1],
+  ["पिज़्ज़ा सॉस", "सॉस", "pc", 3, 1],
+  ["ओरेगैनो + चिली फ्लेक्स", "सॉस", "pc", 3, 1],
+  ["BBQ सॉस", "सॉस", "pc", 2, 1],
+  ["जीरा पाउडर", "पाउडर मसाले", "pc", 2, 1],
+  ["मिक्स मसाला", "पाउडर मसाले", "pc", 3, 1],
+  ["लाल मिर्च पाउडर", "पाउडर मसाले", "pc", 3, 1],
+  ["हल्दी पाउडर", "पाउडर मसाले", "pc", 2, 1],
+  ["धनिया पाउडर", "पाउडर मसाले", "pc", 4, 1],
+  ["कश्मीरी मिर्च", "पाउडर मसाले", "pc", 3, 1],
+  ["चिकन मसाला", "पाउडर मसाले", "pc", 3, 1],
+  ["मीट मसाला", "पाउडर मसाले", "pc", 2, 1],
+  ["बिरयानी मसाला", "पाउडर मसाले", "pc", 4, 1],
+  ["कस्तूरी मेथी", "पाउडर मसाले", "pc", 3, 1],
+  ["तंदूरी मसाला", "पाउडर मसाले", "pc", 3, 1],
+  ["टिक्का मसाला", "पाउडर मसाले", "pc", 3, 1],
+  ["तंदूरी/खाने का रंग", "पाउडर मसाले", "pc", 1, 1],
+  ["गरम मसाला", "पाउडर मसाले", "pc", 3, 1],
+  ["चाट मसाला", "पाउडर मसाले", "pc", 2, 1],
+  ["काली मिर्च पाउडर", "पाउडर मसाले", "pc", 2, 1],
+  ["काला नमक", "पाउडर मसाले", "pc", 1, 1],
+  ["हींग", "पाउडर मसाले", "pc", 1, 1],
+  ["खड़ा जीरा", "खड़े मसाले", "pc", 0, 0],
+  ["खड़ा लाल मिर्च", "खड़े मसाले", "pc", 0, 0],
+  ["गोलकी", "खड़े मसाले", "gm", 0, 0],
+  ["छोटी इलायची", "खड़े मसाले", "pc", 0, 0],
+  ["बड़ी इलायची", "खड़े मसाले", "pc", 1, 1],
+  ["जावित्री", "खड़े मसाले", "gm", 0, 0],
+  ["दालचीनी", "खड़े मसाले", "gm", 100, 20],
+  ["तेज पत्ता", "खड़े मसाले", "pc", 2, 1],
+  ["लौंग", "खड़े मसाले", "gm", 200, 40],
+  ["काजू", "मेवा", "kg", 3, 1],
+  ["मगज", "मेवा", "gm", 1000, 200],
+  ["बादाम", "मेवा", "gm", 500, 100],
+  ["किशमिश", "मेवा", "gm", 500, 100],
+  ["चना दाल", "दाल/सोया", "kg", 3, 1],
+  ["अरहर दाल", "दाल/सोया", "kg", 8, 2],
+  ["सोया चाप", "दाल/सोया", "pc", 40, 8],
+  ["उड़द साबुत", "दाल/सोया", "kg", 4, 1],
+  ["बूंदी", "दाल/सोया", "kg", 2, 1],
+  ["राजमा", "दाल/सोया", "kg", 1, 1],
+  ["मैगी (पैकेट)", "मैगी/कॉर्न/छोले-भटूरे", "pc", 100, 20],
+  ["काबुली चना (छोले)", "मैगी/कॉर्न/छोले-भटूरे", "kg", 8, 2],
+  ["छोले मसाला", "मैगी/कॉर्न/छोले-भटूरे", "pc", 3, 1],
+  ["सूजी", "मैगी/कॉर्न/छोले-भटूरे", "kg", 3, 1],
+  ["अनारदाना", "मैगी/कॉर्न/छोले-भटूरे", "gm", 250, 50],
+  ["स्प्रिंग रोल शीट", "मैगी/कॉर्न/छोले-भटूरे", "pc", 50, 10],
+  ["पनीर", "ताज़ा सामान", "kg", 40, 8],
+  ["प्याज़", "ताज़ा सामान", "kg", 80, 16],
+  ["टमाटर", "ताज़ा सामान", "kg", 50, 10],
+  ["अदरक-लहसुन", "ताज़ा सामान", "kg", 10, 2],
+  ["दही", "ताज़ा सामान", "kg", 25, 5],
+  ["क्रीम/मलाई", "ताज़ा सामान", "L", 8, 2],
+  ["बटर", "ताज़ा सामान", "kg", 7, 2],
+  ["खमीर/बेकिंग सोडा", "ताज़ा सामान", "pc", 1, 1],
+  ["आलू", "ताज़ा सामान", "kg", 40, 8],
+  ["पत्तागोभी", "ताज़ा सामान", "kg", 15, 3],
+  ["गाजर", "ताज़ा सामान", "kg", 5, 1],
+  ["शिमला मिर्च", "ताज़ा सामान", "kg", 12, 3],
+  ["मशरूम", "ताज़ा सामान", "kg", 12, 3],
+  ["बेबी कॉर्न", "ताज़ा सामान", "kg", 6, 2],
+  ["मटर", "ताज़ा सामान", "kg", 5, 1],
+  ["पालक", "ताज़ा सामान", "kg", 4, 1],
+  ["हरी मिर्च", "ताज़ा सामान", "kg", 3, 1],
+  ["धनिया पत्ती", "ताज़ा सामान", "kg", 3, 1],
+  ["पुदीना", "ताज़ा सामान", "kg", 1, 1],
+  ["नींबू", "ताज़ा सामान", "kg", 3, 1],
+  ["स्प्रिंग ओनियन", "ताज़ा सामान", "kg", 4, 1],
+  ["सलाद (खीरा/मूली/गाजर)", "ताज़ा सामान", "kg", 8, 2],
+  ["स्वीट कॉर्न", "ताज़ा सामान", "kg", 8, 2],
+  ["अचार", "ताज़ा सामान", "kg", 2, 1],
+  ["चिकन", "चिकन/मटन/मछली/अंडा", "kg", 80, 16],
+  ["मटन", "चिकन/मटन/मछली/अंडा", "kg", 12, 3],
+  ["मछली", "चिकन/मटन/मछली/अंडा", "kg", 10, 2],
+  ["अंडा", "चिकन/मटन/मछली/अंडा", "tray", 8, 2],
+  ["पिज़्ज़ा बेस", "पिज़्ज़ा/बर्गर/रोल/सैंडविच", "pc", 30, 6],
+  ["मोज़ेरेला चीज़", "पिज़्ज़ा/बर्गर/रोल/सैंडविच", "kg", 5, 1],
+  ["चीज़ स्लाइस", "पिज़्ज़ा/बर्गर/रोल/सैंडविच", "pc", 100, 20],
+  ["बर्गर बन", "पिज़्ज़ा/बर्गर/रोल/सैंडविच", "pc", 60, 12],
+  ["सैंडविच ब्रेड", "पिज़्ज़ा/बर्गर/रोल/सैंडविच", "pkt", 10, 2],
+  ["फ्रेंच फ्राइज़ (फ्रोज़न)", "पिज़्ज़ा/बर्गर/रोल/सैंडविच", "kg", 15, 3],
+  ["KFC/क्रिस्पी कोटिंग मिक्स", "पिज़्ज़ा/बर्गर/रोल/सैंडविच", "pc", 3, 1],
+  ["वेज क्रिस्पी बर्गर पैटी", "पिज़्ज़ा/बर्गर/रोल/सैंडविच", "pc", 40, 8],
+  ["ओलिव + जलापेनो", "पिज़्ज़ा/बर्गर/रोल/सैंडविच", "pc", 2, 1],
+  ["दूध", "शेक/ड्रिंक/चाय", "L", 120, 24],
+  ["आइसक्रीम (वनीला)", "शेक/ड्रिंक/चाय", "L", 15, 3],
+  ["आइसक्रीम (चॉकलेट)", "शेक/ड्रिंक/चाय", "L", 8, 2],
+  ["मैंगो पल्प", "शेक/ड्रिंक/चाय", "pc", 4, 1],
+  ["स्ट्रॉबेरी क्रश", "शेक/ड्रिंक/चाय", "pc", 2, 1],
+  ["बटरस्कॉच क्रश", "शेक/ड्रिंक/चाय", "pc", 2, 1],
+  ["चॉकलेट सिरप", "शेक/ड्रिंक/चाय", "pc", 4, 1],
+  ["ब्लू कुराकाओ सिरप", "शेक/ड्रिंक/चाय", "pc", 2, 1],
+  ["मिंट सिरप", "शेक/ड्रिंक/चाय", "pc", 2, 1],
+  ["कॉफी पाउडर", "शेक/ड्रिंक/चाय", "gm", 1000, 200],
+  ["चायपत्ती", "शेक/ड्रिंक/चाय", "kg", 2, 1],
+  ["किटकैट", "शेक/ड्रिंक/चाय", "pc", 20, 4],
+  ["ओरियो बिस्किट", "शेक/ड्रिंक/चाय", "pkt", 10, 2],
+  ["कोल्ड ड्रिंक", "शेक/ड्रिंक/चाय", "crate", 5, 1],
+  ["सोडा", "शेक/ड्रिंक/चाय", "bottle", 24, 5],
+  ["आइसक्रीम (स्ट्रॉबेरी)", "शेक/ड्रिंक/चाय", "L", 4, 1],
+  ["आइसक्रीम (बटरस्कॉच)", "शेक/ड्रिंक/चाय", "L", 4, 1],
+  ["कोको/चॉकलेट पाउडर", "शेक/ड्रिंक/चाय", "gm", 1000, 200],
+  ["बर्फ", "शेक/ड्रिंक/चाय", "kg", 150, 30],
+  ["स्ट्रॉ", "शेक/ड्रिंक/चाय", "pkt", 5, 1],
+  ["शेक/पार्सल कप + ढक्कन", "शेक/ड्रिंक/चाय", "pc", 200, 40],
+  ["डार्क चॉकलेट", "शेक/ड्रिंक/चाय", "kg", 1, 1],
+  ["ग्रीन ऐपल सिरप", "शेक/ड्रिंक/चाय", "pc", 2, 1],
+  ["ब्लूबेरी सिरप", "शेक/ड्रिंक/चाय", "pc", 2, 1],
+  ["वॉटरमेलन सिरप", "शेक/ड्रिंक/चाय", "pc", 2, 1],
+  ["मिनरल वाटर", "शेक/ड्रिंक/चाय", "carton", 5, 1],
+  ["रसगुल्ला", "मिठाई/डेज़र्ट", "pc", 60, 12],
+  ["राजभोग", "मिठाई/डेज़र्ट", "pc", 30, 6],
+  ["गुलाब जामुन", "मिठाई/डेज़र्ट", "pc", 60, 12],
+  ["रसमलाई", "मिठाई/डेज़र्ट", "pc", 30, 6],
+  ["फ्रूट्स (फ्रूट क्रीम)", "मिठाई/डेज़र्ट", "kg", 5, 1],
+  ["फ्रूट कॉकटेल (टिन)", "मिठाई/डेज़र्ट", "pc", 3, 1],
+  ["कोयला (तंदूर)", "पैकिंग/अन्य", "kg", 50, 10],
+  ["कमर्शियल गैस सिलेंडर", "पैकिंग/अन्य", "pc", 3, 1],
+  ["डिस्पोज़ेबल कंटेनर", "पैकिंग/अन्य", "pc", 200, 40],
+  ["एल्युमिनियम फॉइल", "पैकिंग/अन्य", "pc", 2, 1],
+  ["टिशू पेपर", "पैकिंग/अन्य", "pkt", 5, 1]
+];
+
+const invDateKey = (d = new Date()) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const invNum = (v) => (v === "" || v === null || v === undefined || isNaN(Number(v)) ? null : Number(v));
+const invFmt = (n) => (n === null ? "" : String(Math.round(n * 100) / 100));
+const EMPTY_ROW = { open: "", inn: "", close: "" };
+
+function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
+  const toast = useToast();
+  const haptic = useHaptic();
+  const [items, setItems] = useState(null);
+  const [date, setDate] = useState(invDateKey());
+  const [rows, setRows] = useState({});
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loadingDay, setLoadingDay] = useState(true);
+  const [q, setQ] = useState("");
+  const debouncedQ = useDebounce(q, 150);
+  const [cat, setCat] = useState("All");
+  const [view, setView] = useState("entry");
+  const [showAll, setShowAll] = useState(false);
+
+  // Items list (live)
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "inventory", "items"),
+      (snap) => setItems(snap.exists() && Array.isArray(snap.data().list) ? snap.data().list : []),
+      (e) => { setItems([]); toast("Inventory load nahi hua: " + e.message, "error"); });
+    return () => unsub();
+  }, []);
+
+  const ready = items !== null;
+
+  // Load the selected day (opening auto = last saved closing)
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    setLoadingDay(true);
+    (async () => {
+      try {
+        const [daySnap, stSnap] = await Promise.all([getDoc(doc(db, "inventory", "day_" + date)), getDoc(doc(db, "inventory", "state"))]);
+        if (cancelled) return;
+        const entries = daySnap.exists() ? (daySnap.data().entries || {}) : {};
+        const stock = stSnap.exists() ? (stSnap.data().stock || {}) : {};
+        const next = {};
+        (items || []).forEach((it) => {
+          const e = entries[it.id];
+          if (e) next[it.id] = { open: invFmt(invNum(e.open)), inn: invFmt(invNum(e.inn)), close: invFmt(invNum(e.close)) };
+          else next[it.id] = { open: stock[it.id] !== undefined ? invFmt(invNum(stock[it.id])) : "", inn: "", close: "" };
+        });
+        setRows(next);
+        setDirty(false);
+      } catch (e) { if (!cancelled) toast("Day load error: " + e.message, "error"); }
+      finally { if (!cancelled) setLoadingDay(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [date, ready]);
+
+  const setField = (id, field, val) => {
+    setRows((prev) => ({ ...prev, [id]: { ...(prev[id] || EMPTY_ROW), [field]: val } }));
+    setDirty(true);
+  };
+
+  const changeDate = (v) => {
+    if (!v) return;
+    if (dirty && !window.confirm("Unsaved changes hain. Date badalne par ye chale jayenge. Continue?")) return;
+    setDate(v);
+  };
+
+  const rowOf = (id) => rows[id] || EMPTY_ROW;
+  const currentOf = (id) => {
+    const r = rowOf(id);
+    const close = invNum(r.close);
+    if (close !== null) return close;
+    const open = invNum(r.open);
+    if (open === null) return null;
+    return open + (invNum(r.inn) || 0);
+  };
+  const usedOf = (id) => {
+    const r = rowOf(id);
+    const close = invNum(r.close);
+    if (close === null) return null;
+    return (invNum(r.open) || 0) + (invNum(r.inn) || 0) - close;
+  };
+  const isLow = (it) => {
+    const cur = currentOf(it.id);
+    return cur !== null && Number(it.min) > 0 && cur <= Number(it.min);
+  };
+
+  const save = async () => {
+    if (saving || !ready) return;
+    const entries = {};
+    let negative = 0;
+    (items || []).forEach((it) => {
+      const r = rowOf(it.id);
+      const o = invNum(r.open), i = invNum(r.inn), c = invNum(r.close);
+      if (o === null && i === null && c === null) return;
+      entries[it.id] = { open: o, inn: i, close: c };
+      if (c !== null && (o || 0) + (i || 0) - c < 0) negative++;
+    });
+    if (Object.keys(entries).length === 0) { toast("Kuch bhara nahi hai", "warning"); return; }
+    if (negative > 0 && !window.confirm(negative + " item me closing, opening+aaya se zyada hai (khapat minus). Phir bhi save karein?")) return;
+    setSaving(true);
+    try {
+      await runTransaction(db, async (tx) => {
+        const stRef = doc(db, "inventory", "state");
+        const st = await tx.get(stRef);
+        const stock = st.exists() ? { ...(st.data().stock || {}) } : {};
+        const lastDate = st.exists() ? (st.data().lastDate || "") : "";
+        Object.entries(entries).forEach(([id, e]) => { if (e.close !== null) stock[id] = e.close; });
+        tx.set(doc(db, "inventory", "day_" + date), { date, entries, updatedAt: Date.now(), by: waiterName || "Staff" });
+        if (date >= lastDate) tx.set(stRef, { stock, lastDate: date, updatedAt: Date.now() });
+      });
+      haptic(30);
+      setDirty(false);
+      toast("Stock save ho gaya", "success");
+    } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
+  };
+
+  const seedDefault = async () => {
+    if (!isOwner) { toast("Sirf owner default list load kar sakta hai", "warning"); return; }
+    if (!window.confirm(INV_DEFAULT.length + " items ki default list load karein?")) return;
+    try {
+      const list = INV_DEFAULT.map((x, i) => ({ id: "i" + String(i + 1).padStart(3, "0"), name: x[0], cat: x[1], unit: x[2], ord: x[3], min: x[4] }));
+      await setDoc(doc(db, "inventory", "items"), { list, updatedAt: Date.now() });
+      toast("Default list load ho gayi", "success");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const saveItems = async (list) => { await updateDoc(doc(db, "inventory", "items"), { list, updatedAt: Date.now() }); };
+
+  const editItem = async (it) => {
+    if (!isOwner) { toast("Sirf owner item badal sakta hai", "warning"); return; }
+    const m = window.prompt(it.name + " - Minimum stock (isse kam par laal alert, 0 = alert nahi) [" + it.unit + "]", String(it.min || 0));
+    if (m === null) return;
+    const o = window.prompt(it.name + " - Mangane ki matra (15 din) [" + it.unit + "]", String(it.ord || 0));
+    if (o === null) return;
+    try {
+      await saveItems(items.map((x) => x.id === it.id ? { ...x, min: Math.max(0, Number(m) || 0), ord: Math.max(0, Number(o) || 0) } : x));
+      toast("Item update ho gaya", "success");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const addItem = async () => {
+    if (!isOwner) { toast("Sirf owner item jod sakta hai", "warning"); return; }
+    const name = (window.prompt("Naye item ka naam?", "") || "").trim();
+    if (!name) return;
+    const cats = Array.from(new Set((items || []).map((x) => x.cat)));
+    const c = (window.prompt("Category? (" + cats.join(", ") + ")", cats[0] || "अन्य") || "").trim() || "अन्य";
+    const unit = (window.prompt("Unit? (kg / L / pc / gm)", "kg") || "kg").trim();
+    try {
+      await saveItems([...(items || []), { id: uid("i"), name, cat: c, unit, ord: 0, min: 0 }]);
+      toast("Item jud gaya", "success");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const cats = useMemo(() => ["All", ...Array.from(new Set((items || []).map((x) => x.cat)))], [items]);
+  const visible = useMemo(() => (items || []).filter((it) => (cat === "All" || it.cat === cat) && (!debouncedQ.trim() || it.name.toLowerCase().includes(debouncedQ.toLowerCase()))), [items, cat, debouncedQ]);
+  const lowItems = (items || []).filter(isLow);
+
+  // Order list
+  const orderList = (items || []).filter((it) => Number(it.ord) > 0 && (showAll || isLow(it)));
+  const orderText = () => {
+    const byCat = {};
+    orderList.forEach((it) => { (byCat[it.cat] = byCat[it.cat] || []).push(it); });
+    let msg = "*" + RESTAURANT.name + " - Saman Order List*\n" + date + "\n";
+    Object.entries(byCat).forEach(([c, list]) => {
+      msg += "\n*" + c + "*\n";
+      list.forEach((it) => { msg += "- " + it.name + ": " + it.ord + " " + it.unit + "\n"; });
+    });
+    return msg;
+  };
+  const shareOrder = () => {
+    if (orderList.length === 0) { toast("Order list khaali hai", "warning"); return; }
+    window.open("https://wa.me/?text=" + encodeURIComponent(orderText()), "_blank");
+  };
+  const printOrder = () => {
+    if (orderList.length === 0) { toast("Order list khaali hai", "warning"); return; }
+    const byCat = {};
+    orderList.forEach((it) => { (byCat[it.cat] = byCat[it.cat] || []).push(it); });
+    const body = "<h2>" + esc(RESTAURANT.name) + "</h2><div class='c'>SAMAN ORDER LIST - " + esc(date) + "</div><div class='line'></div>" +
+      Object.entries(byCat).map(([c, list]) => "<div style='font-size:12px;margin-top:6px'>" + esc(c) + "</div><table>" +
+        list.map((it) => "<tr><td>" + esc(it.name) + "</td><td style='text-align:right'>" + esc(it.ord) + " " + esc(it.unit) + "</td></tr>").join("") + "</table>").join("") +
+      "<div class='line'></div><div class='c'>Total items: " + orderList.length + "</div>";
+    printHtml("Order List", body, { css: "@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}h2{text-align:center;font-size:20px;margin:4px 0}.c{text-align:center;font-size:11px}.line{border-top:2px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:13px}td{padding:3px 2px}" });
+  };
+
+  const inputStyle = { width: "100%", boxSizing: "border-box", padding: isMobile ? "9px 6px" : "8px 8px", border: "1.5px solid " + C.line, borderRadius: 8, fontSize: 14, fontWeight: 700, textAlign: "center", background: C.card, color: C.ink, outline: "none", fontFamily: "monospace" };
+  const labelStyle = { fontSize: 9, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3, textAlign: "center" };
+
+  if (!ready) return <div style={{ padding: 20 }}><Skeleton h={40} style={{ marginBottom: 10 }} /><Skeleton h={90} style={{ marginBottom: 10 }} /><Skeleton h={90} /></div>;
+
+  if (items.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: 40, color: C.gray }}>
+        <div style={{ fontSize: 48, marginBottom: 8 }}>🧾</div>
+        <div style={{ fontSize: 15, fontWeight: 800, color: C.ink, marginBottom: 6 }}>Saman ki list abhi khaali hai</div>
+        <div style={{ fontSize: 12, marginBottom: 16 }}>Menu ke hisab se {INV_DEFAULT.length} items ki default list load karo</div>
+        <button onClick={seedDefault} style={{ padding: "12px 22px", border: "none", borderRadius: 10, background: C.red, color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Default list load karo</button>
+        {!isOwner && <div style={{ fontSize: 11, marginTop: 10 }}>(Sirf owner/manager kar sakta hai)</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ paddingBottom: dirty ? 80 : 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Saman Stock</h2>
+          <div style={{ fontSize: 12, color: lowItems.length ? C.red : C.gray, fontWeight: 700, marginTop: 2 }}>{lowItems.length ? lowItems.length + " item kam stock" : "Sab theek hai"}</div>
+        </div>
+        <input type="date" value={date} max={invDateKey()} onChange={(e) => changeDate(e.target.value)} style={{ padding: "8px 12px", border: "1px solid " + C.line, borderRadius: 8, fontSize: 13, background: C.card, color: C.ink, fontWeight: 700, outline: "none" }} />
+      </div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {[["entry", "📝 Daily Entry"], ["order", "🛒 Order List" + (lowItems.length ? " (" + lowItems.length + ")" : "")]].map(([id, label]) => (
+          <button key={id} onClick={() => { haptic(); setView(id); }} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: "1.5px solid " + (view === id ? C.red : C.line), background: view === id ? C.red : C.card, color: view === id ? "#fff" : C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
+        ))}
+      </div>
+
+      {view === "entry" && (
+        <>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Item search..." style={{ width: "100%", boxSizing: "border-box", padding: "10px 14px", border: "1px solid " + C.line, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink, marginBottom: 8 }} />
+          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 4 }}>
+            {cats.map((c) => (
+              <button key={c} onClick={() => setCat(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (cat === c ? C.red : C.line), background: cat === c ? C.red : C.card, color: cat === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
+            ))}
+          </div>
+          {loadingDay && <div style={{ textAlign: "center", padding: 20, color: C.gray, fontSize: 13 }}><Spinner color={C.red} /> Load ho raha hai...</div>}
+          {!loadingDay && (
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(340px, 1fr))", gap: 8 }}>
+              {visible.map((it) => {
+                const r = rowOf(it.id);
+                const used = usedOf(it.id);
+                const low = isLow(it);
+                return (
+                  <div key={it.id} style={{ background: low ? C.redLight : C.card, border: "1.5px solid " + (low ? C.red : C.line), borderRadius: 12, padding: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
+                      <button onClick={() => editItem(it)} style={{ background: "transparent", border: "none", padding: 0, textAlign: "left", fontFamily: "inherit", cursor: "pointer", minWidth: 0, flex: 1 }}>
+                        <span style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{it.name}</span>
+                        <span style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}> ({it.unit})</span>
+                        {low && <span style={{ marginLeft: 6, background: C.red, color: "#fff", fontSize: 9, fontWeight: 800, padding: "2px 6px", borderRadius: 6 }}>KAM</span>}
+                      </button>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: used === null ? C.gray : used < 0 ? C.red : C.green, fontFamily: "monospace", flexShrink: 0 }}>
+                        {used === null ? "khapat -" : "khapat " + invFmt(used)}
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                      {[["open", "Opening"], ["inn", "Aaya"], ["close", "Closing"]].map(([f, label]) => (
+                        <div key={f}>
+                          <div style={labelStyle}>{label}</div>
+                          <input type="number" inputMode="decimal" step="any" min="0" value={r[f]} onChange={(e) => setField(it.id, f, e.target.value)} placeholder="0" style={inputStyle} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              {visible.length === 0 && <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 30, color: C.gray, fontSize: 13 }}>Koi item nahi mila</div>}
+            </div>
+          )}
+          {isOwner && !loadingDay && (
+            <button onClick={addItem} style={{ width: "100%", marginTop: 12, padding: 12, borderRadius: 10, border: "1.5px dashed " + C.gray, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>+ Naya item jodo</button>
+          )}
+        </>
+      )}
+
+      {view === "order" && (
+        <div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+            <button onClick={() => setShowAll(false)} style={{ padding: "7px 14px", borderRadius: 20, border: "1px solid " + (!showAll ? C.red : C.line), background: !showAll ? C.red : C.card, color: !showAll ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Sirf kam stock</button>
+            <button onClick={() => setShowAll(true)} style={{ padding: "7px 14px", borderRadius: 20, border: "1px solid " + (showAll ? C.red : C.line), background: showAll ? C.red : C.card, color: showAll ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Poori 15 din ki list</button>
+          </div>
+          {orderList.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.gray }}><div style={{ fontSize: 40, marginBottom: 8 }}>👍</div><div style={{ fontSize: 13, fontWeight: 700 }}>Abhi kuch mangane ki zarurat nahi</div></div>}
+          {Array.from(new Set(orderList.map((x) => x.cat))).map((c) => (
+            <div key={c} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>{c}</div>
+              {orderList.filter((x) => x.cat === c).map((it) => {
+                const cur = currentOf(it.id);
+                return (
+                  <div key={it.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: C.card, border: "1px solid " + C.line, borderRadius: 10, marginBottom: 6, gap: 8 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{it.name}</div>
+                      <div style={{ fontSize: 11, color: C.gray }}>Abhi: {cur === null ? "-" : invFmt(cur)} {it.unit}</div>
+                    </div>
+                    <div style={{ fontWeight: 900, fontSize: 15, color: C.red, fontFamily: "monospace", flexShrink: 0 }}>{it.ord} {it.unit}</div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+          {orderList.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <button onClick={shareOrder} style={{ padding: 13, border: "none", borderRadius: 10, background: C.green, color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>WhatsApp</button>
+              <button onClick={printOrder} style={{ padding: 13, border: "1.5px solid " + C.blue, borderRadius: 10, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Print</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {dirty && view === "entry" && (
+        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, background: C.card, borderTop: "1px solid " + C.line, padding: 12, boxShadow: "0 -4px 16px rgba(0,0,0,0.1)", zIndex: 60, display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ flex: 1, fontSize: 12, fontWeight: 800, color: C.amber }}>Unsaved changes</div>
+          <button onClick={save} disabled={saving} style={{ padding: "13px 28px", border: "none", borderRadius: 10, background: "linear-gradient(135deg, " + C.red + " 0%, #B91C1C 100%)", color: "#fff", fontWeight: 900, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8 }}>{saving ? <Spinner /> : "Save Stock"}</button>
+        </div>
+      )}
     </div>
   );
 }
