@@ -679,6 +679,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
   const toast = useToast();
   const haptic = useHaptic();
   const defaultStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }, []);
+  const [openId, setOpenId] = useState(null);
   const start = rangeStart ?? defaultStart;
   const end = rangeEnd ?? Date.now();
   const rangeAll = orders.filter(o => o.status !== "cancelled" && o.createdAt >= start && o.createdAt < end);
@@ -726,16 +727,27 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
           ))}
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile || filter === "all" ? "1fr" : "repeat(auto-fill, minmax(340px, 1fr))", gap: filter === "all" ? 8 : 12 }}>
         {filtered.map(o => {
           const st = STATUS[o.status] || STATUS.new;
           const stColor = C[st.color] || C.gray;
           const stBg = C[st.color + "Light"] || C.light;
+          const isOpen = filter !== "all" || openId === o.id;
+          if (!isOpen) return (
+            <button key={o.id} onClick={() => { haptic(); setOpenId(o.id); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: isMobile ? "9px 10px" : "10px 14px", background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: C.ink }}>
+              <span style={{ fontWeight: 800, fontSize: 13, whiteSpace: "nowrap" }}>{o.orderType === "parcel" ? "Parcel" : `T${o.table}`}</span>
+              <span style={{ fontSize: 11, color: C.gray, whiteSpace: "nowrap" }}>#{o.id?.slice(1,5).toUpperCase()} - {timeAgo(o.createdAt)}</span>
+              <span style={{ background: stBg, color: stColor, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>{st.label}</span>
+              {o.paid && <span style={{ background: C.greenLight, color: C.green, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>PAID</span>}
+              <span style={{ marginLeft: "auto", fontWeight: 900, color: C.red, fontFamily: "monospace", fontSize: 13, whiteSpace: "nowrap" }}>{inr(o.finalTotal || 0)}</span>
+              <span style={{ color: C.gray, fontSize: 10 }}>▼</span>
+            </button>
+          );
           return (
             <div key={o.id} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: isMobile ? 12 : 16, boxShadow: "0 2px 8px rgba(0,0,0,0.04)", animation: "fadeIn 0.25s" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8 }}>
                 <div style={{ fontWeight: 800, fontSize: isMobile ? 14 : 15, color: C.ink }}>{o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`}</div>
-                <span style={{ background: stBg, color: stColor, padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>{st.label}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ background: stBg, color: stColor, padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>{st.label}</span>{filter === "all" && <button onClick={() => setOpenId(null)} style={{ border: `1px solid ${C.line}`, background: C.cardAlt, color: C.gray, borderRadius: 8, padding: "3px 9px", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>▲</button>}</div>
               </div>
               <div style={{ fontSize: 12, color: C.gray, marginBottom: 10, display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <span>#{o.id?.slice(1,5).toUpperCase()}</span><span>{timeAgo(o.createdAt)} ago</span>{o.waiter && <span>{o.waiter}</span>}
