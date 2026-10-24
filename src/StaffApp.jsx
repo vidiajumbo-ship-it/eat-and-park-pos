@@ -1274,7 +1274,15 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     const d = Math.round((sub * discount) / 100);
     const g = Math.round(((sub - d) * gstRate) / 100);
     const finalTotal = Math.max(0, sub - d) + g;
-    await updateDoc(doc(db, "orders", existingOrder.id), { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, billEditedAt: Date.now() });
+    const newKotItems = finalItems.map(it => ({ ...it, qty: it.qty - (existingMap[it.itemId] || 0), kotNumber: nextKotNo })).filter(it => it.qty > 0);
+    const extra = {};
+    if (newKotItems.length) {
+      const baseKots = existingOrder.kots?.length ? existingOrder.kots : [{ id: uid("kot"), kotNumber: 1, items: existing, createdAt: existingOrder.createdAt, status: existingOrder.status }];
+      extra.kots = [...baseKots, { id: uid("kot"), kotNumber: nextKotNo, items: newKotItems, createdAt: Date.now(), status: "new", isRunning: true }];
+      extra.status = "new"; extra.lastKotAt = Date.now();
+    }
+    await updateDoc(doc(db, "orders", existingOrder.id), { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, billEditedAt: Date.now(), ...extra });
+    if (newKotItems.length) printKOT({ ...existingOrder, items: newKotItems, kots: [] });
     return { finalItems, sub, discAmt: d, gstAmt: g, finalTotal };
   };
 
@@ -1418,7 +1426,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               return (
                 <div key={id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderBottom: `1px solid ${C.line}`, background: isNew ? C.greenLight : "transparent", minHeight: 36, animation: "slideInRight 0.2s" }}>
                   <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: "0 1 auto", minWidth: 0 }}>{m.name}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: C.ink, lineHeight: 1.2, flex: "0 1 auto", minWidth: 0 }}>{m.name}</span>
                     {!addMoreMode && existingQty > 0 && <span style={{ background: C.blue, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>R{existingQty}</span>}
                     {!addMoreMode && existingQty === 0 && <span style={{ background: C.green, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>NEW</span>}
                   </div>
