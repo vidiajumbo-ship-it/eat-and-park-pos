@@ -67,7 +67,11 @@ const timeAgo = (ts) => {
   if (h < 24) return h + "h";
   return Math.floor(h / 24) + "d";
 };
-const TABLE_COUNT = 12;
+const TABLE_COUNT = 20;
+// Chalu parcel: paid / due / cancelled nahi, aur 18 ghante ke andar
+const isOpenParcel = (o) =>
+  o.orderType === "parcel" && o.status !== "cancelled" && !o.paid && o.paymentStatus !== "due" &&
+  Date.now() - (o.createdAt || 0) < 18 * 3600 * 1000;
 // Table tab tak occupied jab tak paid / due / cancelled na ho (served hone par table free nahi dikhna chahiye)
 const isOpenDineIn = (o) =>
   o.orderType === "dine_in" && o.status !== "cancelled" && !o.paid && o.paymentStatus !== "due" &&
@@ -410,6 +414,7 @@ function StaffAppInner() {
     a.volume = 0.15; a.play().catch(() => {}); } catch (e) {} };
 
   const newCount = orders.filter(o => o.status === "new" && Date.now() - o.createdAt < 6 * 3600 * 1000).length;
+  const parcelCount = orders.filter(isOpenParcel).length;
   useEffect(() => {
     document.title = (newCount ? `(${newCount}) ` : "") + "Eat & Park Staff";
     if (!user || newCount === 0) return;
@@ -514,6 +519,7 @@ function StaffAppInner() {
       {/* TABS */}
       <div style={{ background: C.card, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "0 8px" : "0 16px", display: "flex", gap: 4, overflowX: "auto" }}>
         {[
+          { id: "parcel", label: `🛍️ Parcel${parcelCount ? ` (${parcelCount})` : ""}` },
           { id: "tables", label: `🍽️ Tables` },
           { id: "orders", label: `📋 Orders${newCount ? ` (${newCount})` : ""}` },
           { id: "kot", label: `🍳 Kitchen${newCount ? ` (${newCount})` : ""}` },
@@ -540,6 +546,12 @@ function StaffAppInner() {
         )}
         {activeTab === "orders" && (
           <OrdersView C={C} isMobile={isMobile} orders={orders} menu={menu} waiterName={waiterName} isOwner={isOwner} onAddMore={(order) => { setBillOrder(order); setSelectedTable(order.table || "parcel"); setCart({}); setAddMoreMode(true); }} onEditBill={(order) => { setBillOrder(order); setSelectedTable(order.table || "parcel"); setCart({}); setAddMoreMode(false); }} filter={ordersFilter} setFilter={setOrdersFilter} rangeStart={ordersRange?.start} rangeEnd={ordersRange?.end} setOrders={setOrders} onPaidSuccess={() => { setConfetti(true); setTimeout(() => setConfetti(false), 1800); }} />
+        )}
+        {activeTab === "parcel" && (
+          <ParcelView C={C} isMobile={isMobile} orders={orders}
+            onNew={() => { haptic(); setSelectedTable("parcel"); setCart({}); setBillOrder(null); setAddMoreMode(false); }}
+            onBill={(order) => { haptic(); setBillOrder(order); setSelectedTable("parcel"); setCart({}); setAddMoreMode(false); }}
+            onAdd={(order) => { haptic(); setBillOrder(order); setSelectedTable("parcel"); setCart({}); setAddMoreMode(true); }} />
         )}
         {activeTab === "kot" && <KOTView C={C} isMobile={isMobile} orders={orders} setOrders={setOrders} />}
 {activeTab === "inventory" && <InventoryPanel C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
@@ -569,7 +581,7 @@ function StaffAppInner() {
               <div style={{ fontWeight: 800, fontSize: 15, color: C.ink, marginTop: 4 }}>{staffData?.name || "Staff"}</div>
               <div style={{ fontSize: 12, color: C.gray, marginTop: 2 }}>{staffData?.role || "waiter"}</div>
             </div>
-            {[{ id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }].map(tab => (
+            {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }].map(tab => (
               <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.redLight : "transparent", color: activeTab === tab.id ? C.red : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
                 <span style={{ fontSize: 18 }}>{tab.icon}</span><span>{tab.label}</span>
               </button>
@@ -614,6 +626,66 @@ function StaffAppInner() {
 // ===========================================================================
 // TABLES VIEW
 // ===========================================================================
+// ===========================================================================
+// PARCEL VIEW (chalu parcel orders ek jagah)
+// ===========================================================================
+function ParcelView({ C, isMobile, orders, onNew, onBill, onAdd }) {
+  const [, setTick] = useState(0);
+  useEffect(() => { const iv = setInterval(() => setTick(x => x + 1), 30000); return () => clearInterval(iv); }, []);
+  const list = orders.filter(isOpenParcel).sort((a, b) => b.createdAt - a.createdAt);
+  const total = list.reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Parcel ({list.length})</h2>
+          <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 2 }}>Baaki payment: {inr(total)}</div>
+        </div>
+        <button onClick={onNew} style={{ padding: "11px 18px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>+ New Parcel</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+        {list.map(o => {
+          const st = STATUS[o.status] || STATUS.new;
+          const stColor = C[st.color] || C.gray;
+          const stBg = C[st.color + "Light"] || C.light;
+          const cname = o.customer?.name && o.customer.name !== "Walk-in" ? o.customer.name : "";
+          const cphone = o.customer?.phone || "";
+          return (
+            <div key={o.id} style={{ background: C.card, border: `2px solid ${stColor}`, borderRadius: 12, padding: isMobile ? 12 : 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6, gap: 8 }}>
+                <div style={{ fontWeight: 900, fontSize: 15, color: C.ink }}>🛍️ #{o.id?.slice(1, 5).toUpperCase()}</div>
+                <span style={{ background: stBg, color: stColor, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 800 }}>{st.label}</span>
+              </div>
+              <div style={{ fontSize: 11, color: C.gray, marginBottom: 8, fontWeight: 700 }}>
+                {timeAgo(o.createdAt)} ago{cname ? " - " + cname : ""}{cphone ? " - " + cphone : ""}{o.waiter ? " - " + o.waiter : ""}
+              </div>
+              <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.6, marginBottom: 8 }}>
+                {(o.items || []).map((it, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <span>{it.qty}x {it.name}{it.portion ? ` (${it.portion})` : ""}</span>
+                    <span style={{ color: C.gray, fontFamily: "monospace", flexShrink: 0 }}>{inr(it.price * it.qty)}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 8, marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: C.gray, fontWeight: 600 }}>Total</span>
+                <span style={{ fontSize: 18, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                <button onClick={() => onBill(o)} style={{ padding: 9, border: "none", borderRadius: 8, background: C.red, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Bill / Paid</button>
+                <button onClick={() => onAdd(o)} style={{ padding: 9, border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ Add Items</button>
+                <button onClick={() => printKOT(o)} style={{ padding: 9, border: `1.5px solid ${C.blue}`, borderRadius: 8, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>KOT</button>
+                <button onClick={() => whatsappBill(o)} style={{ padding: 9, border: `1.5px solid ${C.green}`, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>WhatsApp</button>
+              </div>
+            </div>
+          );
+        })}
+        {list.length === 0 && <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 60, color: C.gray }}><div style={{ fontSize: 48, marginBottom: 8 }}>🛍️</div><div style={{ fontSize: 14, fontWeight: 700 }}>Koi chalu parcel nahi</div></div>}
+      </div>
+    </div>
+  );
+}
+
 function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, onMerge, onSplit, onMove, onFeedback, search, setSearch, todayRevenue, activeOrders }) {
   const tableData = useMemo(() => {
     const map = {};
