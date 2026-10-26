@@ -57,7 +57,7 @@ input:focus, textarea:focus { border-color: #DC2626 !important; box-shadow: 0 0 
 // UTILS
 // ===========================================================================
 const uid = (p) => p + Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 6);
-const inr = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN");
+const inr = (n) => { const v = Number(n); return "₹" + (isFinite(v) ? v : 0).toLocaleString("en-IN"); };
 const timeAgo = (ts) => {
   const s = Math.floor((Date.now() - ts) / 1000);
   if (s < 60) return s + "s";
@@ -377,7 +377,7 @@ function StaffAppInner() {
     const startToday = new Date(); startToday.setHours(0,0,0,0);
     const unsubMenu = onSnapshot(doc(db, "settings", "menu"), (snap) => {
       if (snap.exists() && Array.isArray(snap.data().items)) setMenu(snap.data().items);
-    });
+    }, (err) => { console.error("menu listener:", err); });
     const startRange = new Date(); startRange.setDate(startRange.getDate() - 30); startRange.setHours(0,0,0,0);
     const unsubOrders = onSnapshot(query(collection(db, "orders"), where("createdAt", ">=", startRange.getTime())), (snap) => {
       const newOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -396,7 +396,7 @@ function StaffAppInner() {
         }
         return newOrders;
       });
-    });
+    }, (err) => { console.error("orders listener:", err); });
     const unsubDue = onSnapshot(
       query(collection(db, "orders"), where("paymentStatus", "==", "due")),
       (snap) => setDueOrders(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
@@ -454,7 +454,13 @@ function StaffAppInner() {
     }
   };
 
-  const handleLogout = async () => { await signOut(auth); setUser(null); setStaffData(null); };
+  const handleLogout = async () => {
+    try {
+      Object.keys(localStorage).filter(k => k.startsWith("staff_draft_")).forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+    } catch (e) {}
+    setCart({}); setSelectedTable(null); setBillOrder(null); setAddMoreMode(false);
+    await signOut(auth); setUser(null); setStaffData(null);
+  };
 
   if (loading) return <SplashScreen C={C} />;
 
@@ -555,6 +561,7 @@ function StaffAppInner() {
         )}
         {activeTab === "kot" && <KOTView C={C} isMobile={isMobile} orders={orders} setOrders={setOrders} />}
 {activeTab === "inventory" && <InventoryPanel C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
+        {activeTab === "stock" && <StockPanel C={C} isMobile={isMobile} menu={menu} />}
         {activeTab === "dashboard" && (
           <DashboardView C={C} isMobile={isMobile} orders={orders} dueOrders={dueOrders} menu={menu}
             onStatusClick={(status, bounds) => { setOrdersFilter(status); setOrdersRange(bounds || null); setActiveTab("orders"); }}
@@ -774,7 +781,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
   const rangeAll = orders.filter(o => o.status !== "cancelled" && o.createdAt >= start && o.createdAt < end);
   const filtered =
     filter === "all" ? rangeAll
-    : filter === "active" ? rangeAll.filter(o => o.status !== "served")
+    : filter === "active" ? rangeAll.filter(o => o.status !== "served" && !o.paid)
     : filter === "paid" ? rangeAll.filter(o => o.paid)
     : filter === "served" ? rangeAll.filter(o => o.status === "served")
     : rangeAll.filter(o => o.status === filter);
@@ -787,7 +794,11 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
     // Optimistic
     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: next } : o));
     try { await updateDoc(doc(db, "orders", order.id), { status: next }); toast(`Order → ${STATUS[next].label}`, "success"); }
-    catch (e) { setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: order.status } : o)); toast(e.message, "error"); }
+    catch (e) {
+      try { const fresh = await getDoc(doc(db, "orders", order.id)); if (fresh.exists()) { const fd = fresh.data(); setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...fd } : o)); } else { setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: order.status } : o)); } }
+      catch (_) { setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: order.status } : o)); }
+      toast(e.message, "error");
+    }
   };
 
   const [payFor, setPayFor] = useState(null);
@@ -1083,7 +1094,9 @@ function printKOT(order) {
     iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
     document.body.appendChild(iframe);
     const w = iframe.contentWindow;
-    setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 30000);
+    const cleanup = () => { setTimeout(() => { try { if (iframe.parentNode) document.body.removeChild(iframe); } catch (e) {} }, 5000); };
+    try { w.addEventListener("afterprint", cleanup); } catch (e) {}
+    setTimeout(cleanup, 90000);
     w.document.open();
     w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:10px}h2,h3{text-align:center;margin:4px 0;font-weight:900}h2{font-size:26px}h3{font-size:18px}.c{text-align:center;font-size:12px;font-weight:700}.big{font-size:16px;font-weight:800}</style></head><body>
 <h2>KOT</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + order.table}</h3>
@@ -1107,7 +1120,9 @@ function printHtml(title, bodyHtml, opts = {}) {
     iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
     document.body.appendChild(iframe);
     const w = iframe.contentWindow;
-    setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 30000);
+    const cleanup = () => { setTimeout(() => { try { if (iframe.parentNode) document.body.removeChild(iframe); } catch (e) {} }, 5000); };
+    try { w.addEventListener("afterprint", cleanup); } catch (e) {}
+    setTimeout(cleanup, 90000);
     w.document.open();
     w.document.write(`<!doctype html><html><head><title>${title}</title><style>${css}</style></head><body>${bodyHtml}</body></html>`);
     w.document.close();
@@ -1124,7 +1139,7 @@ function printBill(order) {
     const total = order.finalTotal || sub;
     const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
     const billNo = order.id.slice(1,9).toUpperCase();
-    const showQr = !!RESTAURANT.upi && !order.paid && order.payment !== "due" && total > 0;
+    const showQr = !!RESTAURANT.upi && !order.paid && order.payment !== "due" && total > 0 && !!RESTAURANT.upi.trim();
     const qrHtml = showQr ? `<div class="c" style="margin-top:8px">Scan &amp; Pay Rs ${total}<br/><img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(upiUri(total, billNo))}" width="170" height="170" /></div>` : "";
     const css = "@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}h2{text-align:center;font-size:24px;font-weight:900;margin:4px 0}.c{text-align:center;font-size:10px}.line{border-top:2px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:4px 2px}th{border-bottom:2px solid #000;text-align:left;font-size:12px}.grand td{font-size:18px;font-weight:900;border-top:3px solid #000;padding-top:8px}.badge{display:inline-block;padding:3px 10px;border:2px solid #000;border-radius:10px;font-size:12px;margin:2px}";
     const body = `<h2>${RESTAURANT.name}</h2><div class="c">${RESTAURANT.address}</div><div class="c">Ph: ${RESTAURANT.phones.join(" / ")}</div><div class="line"></div>
@@ -1150,6 +1165,7 @@ ${qrHtml}
 }
 
 function whatsappBill(order) {
+  if (!order || !Array.isArray(order.items) || order.items.length === 0) { alert("Bill me item nahi hai"); return; }
   let phone = String(order.customer?.phone || order.duePhone || "").replace(/\D/g, "");
   if (phone.length < 10) phone = (window.prompt("Customer WhatsApp number (10 digit)?", "") || "").replace(/\D/g, "");
   if (phone.length < 10) return;
@@ -1166,13 +1182,15 @@ function printSplitBills(order, selected) {
   const a = items.filter((_, i) => selected[i]);
   const b = items.filter((_, i) => !selected[i]);
   const fullSub = items.reduce((s, it) => s + it.price * it.qty, 0) || 1;
-  const make = (list) => {
+  const aTotal = Math.round((Number(order.finalTotal) || fullSub) * (a.reduce((s, it) => s + it.price * it.qty, 0) / fullSub));
+  const bTotal = (Number(order.finalTotal) || fullSub) - aTotal;
+  const make = (list, targetTotal) => {
     const sub = list.reduce((s, it) => s + it.price * it.qty, 0);
     const r = sub / fullSub;
-    return { ...order, items: list, subtotal: sub, deliveryFee: 0, gstAmount: Math.round((order.gstAmount || 0) * r), billDiscount: Math.round((order.billDiscount || 0) * r), finalTotal: Math.round((Number(order.finalTotal) || fullSub) * r) };
+    return { ...order, items: list, subtotal: sub, deliveryFee: 0, gstAmount: Math.round((order.gstAmount || 0) * r), billDiscount: Math.round((order.billDiscount || 0) * r), finalTotal: targetTotal };
   };
-  if (a.length) printBill(make(a));
-  if (b.length) setTimeout(() => printBill(make(b)), 3500);
+  if (a.length) printBill(make(a, aTotal));
+  if (b.length) setTimeout(() => printBill(make(b, bTotal)), 3500);
 }
 
 // ===========================================================================
@@ -1309,7 +1327,9 @@ function SplitBillModal({ C, isMobile, order, onClose }) {
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
         <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${C.line}`, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Close</button>
         <button onClick={() => {
-          if (!Object.values(split1).some(Boolean)) { toast("Kam se kam 1 item tick karo", "warning"); return; }
+          const sel = Object.values(split1).filter(Boolean).length;
+          if (sel === 0) { toast("Kam se kam 1 item tick karo", "warning"); return; }
+          if (sel === items.length) { toast("Dono taraf item chahiye (kuch untick karo)", "warning"); return; }
           printSplitBills(order, split1); onClose();
         }} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.blue, color: "#fff", fontWeight: 800, cursor: "pointer" }}>Print Both</button>
       </div>
@@ -1352,8 +1372,10 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     }
   }, [cart, table, existingOrder, addMoreMode]);
 
-  // Restore draft on open (only if new order)
+  // Restore draft on open (only if new order) - runs once per table open
+  const draftRestoredRef = useRef(false);
   useEffect(() => {
+    if (draftRestoredRef.current) return;
     if (!existingOrder && !addMoreMode) {
       try {
         const draft = localStorage.getItem(`staff_draft_${table}`);
@@ -1366,7 +1388,8 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         }
       } catch (e) {}
     }
-  }, []);
+    draftRestoredRef.current = true;
+  }, [existingOrder, addMoreMode, table]);
 
   const existingItems = existingOrder?.items || [];
   const existingSubtotal = existingItems.reduce((s, it) => s + (it.price * it.qty), 0);
@@ -1405,7 +1428,6 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       const ex = existing.find(e => e.itemId === id);
       if (ex) finalItems.push({ itemId: id, name: ex.name, portion: ex.portion || "", price: ex.price, qty, kotNumber: ex.kotNumber || 1 });
       else if (m) finalItems.push({ itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty, kotNumber: nextKotNo });
-      /* old-item branch moved above */
     });
     if (finalItems.length === 0) throw new Error("Bill me kam se kam 1 item hona chahiye");
     const sub = finalItems.reduce((s, it) => s + it.price * it.qty, 0);
@@ -1413,10 +1435,12 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     const g = Math.round(((sub - d) * gstRate) / 100);
     const finalTotal = Math.max(0, sub - d) + g;
     const newKotItems = finalItems.map(it => ({ ...it, qty: it.qty - (existingMap[it.itemId] || 0), kotNumber: nextKotNo })).filter(it => it.qty > 0);
+    const removedItems = existing.filter(it => !cart[it.itemId] || cart[it.itemId] <= 0);
     const extra = {};
-    if (newKotItems.length) {
+    if (newKotItems.length || removedItems.length) {
       const baseKots = existingOrder.kots?.length ? existingOrder.kots : [{ id: uid("kot"), kotNumber: 1, items: existing, createdAt: existingOrder.createdAt, status: existingOrder.status }];
-      extra.kots = [...baseKots, { id: uid("kot"), kotNumber: nextKotNo, items: newKotItems, createdAt: Date.now(), status: "new", isRunning: true }];
+      const editKot = { id: uid("kot"), kotNumber: nextKotNo, items: newKotItems, removedItems, createdAt: Date.now(), status: "new", isRunning: true, isEdit: true };
+      extra.kots = [...baseKots, editKot];
       extra.status = "new"; extra.lastKotAt = Date.now();
     }
     await updateDoc(doc(db, "orders", existingOrder.id), { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, billEditedAt: Date.now(), ...extra });
@@ -1496,7 +1520,8 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   };
 
   const addRunningItems = async (orderId) => {
-    if (cartItems.length === 0) return;
+    if (cartItems.length === 0 || placing) return;
+    setPlacing(true);
     try {
       const baseOrder = orders.find(o => o.id === orderId);
       if (!baseOrder) return;
@@ -1509,7 +1534,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       printKOT({ ...baseOrder, items: newItems, kots: [runKot] });
       toast(`KOT #${nextNo} added`, "success");
       onBack();
-    } catch (e) { toast(e.message, "error"); }
+    } catch (e) { toast(e.message, "error"); } finally { setPlacing(false); }
   };
 
   return (
@@ -1965,7 +1990,7 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
       finally { if (!cancelled) setLoadingDay(false); }
     })();
     return () => { cancelled = true; };
-  }, [date, ready]);
+  }, [date, ready, items]);
 
   const setField = (id, field, val) => {
     setRows((prev) => ({ ...prev, [id]: { ...(prev[id] || EMPTY_ROW), [field]: val } }));
