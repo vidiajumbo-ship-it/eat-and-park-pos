@@ -68,6 +68,10 @@ const timeAgo = (ts) => {
   return Math.floor(h / 24) + "d";
 };
 const TABLE_COUNT = 12;
+// Table tab tak occupied jab tak paid / due / cancelled na ho (served hone par table free nahi dikhna chahiye)
+const isOpenDineIn = (o) =>
+  o.orderType === "dine_in" && o.status !== "cancelled" && !o.paid && o.paymentStatus !== "due" &&
+  Date.now() - (o.createdAt || 0) < 18 * 3600 * 1000;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const STATUS = {
@@ -307,6 +311,7 @@ function StaffAppInner() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [orders, setOrders] = useState([]);
+  const [dueOrders, setDueOrders] = useState([]);
   const [menu, setMenu] = useState([]);
   const [activeTab, setActiveTab] = useState("tables");
   const [selectedTable, setSelectedTable] = useState(null);
@@ -318,6 +323,7 @@ function StaffAppInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [feedbackOrder, setFeedbackOrder] = useState(null);
   const [tableMerge, setTableMerge] = useState(null);
+  const [tableMove, setTableMove] = useState(null);
   const [splitBillOrder, setSplitBillOrder] = useState(null);
   const [billOrder, setBillOrder] = useState(null);
   const [addMoreMode, setAddMoreMode] = useState(false);
@@ -374,7 +380,7 @@ function StaffAppInner() {
       setOrders(prev => {
         if (prev.length > 0) {
           const prevIds = new Set(prev.map(o => o.id));
-          const newOnes = newOrders.filter(o => !prevIds.has(o.id) && o.status === "new" && o.createdAt >= startToday.getTime());
+          const newOnes = newOrders.filter(o => !prevIds.has(o.id) && o.status === "new" && o.createdBy !== auth.currentUser?.uid && o.createdAt >= startToday.getTime());
           if (newOnes.length > 0) {
             playSound();
             newOnes.forEach(o => {
@@ -387,7 +393,12 @@ function StaffAppInner() {
         return newOrders;
       });
     });
-    return () => { unsubMenu(); unsubOrders(); };
+    const unsubDue = onSnapshot(
+      query(collection(db, "orders"), where("paymentStatus", "==", "due")),
+      (snap) => setDueOrders(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      () => {}
+    );
+    return () => { unsubMenu(); unsubOrders(); unsubDue(); };
   }, [user]);
 
   useEffect(() => {
@@ -430,7 +441,10 @@ function StaffAppInner() {
       if (!s.exists()) { await signOut(auth); setLoginError("Ye account staff ka nahi hai"); }
       else toast("Welcome back!", "success");
     } catch (err) {
-      const msg = err.code === "auth/invalid-credential" ? "Email ya password galat hai" : err.message;
+      const msg = ["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(err.code) ? "Email ya password galat hai"
+        : err.code === "auth/too-many-requests" ? "Bahut zyada try ho gaye, thodi der baad try karo"
+        : err.code === "auth/network-request-failed" ? "Internet check karo"
+        : err.message;
       setLoginError(msg);
     }
   };
@@ -519,6 +533,7 @@ function StaffAppInner() {
             onAddMore={(order) => { haptic(); setBillOrder(order); setSelectedTable(order.table); setCart({}); setAddMoreMode(true); }}
             onMerge={(order) => setTableMerge(order)}
             onSplit={(order) => setSplitBillOrder(order)}
+            onMove={(order) => setTableMove(order)}
             onFeedback={(order) => setFeedbackOrder(order)}
             search={searchTable} setSearch={setSearchTable}
             todayRevenue={todayRevenue} activeOrders={activeOrders.length} />
@@ -529,7 +544,7 @@ function StaffAppInner() {
         {activeTab === "kot" && <KOTView C={C} isMobile={isMobile} orders={orders} setOrders={setOrders} />}
 {activeTab === "inventory" && <InventoryPanel C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
         {activeTab === "dashboard" && (
-          <DashboardView C={C} isMobile={isMobile} orders={orders} menu={menu}
+          <DashboardView C={C} isMobile={isMobile} orders={orders} dueOrders={dueOrders} menu={menu}
             onStatusClick={(status, bounds) => { setOrdersFilter(status); setOrdersRange(bounds || null); setActiveTab("orders"); }}
             onOrderClick={(order) => {
               if (order.orderType === "dine_in" && order.table) { setBillOrder(order); setSelectedTable(Number(order.table)); setCart({}); setAddMoreMode(false); }
@@ -584,6 +599,7 @@ function StaffAppInner() {
       {feedbackOrder && <FeedbackModal C={C} isMobile={isMobile} order={feedbackOrder} onClose={() => setFeedbackOrder(null)} />}
       {tableMerge && <TableMergeModal C={C} isMobile={isMobile} primaryOrder={tableMerge} allOrders={orders} onClose={() => setTableMerge(null)} />}
       {splitBillOrder && <SplitBillModal C={C} isMobile={isMobile} order={splitBillOrder} onClose={() => setSplitBillOrder(null)} />}
+      {tableMove && <TableMoveModal C={C} isMobile={isMobile} order={tableMove} allOrders={orders} onClose={() => setTableMove(null)} />}
       <ConnectionBadge C={C} />
 
       {selectedTable && (
@@ -598,11 +614,11 @@ function StaffAppInner() {
 // ===========================================================================
 // TABLES VIEW
 // ===========================================================================
-function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, onMerge, onSplit, onFeedback, search, setSearch, todayRevenue, activeOrders }) {
+function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, onMerge, onSplit, onMove, onFeedback, search, setSearch, todayRevenue, activeOrders }) {
   const tableData = useMemo(() => {
     const map = {};
     for (let i = 1; i <= TABLE_COUNT; i++) map[i] = { table: i, order: null };
-    orders.filter(o => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled" && !o.paid).forEach(o => {
+    orders.filter(isOpenDineIn).forEach(o => {
       const t = Number(o.table);
       if (map[t]) map[t].order = o;
     });
@@ -660,6 +676,7 @@ function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, 
                 <button onClick={() => onAddMore(t.order)} style={{ padding: isMobile ? "8px 4px" : "6px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: isMobile ? 10 : 11, cursor: "pointer", fontFamily: "inherit" }}>Add</button>
                 <button onClick={() => onMerge(t.order)} style={{ padding: isMobile ? "8px 4px" : "6px", border: `1.5px solid ${C.blue}`, borderRadius: 6, background: "transparent", color: C.blue, fontWeight: 800, fontSize: isMobile ? 10 : 11, cursor: "pointer", fontFamily: "inherit" }}>Merge</button>
                 <button onClick={() => onSplit(t.order)} style={{ padding: isMobile ? "8px 4px" : "6px", border: `1.5px solid ${C.amber}`, borderRadius: 6, background: "transparent", color: C.amber, fontWeight: 800, fontSize: isMobile ? 10 : 11, cursor: "pointer", fontFamily: "inherit" }}>Split</button>
+                <button onClick={() => onMove(t.order)} style={{ padding: isMobile ? "8px 4px" : "6px", border: `1.5px solid ${C.ink}`, borderRadius: 6, background: "transparent", color: C.ink, fontWeight: 800, fontSize: isMobile ? 10 : 11, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>Move Table</button>
                 <button onClick={() => onFeedback(t.order)} style={{ padding: isMobile ? "8px 4px" : "6px", border: `1.5px solid ${C.gray}`, borderRadius: 6, background: "transparent", color: C.gray, fontWeight: 800, fontSize: isMobile ? 10 : 11, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>Feedback</button>
               </div>
             ) : (
@@ -701,12 +718,14 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
     catch (e) { setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: order.status } : o)); toast(e.message, "error"); }
   };
 
-  const markPaid = async (order) => {
-    if (!window.confirm(`${order.orderType === "parcel" ? "Parcel" : "Table " + order.table} - ${inr(order.finalTotal || 0)} paid mark karna hai?`)) return;
+  const [payFor, setPayFor] = useState(null);
+  const markPaid = (order) => setPayFor(order);
+  const markPaidWith = async (order, mode) => {
+    /* confirm ab modal se hota hai */
     haptic(30);
-    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff" } : o));
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: mode } : o));
     try {
-      await updateDoc(doc(db, "orders", order.id), { paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff" });
+      await updateDoc(doc(db, "orders", order.id), { paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: mode });
       toast("Payment received!", "success");
       if (onPaidSuccess) onPaidSuccess();
     } catch (e) {
@@ -721,6 +740,16 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
         <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>{filterLabel} Orders ({filtered.length})</h2>
+        {payFor && (
+          <ModalShell C={C} open onClose={() => setPayFor(null)} isMobile={isMobile} title="Payment mode" icon="💰" maxWidth={340}>
+            <div style={{ fontSize: 13, color: C.gray, marginBottom: 14 }}>{payFor.orderType === "parcel" ? "Parcel" : "Table " + payFor.table} - {inr(payFor.finalTotal || 0)}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+              {[["cash", "Cash", C.green], ["upi", "UPI", C.blue], ["card", "Card", C.amber]].map(([m, l, c]) => (
+                <button key={m} onClick={() => { const o = payFor; setPayFor(null); markPaidWith(o, m); }} style={{ padding: "14px 4px", border: "none", borderRadius: 10, background: c, color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>
+              ))}
+            </div>
+          </ModalShell>
+        )}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {["all", "active", ...STATUS_FLOW, "paid"].map(f => (
             <button key={f} onClick={() => { haptic(); setFilter(f); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: `1px solid ${filter === f ? C.red : C.line}`, background: filter === f ? C.red : C.card, color: filter === f ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", textTransform: "capitalize", fontFamily: "inherit" }}>{f}</button>
@@ -840,7 +869,7 @@ function KOTView({ C, isMobile, orders, setOrders }) {
 // ===========================================================================
 // DASHBOARD VIEW (with animated numbers)
 // ===========================================================================
-function DashboardView({ C, isMobile, orders, menu, onStatusClick, onOrderClick }) {
+function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, onOrderClick }) {
   const todayStr = new Date().toISOString().slice(0, 10);
   const [range, setRange] = useState("today");
   const [customDate, setCustomDate] = useState(todayStr);
@@ -934,7 +963,7 @@ function DashboardView({ C, isMobile, orders, menu, onStatusClick, onOrderClick 
         </div>
       </div>
       <ReportsExtra C={C} isMobile={isMobile} orders={filtered} rangeLabel={rangeLabel} />
-      <DueLedger C={C} isMobile={isMobile} orders={orders} />
+      <DueLedger C={C} isMobile={isMobile} orders={dueOrders || orders} />
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: isMobile ? 14 : 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: C.ink }}>Orders - {rangeLabel}</div>
@@ -1113,7 +1142,7 @@ function FeedbackModal({ C, isMobile, order, onClose }) {
 function TableMergeModal({ C, isMobile, primaryOrder, allOrders, onClose }) {
   const toast = useToast();
   const [selectedId, setSelectedId] = useState("");
-  const otherOrders = allOrders.filter(o => o.id !== primaryOrder.id && o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled");
+  const otherOrders = allOrders.filter(o => o.id !== primaryOrder.id && isOpenDineIn(o));
   const merge = async () => {
     if (!selectedId) return;
     try {
@@ -1149,13 +1178,49 @@ function TableMergeModal({ C, isMobile, primaryOrder, allOrders, onClose }) {
   );
 }
 
+function TableMoveModal({ C, isMobile, order, allOrders, onClose }) {
+  const toast = useToast();
+  const [to, setTo] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const occupied = new Set(allOrders.filter(isOpenDineIn).map(o => Number(o.table)));
+  const free = Array.from({ length: TABLE_COUNT }, (_, i) => i + 1).filter(n => !occupied.has(n));
+  const move = async () => {
+    if (!to || busy) return;
+    setBusy(true);
+    try {
+      await updateDoc(doc(db, "orders", order.id), { table: to, movedFrom: order.table, movedAt: Date.now() });
+      logAudit("table_moved", { orderId: order.id, from: order.table, to });
+      toast(`Table ${order.table} → ${to}`, "success");
+      onClose();
+    } catch (e) { toast(e.message, "error"); setBusy(false); }
+  };
+  return (
+    <ModalShell C={C} open onClose={onClose} isMobile={isMobile} title="Move Table" icon="🔀" maxWidth={380}>
+      <div style={{ fontSize: 12, color: C.gray, marginBottom: 14 }}>Table {order.table} ka order kis khali table par bhejna hai?</div>
+      {free.length === 0 && <div style={{ padding: 20, textAlign: "center", color: C.gray }}>Koi table khali nahi</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+        {free.map(n => (
+          <button key={n} onClick={() => setTo(n)} style={{ padding: "14px 0", borderRadius: 10, border: `2px solid ${to === n ? C.red : C.line}`, background: to === n ? C.redLight : "transparent", color: to === n ? C.red : C.ink, fontWeight: 900, fontSize: 16, cursor: "pointer", fontFamily: "monospace" }}>{n}</button>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+        <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${C.line}`, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+        <button onClick={move} disabled={!to || busy} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: !to || busy ? "not-allowed" : "pointer" }}>{busy ? <Spinner /> : "Move"}</button>
+      </div>
+    </ModalShell>
+  );
+}
+
 function SplitBillModal({ C, isMobile, order, onClose }) {
   const toast = useToast();
   const items = order.items || [];
   const [split1, setSplit1] = useState({});
   const toggleItem = (idx) => setSplit1(prev => ({ ...prev, [idx]: !prev[idx] }));
-  const total1 = items.reduce((s, it, i) => s + (split1[i] ? it.price * it.qty : 0), 0);
-  const total2 = (Number(order.finalTotal) || 0) - total1;
+  const rawSub1 = items.reduce((s, it, i) => s + (split1[i] ? it.price * it.qty : 0), 0);
+  const rawFull = items.reduce((s, it) => s + it.price * it.qty, 0) || 1;
+  const grand = Number(order.finalTotal) || rawFull;
+  const total1 = Math.round(grand * rawSub1 / rawFull);
+  const total2 = grand - total1;
   return (
     <ModalShell C={C} open onClose={onClose} isMobile={isMobile} title="Split Bill" icon="✂️" maxWidth={450}>
       <div style={{ fontSize: 12, color: C.gray, marginBottom: 16 }}>Jo items pehle bande ko dena hai unpe tick karo</div>
@@ -1238,7 +1303,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const filtered = useMemo(() => menu.filter(m => m.available && (category === "All" || m.category === category) && (!debouncedSearch.trim() || m.name.toLowerCase().includes(debouncedSearch.toLowerCase()))), [menu, category, debouncedSearch]);
 
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
-  const resolveItem = (id) => { const m = menu.find(x => x.id === id); if (m) return m; const ex = existingItems.find(e => e.itemId === id); return ex || null; };
+  const resolveItem = (id) => { const m = menu.find(x => x.id === id); const ex = existingItems.find(e => e.itemId === id); if (ex && !addMoreMode) return ex; return m || ex || null; };
   const cartSubtotal = cartItems.reduce((s, [id, q]) => { const m = resolveItem(id); return s + (m?.price || 0) * q; }, 0);
   const grossSub = addMoreMode ? existingSubtotal + cartSubtotal : cartSubtotal;
   const discAmt = Math.round(grossSub * discount / 100);
@@ -1246,7 +1311,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const totalAmount = Math.max(0, grossSub - discAmt) + gstAmt;
 
   useEffect(() => {
-    const running = orders.filter(o => o.orderType === "dine_in" && Number(o.table) === Number(table) && o.status !== "served" && o.status !== "cancelled");
+    const running = orders.filter(o => Number(o.table) === Number(table) && isOpenDineIn(o));
     setRunningOrders(running);
   }, [orders, table]);
 
@@ -1266,8 +1331,9 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       if (qty <= 0) return;
       const m = menu.find(x => x.id === id);
       const ex = existing.find(e => e.itemId === id);
-      if (m) finalItems.push({ itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty, kotNumber: existingMap[id] ? (ex?.kotNumber || 1) : nextKotNo });
-      else if (ex) finalItems.push({ itemId: id, name: ex.name, portion: ex.portion || "", price: ex.price, qty, kotNumber: ex.kotNumber || 1 });
+      if (ex) finalItems.push({ itemId: id, name: ex.name, portion: ex.portion || "", price: ex.price, qty, kotNumber: ex.kotNumber || 1 });
+      else if (m) finalItems.push({ itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty, kotNumber: nextKotNo });
+      /* old-item branch moved above */
     });
     if (finalItems.length === 0) throw new Error("Bill me kam se kam 1 item hona chahiye");
     const sub = finalItems.reduce((s, it) => s + it.price * it.qty, 0);
