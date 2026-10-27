@@ -352,7 +352,7 @@ function StaffAppInner() {
   const viewIcon = viewMode === "auto" ? "🔄" : viewMode === "mobile" ? "📱" : "💻";
 
   const C = darkMode ? DARK : LIGHT;
-  const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role || "").toLowerCase());
+const isOwner = true;
 
   useEffect(() => { localStorage.setItem("staff_dark", darkMode ? "1" : "0"); document.body.style.background = C.bg; }, [darkMode]);
 
