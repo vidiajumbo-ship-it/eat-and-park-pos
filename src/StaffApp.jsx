@@ -643,7 +643,7 @@ const isOwner = true;
       {selectedTable && (
         <BillingView C={C} isMobile={isMobile} table={selectedTable} menu={menu} orders={orders} cart={cart} setCart={setCart} waiterName={waiterName} existingOrder={billOrder} isOwner={isOwner} addMoreMode={addMoreMode}
           onBack={() => { setSelectedTable(null); setCart({}); setBillOrder(null); setAddMoreMode(false); }}
-          onPaidSuccess={() => { haptic(60); setConfetti(true); setTimeout(() => setConfetti(false), 1800); }} />
+          onSwitchAdd={() => { setCart({}); setAddMoreMode(true); }} onPaidSuccess={() => { haptic(60); setConfetti(true); setTimeout(() => setConfetti(false), 1800); }} />
       )}
     </div>
   );
@@ -1426,7 +1426,7 @@ function SplitBillModal({ C, isMobile, order, onClose }) {
 // ===========================================================================
 // BILLING VIEW (with debounce + autosave + sticky bar + confetti)
 // ===========================================================================
-function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterName, existingOrder, addMoreMode, onBack, isOwner, onPaidSuccess }) {
+function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterName, existingOrder, addMoreMode, onBack, isOwner, onPaidSuccess, onSwitchAdd }) {
   const toast = useToast();
   const haptic = useHaptic();
   const [search, setSearch] = useState("");
@@ -1468,6 +1468,17 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   };
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const handlePrintBill = async () => {
+    if (!existingOrder || placing) return;
+    if (existingOrder.paid) { printBill(existingOrder); return; }
+    setPlacing(true);
+    try {
+      const applied = await applyCartChanges();
+      printBill({ ...existingOrder, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: false });
+      toast("Bill saved & printing", "success");
+      onBack();
+    } catch (e) { toast(e.message, "error"); } finally { setPlacing(false); }
+  };
   const cancelOrder = async () => {
     if (!existingOrder || placing) return;
     setPlacing(true);
@@ -1777,6 +1788,10 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 6 }}>
                 <button onClick={handleSaveBill} disabled={placing} style={{ padding: 12, border: "none", borderRadius: 8, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{placing ? <Spinner /> : "Save"}</button>
                 <button onClick={handlePaidPrint} disabled={placing} style={{ padding: 12, border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{placing ? <Spinner /> : "Paid"}</button>
+                <button onClick={handlePrintBill} disabled={placing} style={{ padding: 12, border: "1.5px solid " + C.red, borderRadius: 8, background: "transparent", color: C.red, fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", gridColumn: existingOrder.paid ? "span 2" : undefined }}>Print Bill</button>
+                {!existingOrder.paid && onSwitchAdd && (
+                  <button onClick={onSwitchAdd} disabled={placing} style={{ padding: 12, border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>+ Add Items</button>
+                )}
                 {isOwner && !existingOrder.paid && (
                   <button onClick={() => setCancelOpen(true)} style={{ gridColumn: "span 2", padding: 12, border: "1.5px solid " + C.gray, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Cancel Order</button>
                 )}
