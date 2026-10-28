@@ -1437,6 +1437,35 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const [discount, setDiscount] = useState(0);
   const [gstRate, setGstRate] = useState(0);
   const [payMode, setPayMode] = useState("cash");
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPrice, setNewPrice] = useState("");
+  const [newCat, setNewCat] = useState("");
+  const [savingMenu, setSavingMenu] = useState(false);
+  const saveMenuItem = async () => {
+    const name = newName.trim();
+    const price = Number(newPrice);
+    const cat = newCat.trim();
+    if (!name) { toast("Item ka naam likho", "warning"); return; }
+    if (!(price > 0)) { toast("Sahi rate likho", "warning"); return; }
+    if (!cat) { toast("Category chuno ya likho", "warning"); return; }
+    if (menu.some((m) => String(m.name || "").trim().toLowerCase() === name.toLowerCase() && m.category === cat)) { toast("Ye item is category me pehle se hai", "warning"); return; }
+    setSavingMenu(true);
+    try {
+      const item = { id: uid("m"), name, price, category: cat, available: true, portion: "" };
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, "settings", "menu");
+        const snap = await tx.get(ref);
+        const items = snap.exists() && Array.isArray(snap.data().items) ? snap.data().items : [];
+        if (snap.exists()) tx.update(ref, { items: [...items, item] });
+        else tx.set(ref, { items: [item] });
+      });
+      logAudit("menu_item_added", { name, price, category: cat });
+      toast("Menu me jud gaya: " + name, "success");
+      setNewName(""); setNewPrice(""); setNewCat("");
+      setAddMenuOpen(false);
+    } catch (e) { toast(e.message, "error"); } finally { setSavingMenu(false); }
+  };
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const cancelOrder = async () => {
@@ -1685,7 +1714,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         </div>
 
         <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0, width: isMobile ? "100%" : 380, minHeight: isMobile ? 400 : undefined }}>
-          <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.line}`, fontWeight: 800, fontSize: isMobile ? 13 : 15, color: C.ink }}>Cart ({cartItems.length})</div>
+          <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.line}`, fontWeight: 800, fontSize: isMobile ? 13 : 15, color: C.ink }}>Cart ({cartItems.length}){isOwner && <button onClick={() => setAddMenuOpen(true)} style={{ float: "right", margin: "-3px 0", padding: "5px 12px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ Menu</button>}</div>
           <div style={{ flex: isMobile ? "none" : 1, overflowY: isMobile ? "visible" : "auto", maxHeight: isMobile ? 220 : undefined }}>
             {cartItems.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.gray, fontSize: 13 }}>Menu se item tap karo</div>}
             {cartItems.map(([id, q]) => {
@@ -1768,6 +1797,24 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setCancelOpen(false)} style={{ flex: 1, padding: 12, borderRadius: 8, border: "1px solid " + C.line, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Nahi</button>
           <button onClick={cancelOrder} disabled={placing} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: "pointer" }}>Haan, Cancel</button>
+        </div>
+      </ModalShell>
+
+      <ModalShell C={C} open={addMenuOpen} onClose={() => setAddMenuOpen(false)} isMobile={isMobile} title="Naya menu item" icon="🍽️" maxWidth={400}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, marginBottom: 4 }}>ITEM KA NAAM</div>
+        <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Jaise: Paneer Tikka" style={{ width: "100%", boxSizing: "border-box", padding: 11, border: "1px solid " + C.line, borderRadius: 8, fontSize: 14, background: C.card, color: C.ink, marginBottom: 12, outline: "none" }} />
+        <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, marginBottom: 4 }}>RATE (₹)</div>
+        <input type="number" inputMode="decimal" min="0" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="200" style={{ width: "100%", boxSizing: "border-box", padding: 11, border: "1px solid " + C.line, borderRadius: 8, fontSize: 14, background: C.card, color: C.ink, marginBottom: 12, outline: "none" }} />
+        <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, marginBottom: 6 }}>CATEGORY</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, maxHeight: 120, overflowY: "auto" }}>
+          {Array.from(new Set(menu.map((m) => m.category).filter(Boolean))).map((c) => (
+            <button key={c} onClick={() => setNewCat(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (newCat === c ? C.red : C.line), background: newCat === c ? C.red : C.card, color: newCat === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{c}</button>
+          ))}
+        </div>
+        <input value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="Ya nayi category likho" style={{ width: "100%", boxSizing: "border-box", padding: 11, border: "1px solid " + C.line, borderRadius: 8, fontSize: 14, background: C.card, color: C.ink, marginBottom: 16, outline: "none" }} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setAddMenuOpen(false)} style={{ flex: 1, padding: 12, borderRadius: 8, border: "1px solid " + C.line, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+          <button onClick={saveMenuItem} disabled={savingMenu} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.green, color: "#fff", fontWeight: 800, cursor: savingMenu ? "not-allowed" : "pointer" }}>{savingMenu ? <Spinner /> : "Save"}</button>
         </div>
       </ModalShell>
 
