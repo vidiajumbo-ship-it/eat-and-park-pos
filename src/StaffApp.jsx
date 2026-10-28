@@ -4,7 +4,7 @@ import { db, auth } from "./firebase";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, getDoc, updateDoc, addDoc,
-  query, where, runTransaction
+  query, where, runTransaction, orderBy, limit
 } from "firebase/firestore";
 
 // ===========================================================================
@@ -91,7 +91,16 @@ const RESTAURANT = {
   address: "Girja More, Ara - Buxar Main Road, Pakri, Ara",
   phones: ["7303267750", "8271918062"],
   gstin: "",
-  upi: "",
+  upi: "YOURNAME@upi",
+};
+
+const FRESH_MS = 30 * 60 * 1000;
+const toMillis = (v) => {
+  if (!v) return 0;
+  if (typeof v === "number") return v;
+  if (v.toMillis) return v.toMillis();
+  if (v.seconds) return v.seconds * 1000;
+  return 0;
 };
 
 function getRangeBounds(range, customDate) {
@@ -334,6 +343,7 @@ function StaffAppInner() {
   const [ordersFilter, setOrdersFilter] = useState("all");
   const [ordersRange, setOrdersRange] = useState(null);
   const [confetti, setConfetti] = useState(false);
+  const prevNewIdsRef = useRef(null);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem("staff_view_mode") || "auto");
   const [autoMobile, setAutoMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
 
@@ -381,21 +391,7 @@ const isOwner = true;
     const startRange = new Date(); startRange.setDate(startRange.getDate() - 30); startRange.setHours(0,0,0,0);
     const unsubOrders = onSnapshot(query(collection(db, "orders"), where("createdAt", ">=", startRange.getTime())), (snap) => {
       const newOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setOrders(prev => {
-        if (prev.length > 0) {
-          const prevIds = new Set(prev.map(o => o.id));
-          const newOnes = newOrders.filter(o => !prevIds.has(o.id) && o.status === "new" && o.createdBy !== auth.currentUser?.uid && o.createdAt >= startToday.getTime());
-          if (newOnes.length > 0) {
-            playSound();
-            newOnes.forEach(o => {
-              if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-                try { new Notification("New Order", { body: `Table ${o.table} - ${inr(o.finalTotal || 0)}` }); } catch(e) {}
-              }
-            });
-          }
-        }
-        return newOrders;
-      });
+      setOrders(newOrders);
     }, (err) => { console.error("orders listener:", err); });
     const unsubDue = onSnapshot(
       query(collection(db, "orders"), where("paymentStatus", "==", "due")),
@@ -413,10 +409,29 @@ const isOwner = true;
   const clickSound = () => { try { const a = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT");
     a.volume = 0.15; a.play().catch(() => {}); } catch (e) {} };
 
-  const newCount = orders.filter(o => o.status === "new" && Date.now() - o.createdAt < 6 * 3600 * 1000).length;
+  const newCount = orders.filter(o => o.status === "new" && toMillis(o.createdAt) > Date.now() - FRESH_MS).length;
   const parcelCount = orders.filter(isOpenParcel).length;
+
   useEffect(() => {
-    document.title = (newCount ? `(${newCount}) ` : "") + "Eat & Park Staff";
+    const fresh = orders.filter(o => o.status === "new" && toMillis(o.createdAt) > Date.now() - FRESH_MS);
+    const freshIds = fresh.map(o => o.id);
+    if (prevNewIdsRef.current === null) { prevNewIdsRef.current = freshIds; return; }
+    const prevSet = new Set(prevNewIdsRef.current);
+    const hasNew = freshIds.some(id => !prevSet.has(id));
+    if (hasNew) {
+      playSound();
+      fresh.forEach(o => {
+        if (prevSet.has(o.id)) return;
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          try { new Notification("New Order", { body: (o.orderType === "parcel" ? "Parcel" : "Table " + o.table) + " - " + inr(o.finalTotal || 0) }); } catch (e) {}
+        }
+      });
+    }
+    prevNewIdsRef.current = freshIds;
+  }, [orders]);
+
+  useEffect(() => {
+    document.title = (newCount ? "(" + newCount + ") " : "") + "Eat & Park Staff";
     if (!user || newCount === 0) return;
     const iv = setInterval(() => playSound(), 8000);
     return () => clearInterval(iv);
@@ -531,6 +546,7 @@ const isOwner = true;
           { id: "kot", label: `🍳 Kitchen${newCount ? ` (${newCount})` : ""}` },
           { id: "dashboard", label: "📊 Dashboard" },
           { id: "inventory", label: "🧾 Saman" },
+          { id: "audit", label: "📝 Audit" },
         ].map(tab => (
           <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSelectedTable(null); setOrdersRange(null); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: activeTab === tab.id ? C.red : C.gray, fontWeight: 700, fontSize: isMobile ? 12 : 13, cursor: "pointer", borderBottom: activeTab === tab.id ? `3px solid ${C.red}` : "3px solid transparent", whiteSpace: "nowrap", flexShrink: 0 }}>{tab.label}</button>
         ))}
@@ -562,12 +578,13 @@ const isOwner = true;
         {activeTab === "kot" && <KOTView C={C} isMobile={isMobile} orders={orders} setOrders={setOrders} />}
 {activeTab === "inventory" && <InventoryPanel C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
         {activeTab === "stock" && <StockPanel C={C} isMobile={isMobile} menu={menu} />}
+        {activeTab === "audit" && <AuditLogView C={C} isMobile={isMobile} />}
         {activeTab === "dashboard" && (
           <DashboardView C={C} isMobile={isMobile} orders={orders} dueOrders={dueOrders} menu={menu}
             onStatusClick={(status, bounds) => { setOrdersFilter(status); setOrdersRange(bounds || null); setActiveTab("orders"); }}
             onOrderClick={(order) => {
               if (order.orderType === "dine_in" && order.table) { setBillOrder(order); setSelectedTable(Number(order.table)); setCart({}); setAddMoreMode(false); }
-              else { setOrdersFilter("all"); setOrdersRange(null); setActiveTab("orders"); }
+              else { setBillOrder(order); setSelectedTable("parcel"); setCart({}); setAddMoreMode(false); }
             }} />
         )}
       </div>
@@ -588,7 +605,7 @@ const isOwner = true;
               <div style={{ fontWeight: 800, fontSize: 15, color: C.ink, marginTop: 4 }}>{staffData?.name || "Staff"}</div>
               <div style={{ fontSize: 12, color: C.gray, marginTop: 2 }}>{staffData?.role || "waiter"}</div>
             </div>
-            {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }].map(tab => (
+            {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }, { id: "audit", label: "Audit Log", icon: "📝" }].map(tab => (
               <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.redLight : "transparent", color: activeTab === tab.id ? C.red : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
                 <span style={{ fontSize: 18 }}>{tab.icon}</span><span>{tab.label}</span>
               </button>
@@ -776,14 +793,22 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
   const haptic = useHaptic();
   const defaultStart = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }, []);
   const [openId, setOpenId] = useState(null);
+  const payLockRef = useRef(false);
+  const [payFor, setPayFor] = useState(null);
+  const [cancellingId, setCancellingId] = useState(null);
   const start = rangeStart ?? defaultStart;
   const end = rangeEnd ?? Date.now();
-  const rangeAll = orders.filter(o => o.status !== "cancelled" && o.createdAt >= start && o.createdAt < end);
+  const rangeAll = orders.filter(o => {
+    if (o.createdAt < start || o.createdAt >= end) return false;
+    if (filter === "cancelled") return o.status === "cancelled";
+    return o.status !== "cancelled";
+  });
   const filtered =
     filter === "all" ? rangeAll
     : filter === "active" ? rangeAll.filter(o => o.status !== "served" && !o.paid)
     : filter === "paid" ? rangeAll.filter(o => o.paid)
     : filter === "served" ? rangeAll.filter(o => o.status === "served")
+    : filter === "cancelled" ? rangeAll
     : rangeAll.filter(o => o.status === filter);
 
   const advanceOrder = async (order) => {
@@ -791,33 +816,83 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
     if (idx < 0 || idx >= STATUS_FLOW.length - 1) return;
     const next = STATUS_FLOW[idx + 1];
     haptic(12);
-    // Optimistic
     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: next } : o));
-    try { await updateDoc(doc(db, "orders", order.id), { status: next }); toast(`Order → ${STATUS[next].label}`, "success"); }
+    try { await updateDoc(doc(db, "orders", order.id), { status: next }); toast("Order → " + STATUS[next].label, "success"); }
     catch (e) {
-      try { const fresh = await getDoc(doc(db, "orders", order.id)); if (fresh.exists()) { const fd = fresh.data(); setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...fd } : o)); } else { setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: order.status } : o)); } }
-      catch (_) { setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: order.status } : o)); }
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: order.status } : o));
       toast(e.message, "error");
     }
   };
 
-  const [payFor, setPayFor] = useState(null);
-  const markPaid = (order) => setPayFor(order);
-  const markPaidWith = async (order, mode) => {
-    /* confirm ab modal se hota hai */
-    haptic(30);
-    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: mode } : o));
+  const voidOrder = async (o) => {
+    if (!isOwner) { toast("Sirf owner delete kar sakta hai", "warning"); return; }
+    const label = o.orderType === "parcel" ? "Parcel" : "Table " + o.table;
+    if (!window.confirm(label + " - " + inr(o.finalTotal || 0) + (o.paid ? " (PAID)" : "") + "\nDelete karein? Revenue se hat jayega.")) return;
+    const reason = window.prompt("Cancel karne ka reason? (zaroori)", "");
+    if (reason === null) return;
+    if (!reason.trim()) { toast("Reason likhna zaroori hai", "warning"); return; }
+    setCancellingId(o.id);
     try {
-      await updateDoc(doc(db, "orders", order.id), { paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: mode });
+      await updateDoc(doc(db, "orders", o.id), {
+        status: "cancelled", cancelledAt: Date.now(),
+        cancelledBy: waiterName || "Staff",
+        cancelledReason: reason.trim(),
+        voidedWasPaid: !!o.paid,
+      });
+      logAudit("void_order", { orderId: o.id, total: o.finalTotal || 0, wasPaid: !!o.paid, reason: reason.trim() });
+      toast("Order delete ho gaya", "success");
+    } catch (e) { toast(e.message, "error"); }
+    finally { setCancellingId(null); }
+  };
+
+  const restoreOrder = async (o) => {
+    if (!isOwner) { toast("Sirf owner restore kar sakta hai", "warning"); return; }
+    if (!window.confirm("Is cancelled order ko restore karein?")) return;
+    try {
+      await updateDoc(doc(db, "orders", o.id), {
+        status: o.voidedWasPaid ? "served" : "new",
+        cancelledAt: null, cancelledBy: null, cancelledReason: null, voidedWasPaid: null,
+        restoredAt: Date.now(), restoredBy: waiterName || "Staff",
+      });
+      logAudit("restore_order", { orderId: o.id, wasPaid: !!o.voidedWasPaid });
+      toast("Order restore ho gaya", "success");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const undoPaid = async (o) => {
+    if (!isOwner) { toast("Sirf owner undo kar sakta hai", "warning"); return; }
+    if (!window.confirm("Is order ka payment undo karein? (paid -> pending)")) return;
+    try {
+      await updateDoc(doc(db, "orders", o.id), {
+        paid: false, paymentStatus: "pending",
+        paidAt: null, paidBy: null, payment: "cash",
+        undonePaidAt: Date.now(), undonePaidBy: waiterName || "Staff",
+      });
+      logAudit("undo_paid", { orderId: o.id, total: o.finalTotal || 0 });
+      toast("Payment undo ho gaya", "success");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const markPaidWith = async (order, mode) => {
+    if (payLockRef.current) return;
+    payLockRef.current = true;
+    haptic(30);
+    const patch = { paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: mode };
+    if (order.orderType === "parcel") patch.status = "served";
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...patch } : o));
+    try {
+      await updateDoc(doc(db, "orders", order.id), patch);
       toast("Payment received!", "success");
       if (onPaidSuccess) onPaidSuccess();
     } catch (e) {
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, paid: false, paymentStatus: "pending" } : o));
       toast(e.message, "error");
+    } finally {
+      payLockRef.current = false;
     }
   };
 
-  const filterLabel = filter.charAt(0).toUpperCase() + filter.slice(1);
+  const filterLabel = filter === "cancelled" ? "Cancelled" : filter.charAt(0).toUpperCase() + filter.slice(1);
 
   return (
     <div>
@@ -834,8 +909,8 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
           </ModalShell>
         )}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {["all", "active", ...STATUS_FLOW, "paid"].map(f => (
-            <button key={f} onClick={() => { haptic(); setFilter(f); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: `1px solid ${filter === f ? C.red : C.line}`, background: filter === f ? C.red : C.card, color: filter === f ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", textTransform: "capitalize", fontFamily: "inherit" }}>{f}</button>
+          {["all", "active", ...STATUS_FLOW, "paid", "cancelled"].map(f => (
+            <button key={f} onClick={() => { haptic(); setFilter(f); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: "1px solid " + (filter === f ? C.red : C.line), background: filter === f ? C.red : C.card, color: filter === f ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", textTransform: "capitalize", fontFamily: "inherit" }}>{f}</button>
           ))}
         </div>
       </div>
@@ -844,10 +919,11 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
           const st = STATUS[o.status] || STATUS.new;
           const stColor = C[st.color] || C.gray;
           const stBg = C[st.color + "Light"] || C.light;
+          const isCancelled = o.status === "cancelled";
           const isOpen = filter !== "all" || openId === o.id;
-          if (!isOpen) return (
-            <button key={o.id} onClick={() => { haptic(); setOpenId(o.id); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: isMobile ? "9px 10px" : "10px 14px", background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: C.ink }}>
-              <span style={{ fontWeight: 800, fontSize: 13, whiteSpace: "nowrap" }}>{o.orderType === "parcel" ? "Parcel" : `T${o.table}`}</span>
+          if (!isOpen && !isCancelled) return (
+            <button key={o.id} onClick={() => { haptic(); setOpenId(o.id); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: isMobile ? "9px 10px" : "10px 14px", background: C.card, border: "1px solid " + C.line, borderRadius: 10, cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: C.ink }}>
+              <span style={{ fontWeight: 800, fontSize: 13, whiteSpace: "nowrap" }}>{o.orderType === "parcel" ? "Parcel" : "T" + o.table}</span>
               <span style={{ fontSize: 11, color: C.gray, whiteSpace: "nowrap" }}>#{o.id?.slice(1,5).toUpperCase()} - {timeAgo(o.createdAt)}</span>
               <span style={{ background: stBg, color: stColor, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>{st.label}</span>
               {o.paid && <span style={{ background: C.greenLight, color: C.green, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>PAID</span>}
@@ -856,39 +932,45 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
             </button>
           );
           return (
-            <div key={o.id} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: isMobile ? 12 : 16, boxShadow: "0 2px 8px rgba(0,0,0,0.04)", animation: "fadeIn 0.25s" }}>
+            <div key={o.id} style={{ background: isCancelled ? C.redLight : C.card, border: "1px solid " + (isCancelled ? C.red : C.line), borderRadius: 12, padding: isMobile ? 12 : 16, boxShadow: "0 2px 8px rgba(0,0,0,0.04)", animation: "fadeIn 0.25s", opacity: isCancelled ? 0.9 : 1 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, gap: 8 }}>
-                <div style={{ fontWeight: 800, fontSize: isMobile ? 14 : 15, color: C.ink }}>{o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ background: stBg, color: stColor, padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>{st.label}</span>{filter === "all" && <button onClick={() => setOpenId(null)} style={{ border: `1px solid ${C.line}`, background: C.cardAlt, color: C.gray, borderRadius: 8, padding: "3px 9px", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>▲</button>}</div>
+                <div style={{ fontWeight: 800, fontSize: isMobile ? 14 : 15, color: C.ink }}>{o.orderType === "parcel" ? "Parcel" : "Table " + o.table}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ background: stBg, color: stColor, padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>{st.label}</span>
+                  {filter === "all" && !isCancelled && <button onClick={() => setOpenId(null)} style={{ border: "1px solid " + C.line, background: C.cardAlt, color: C.gray, borderRadius: 8, padding: "3px 9px", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>▲</button>}
+                </div>
               </div>
               <div style={{ fontSize: 12, color: C.gray, marginBottom: 10, display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <span>#{o.id?.slice(1,5).toUpperCase()}</span><span>{timeAgo(o.createdAt)} ago</span>{o.waiter && <span>{o.waiter}</span>}
               </div>
+              {isCancelled && (
+                <div style={{ background: C.amberLight, color: C.amber, padding: "8px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, marginBottom: 10 }}>
+                  Cancelled by {o.cancelledBy || "?"} - {o.cancelledReason || "-"}{o.voidedWasPaid ? " (was PAID)" : ""}
+                </div>
+              )}
               <div style={{ fontSize: isMobile ? 12 : 13, color: C.ink, lineHeight: 1.6, marginBottom: 10 }}>
                 {(o.items || []).map((it, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", gap: 8 }}><span>{it.qty}x {it.name}</span><span style={{ color: C.gray, fontFamily: "monospace", flexShrink: 0 }}>{inr(it.price * it.qty)}</span></div>)}
               </div>
-              <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 10, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ borderTop: "1px solid " + C.line, paddingTop: 10, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: C.gray, fontWeight: 600 }}>Total</span>
                 <span style={{ fontSize: isMobile ? 16 : 18, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</span>
               </div>
-              {o.paid && <div style={{ background: C.greenLight, color: C.green, padding: "6px 10px", borderRadius: 6, fontSize: 11, fontWeight: 800, marginBottom: 10, textAlign: "center" }}>PAID</div>}
+              {o.paid && <div style={{ background: C.greenLight, color: C.green, padding: "6px 10px", borderRadius: 6, fontSize: 11, fontWeight: 800, marginBottom: 10, textAlign: "center" }}>PAID {o.payment ? "(" + o.payment.toUpperCase() + ")" : ""}</div>}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                {o.status !== "served" && <button onClick={() => advanceOrder(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: stColor, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{o.status === "new" ? "Start" : o.status === "preparing" ? "Ready" : "Serve"}</button>}
-                {!o.paid && <button onClick={() => markPaid(o)} style={{ padding: "9px", border: `1.5px solid ${C.green}`, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Paid</button>}
-                {!o.paid && <button onClick={() => onAddMore && onAddMore(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ Add Items</button>}
-                {!o.paid && <button onClick={() => onEditBill && onEditBill(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: C.red, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Edit Bill</button>}
-                <button onClick={() => printKOT(o)} style={{ padding: "9px", border: `1.5px solid ${C.blue}`, borderRadius: 8, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>KOT</button>
-                <button onClick={() => printBill(o)} style={{ padding: "9px", border: `1.5px solid ${C.red}`, borderRadius: 8, background: "transparent", color: C.red, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Bill</button>
-                <button onClick={() => whatsappBill(o)} style={{ padding: "9px", border: `1.5px solid ${C.green}`, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>WhatsApp</button>
-                <button onClick={async () => {
-                  if (!isOwner) { toast("Sirf owner cancel kar sakta hai", "warning"); return; }
-                  const reason = window.prompt("Cancel karne ka reason?", ""); if (reason === null) return;
-                  try {
-                    await updateDoc(doc(db, "orders", o.id), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff", cancelledReason: reason || "" });
-                    logAudit("cancel_order", { orderId: o.id, table: o.table || "", total: o.finalTotal || 0, reason: reason || "" });
-                    toast("Order cancelled", "success");
-                  } catch (e) { toast(e.message, "error"); }
-                }} style={{ padding: "9px", border: `1.5px solid ${C.gray}`, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>Cancel Order</button>
+                {isCancelled && isOwner && (
+                  <button onClick={() => restoreOrder(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>Restore Order</button>
+                )}
+                {!isCancelled && o.status !== "served" && <button onClick={() => advanceOrder(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: stColor, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{o.status === "new" ? "Start" : o.status === "preparing" ? "Ready" : "Serve"}</button>}
+                {!isCancelled && !o.paid && <button onClick={() => setPayFor(o)} style={{ padding: "9px", border: "1.5px solid " + C.green, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Paid</button>}
+                {!isCancelled && o.paid && isOwner && <button onClick={() => undoPaid(o)} style={{ padding: "9px", border: "1.5px solid " + C.amber, borderRadius: 8, background: "transparent", color: C.amber, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Undo Paid</button>}
+                {!isCancelled && !o.paid && <button onClick={() => onAddMore && onAddMore(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ Add Items</button>}
+                {!isCancelled && !o.paid && <button onClick={() => onEditBill && onEditBill(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: C.red, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Edit Bill</button>}
+                {!isCancelled && <button onClick={() => printKOT(o)} style={{ padding: "9px", border: "1.5px solid " + C.blue, borderRadius: 8, background: "transparent", color: C.blue, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>KOT</button>}
+                {!isCancelled && <button onClick={() => printBill(o)} style={{ padding: "9px", border: "1.5px solid " + C.red, borderRadius: 8, background: "transparent", color: C.red, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Bill</button>}
+                {!isCancelled && <button onClick={() => whatsappBill(o)} style={{ padding: "9px", border: "1.5px solid " + C.green, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>WhatsApp</button>}
+                {!isCancelled && (
+                  <button onClick={() => voidOrder(o)} disabled={cancellingId === o.id} style={{ padding: "9px", border: "1.5px solid " + C.gray, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 12, cursor: cancellingId === o.id ? "not-allowed" : "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>{cancellingId === o.id ? "Deleting..." : "Delete Order"}</button>
+                )}
               </div>
             </div>
           );
@@ -1232,9 +1314,11 @@ function FeedbackModal({ C, isMobile, order, onClose }) {
 function TableMergeModal({ C, isMobile, primaryOrder, allOrders, onClose }) {
   const toast = useToast();
   const [selectedId, setSelectedId] = useState("");
+  const [busy, setBusy] = useState(false);
   const otherOrders = allOrders.filter(o => o.id !== primaryOrder.id && isOpenDineIn(o));
   const merge = async () => {
-    if (!selectedId) return;
+    if (!selectedId || busy) return;
+    setBusy(true);
     try {
       const other = allOrders.find(o => o.id === selectedId);
       if (!other) return;
@@ -1248,7 +1332,7 @@ function TableMergeModal({ C, isMobile, primaryOrder, allOrders, onClose }) {
       await updateDoc(doc(db, "orders", other.id), { status: "cancelled", cancelledAt: Date.now(), cancelledReason: "Merged into " + primaryOrder.table });
       toast("Merged successfully", "success");
       onClose();
-    } catch (e) { toast(e.message, "error"); }
+    } catch (e) { toast(e.message, "error"); setBusy(false); }
   };
   return (
     <ModalShell C={C} open onClose={onClose} isMobile={isMobile} title="Merge Table" icon="🔗">
@@ -1262,7 +1346,7 @@ function TableMergeModal({ C, isMobile, primaryOrder, allOrders, onClose }) {
       ))}
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
         <button onClick={onClose} style={{ flex: 1, padding: 12, borderRadius: 8, border: `1px solid ${C.line}`, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-        <button onClick={merge} disabled={!selectedId} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: !selectedId ? "not-allowed" : "pointer" }}>Merge</button>
+        <button onClick={merge} disabled={!selectedId || busy} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: !selectedId || busy ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{busy ? <Spinner /> : "Merge"}</button>
       </div>
     </ModalShell>
   );
@@ -1351,6 +1435,20 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const [discount, setDiscount] = useState(0);
   const [gstRate, setGstRate] = useState(0);
   const [payMode, setPayMode] = useState("cash");
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const cancelOrder = async () => {
+    if (!existingOrder || placing) return;
+    setPlacing(true);
+    try {
+      await updateDoc(doc(db, "orders", existingOrder.id), { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "staff", cancelledReason: cancelReason || "" });
+      logAudit("cancel_order", { orderId: existingOrder.id, table: existingOrder.table || "", total: existingOrder.finalTotal || 0, reason: cancelReason || "" });
+      toast("Order cancelled", "success");
+      setCancelOpen(false);
+      onBack();
+    } catch (e) { toast(e.message, "error"); } finally { setPlacing(false); }
+  };
+  const lockRef = useRef(false);
 
   useEffect(() => {
     if (existingOrder) {
@@ -1449,7 +1547,12 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   };
 
   const handlePlaceOrder = async () => {
-    if (cartItems.length === 0 || placing) return;
+    if (cartItems.length === 0 || lockRef.current) return;
+    if (!existingOrder && !addMoreMode && table !== "parcel") {
+      const busy = orders.some(o => isOpenDineIn(o) && Number(o.table) === Number(table));
+      if (busy && !window.confirm("Table " + table + " par order chalu hai. Phir bhi naya banayein?")) return;
+    }
+    lockRef.current = true;
     if (existingOrder && addMoreMode) {
       setPlacing(true);
       try {
@@ -1464,7 +1567,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         haptic(30);
         toast(`KOT #${nextNo} added & printing`, "success");
         onBack();
-      } catch (e) { toast(e.message, "error"); } finally { setPlacing(false); }
+      } catch (e) { toast(e.message, "error"); } finally { lockRef.current = false; setPlacing(false); }
       return;
     }
     setPlacing(true);
@@ -1482,7 +1585,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       haptic(30);
       toast("Order placed! KOT printing", "success");
       onBack();
-    } catch (e) { toast(e.message, "error"); } finally { setPlacing(false); }
+    } catch (e) { toast(e.message, "error"); } finally { lockRef.current = false; setPlacing(false); }
   };
 
   const handleSaveBill = async () => {
@@ -1510,13 +1613,15 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         return;
       }
       const applied = await applyCartChanges();
-      await updateDoc(doc(db, "orders", existingOrder.id), { paid: true, paymentStatus: "paid", paidAt: Date.now() });
+      const paidPatch = { paid: true, paymentStatus: "paid", paidAt: Date.now() };
+      if (existingOrder.orderType === "parcel") paidPatch.status = "served";
+      await updateDoc(doc(db, "orders", existingOrder.id), paidPatch);
       printBill({ ...existingOrder, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: true });
       haptic(80);
       toast("Payment received! Bill printing", "success");
       if (onPaidSuccess) onPaidSuccess();
       onBack();
-    } catch (e) { toast(e.message, "error"); } finally { setPlacing(false); }
+    } catch (e) { toast(e.message, "error"); } finally { lockRef.current = false; setPlacing(false); }
   };
 
   const addRunningItems = async (orderId) => {
@@ -1534,7 +1639,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       printKOT({ ...baseOrder, items: newItems, kots: [runKot] });
       toast(`KOT #${nextNo} added`, "success");
       onBack();
-    } catch (e) { toast(e.message, "error"); } finally { setPlacing(false); }
+    } catch (e) { toast(e.message, "error"); } finally { lockRef.current = false; setPlacing(false); }
   };
 
   return (
@@ -1641,6 +1746,9 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 6 }}>
                 <button onClick={handleSaveBill} disabled={placing} style={{ padding: 12, border: "none", borderRadius: 8, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{placing ? <Spinner /> : "Save"}</button>
                 <button onClick={handlePaidPrint} disabled={placing} style={{ padding: 12, border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{placing ? <Spinner /> : "Paid"}</button>
+                {isOwner && !existingOrder.paid && (
+                  <button onClick={() => setCancelOpen(true)} style={{ gridColumn: "span 2", padding: 12, border: "1.5px solid " + C.gray, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Cancel Order</button>
+                )}
               </div>
             )}
             {addMoreMode && (
@@ -1653,14 +1761,22 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         </div>
       </div>
 
+      <ModalShell C={C} open={cancelOpen} onClose={() => setCancelOpen(false)} isMobile={isMobile} title="Order cancel karein?" icon="🗑️" maxWidth={360}>
+        <input value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="Reason (optional)" style={{ width: "100%", boxSizing: "border-box", padding: 10, border: "1px solid " + C.line, borderRadius: 8, background: C.card, color: C.ink, marginBottom: 14 }} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setCancelOpen(false)} style={{ flex: 1, padding: 12, borderRadius: 8, border: "1px solid " + C.line, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Nahi</button>
+          <button onClick={cancelOrder} disabled={placing} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: "pointer" }}>Haan, Cancel</button>
+        </div>
+      </ModalShell>
+
       {/* STICKY MOBILE CART BAR */}
-      {isMobile && cartItems.length > 0 && !existingOrder && (
+      {isMobile && cartItems.length > 0 && !(existingOrder && addMoreMode) && (
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.card, borderTop: `1px solid ${C.line}`, padding: 12, boxShadow: "0 -4px 16px rgba(0,0,0,0.1)", zIndex: 101, display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10, color: C.gray, fontWeight: 800, textTransform: "uppercase" }}>{cartItems.length} items</div>
             <div style={{ fontSize: 20, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(totalAmount)}</div>
           </div>
-          <button onClick={handlePlaceOrder} disabled={placing} style={{ padding: "14px 24px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", fontWeight: 900, fontSize: 14, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: `0 6px 16px ${C.red}55`, display: "flex", alignItems: "center", gap: 8 }}>{placing ? <Spinner /> : "Place Order"}</button>
+          <button onClick={existingOrder ? handleSaveBill : handlePlaceOrder} disabled={placing} style={{ padding: "14px 24px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", fontWeight: 900, fontSize: 14, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: `0 6px 16px ${C.red}55`, display: "flex", alignItems: "center", gap: 8 }}>{placing ? <Spinner /> : existingOrder ? "Save Bill" : "Place Order"}</button>
         </div>
       )}
     </div>
@@ -2284,6 +2400,54 @@ function StockPanel({ C, isMobile, menu }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+
+// ===========================================================================
+// AUDIT LOG VIEW
+// ===========================================================================
+function AuditLogView({ C, isMobile }) {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const q = query(collection(db, "auditLog"), orderBy("at", "desc"), limit(200));
+    const unsub = onSnapshot(q, s => {
+      setLogs(s.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    }, e => { console.error(e); setLoading(false); });
+    return () => unsub();
+  }, []);
+  const iconOf = (a) => a === "void_order" ? "🗑" : a === "restore_order" ? "↩" : a === "undo_paid" ? "↺" : a === "due_settled" ? "💰" : a === "table_moved" ? "🔀" : "📝";
+  const labelOf = (a) => ({ void_order: "Void", restore_order: "Restore", undo_paid: "Undo Paid", due_settled: "Due Settled", table_moved: "Table Moved", due_created: "Due Created", cancel_order: "Cancel" }[a] || a);
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 16px", fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Audit Log</h2>
+      {loading && <div style={{ textAlign: "center", padding: 30 }}><Spinner color={C.red} /></div>}
+      {!loading && logs.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.gray }}><div style={{ fontSize: 40, marginBottom: 8 }}>📋</div><div style={{ fontSize: 13, fontWeight: 700 }}>Koi activity nahi</div></div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {logs.map(l => (
+          <div key={l.id} style={{ background: C.card, border: "1px solid " + C.line, borderRadius: 10, padding: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                <span style={{ fontSize: 16 }}>{iconOf(l.action)}</span>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>{labelOf(l.action)}</div>
+                  <div style={{ fontSize: 11, color: C.gray, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {l.orderId ? "#" + l.orderId.slice(1, 5).toUpperCase() : ""}
+                    {l.total ? " - " + inr(l.total) : ""}
+                    {l.reason ? ' - "' + l.reason + '"' : ""}
+                    {l.table ? " - T" + l.table : ""}
+                    {l.wasPaid ? " - was PAID" : ""}
+                  </div>
+                </div>
+              </div>
+              <div style={{ fontSize: 10, color: C.gray, flexShrink: 0 }}>{timeAgo(l.at)} ago</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
