@@ -1734,18 +1734,18 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               const existingQty = existingItems.filter(e => e.itemId === id).reduce((s, e) => s + e.qty, 0);
               const isNew = !addMoreMode && existingQty === 0;
               return (
-                <div key={id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderBottom: `1px solid ${C.line}`, background: isNew ? C.greenLight : "transparent", minHeight: 36, animation: "slideInRight 0.2s" }}>
+                <div key={id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 10px", borderBottom: `1px solid ${C.line}`, background: isNew ? C.greenLight : "transparent", minHeight: 48, animation: "slideInRight 0.2s" }}>
                   <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: C.ink, lineHeight: 1.2, flex: "0 1 auto", minWidth: 0 }}>{m.name}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.ink, lineHeight: 1.25, flex: "0 1 auto", minWidth: 0 }}>{m.name}</span>
                     {!addMoreMode && existingQty > 0 && <span style={{ background: C.blue, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>R{existingQty}</span>}
                     {!addMoreMode && existingQty === 0 && <span style={{ background: C.green, color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 800, flexShrink: 0 }}>NEW</span>}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", border: `1px solid ${C.red}`, borderRadius: 4, overflow: "hidden", height: 24 }}>
-                    <button onClick={() => setQty(id, q - 1)} style={{ width: 22, height: 22, border: "none", background: C.redLight, color: C.red, fontSize: 13, fontWeight: 900, cursor: "pointer", padding: 0 }}>-</button>
-                    <span style={{ width: 22, textAlign: "center", fontWeight: 900, fontSize: 11, color: C.red }}>{q}</span>
-                    <button onClick={() => setQty(id, q + 1)} style={{ width: 22, height: 22, border: "none", background: C.red, color: "#fff", fontSize: 13, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
+                  <div style={{ display: "flex", alignItems: "center", border: `1px solid ${C.red}`, borderRadius: 4, overflow: "hidden", height: 30 }}>
+                    <button onClick={() => setQty(id, q - 1)} style={{ width: 30, height: 30, border: "none", background: C.redLight, color: C.red, fontSize: 13, fontWeight: 900, cursor: "pointer", padding: 0 }}>-</button>
+                    <span style={{ width: 30, textAlign: "center", fontWeight: 900, fontSize: 14, color: C.red }}>{q}</span>
+                    <button onClick={() => setQty(id, q + 1)} style={{ width: 30, height: 30, border: "none", background: C.red, color: "#fff", fontSize: 13, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
                   </div>
-                  <div style={{ width: 50, textAlign: "right", fontWeight: 800, fontSize: 11, color: C.red, fontFamily: "monospace", flexShrink: 0 }}>{inr(m.price * q)}</div>
+                  <div style={{ width: 66, textAlign: "right", fontWeight: 800, fontSize: 13, color: C.red, fontFamily: "monospace", flexShrink: 0 }}>{inr(m.price * q)}</div>
                   <button onClick={() => setQty(id, 0)} style={{ background: "transparent", border: "none", color: C.gray, fontSize: 12, cursor: "pointer", padding: 2, flexShrink: 0 }}>x</button>
                 </div>
               );
@@ -1785,15 +1785,23 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               <span style={{ color: "#fff", fontSize: 20, fontWeight: 900, fontFamily: "monospace" }}>{inr(addMoreMode ? grossSub : totalAmount)}</span>
             </div>
             {existingOrder && !addMoreMode && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginTop: 6 }}>
-                <button onClick={handleSaveBill} disabled={placing} style={{ padding: 12, border: "none", borderRadius: 8, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{placing ? <Spinner /> : "Save"}</button>
-                <button onClick={handlePaidPrint} disabled={placing} style={{ padding: 12, border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>{placing ? <Spinner /> : "Paid"}</button>
-                <button onClick={handlePrintBill} disabled={placing} style={{ padding: 12, border: "1.5px solid " + C.red, borderRadius: 8, background: "transparent", color: C.red, fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", gridColumn: existingOrder.paid ? "span 2" : undefined }}>Print Bill</button>
-                {!existingOrder.paid && onSwitchAdd && (
-                  <button onClick={onSwitchAdd} disabled={placing} style={{ padding: 12, border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>+ Add Items</button>
+              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                {existingOrder.paid ? (
+                  <div style={{ padding: 13, borderRadius: 10, background: C.greenLight, color: C.green, fontWeight: 900, fontSize: 15, textAlign: "center", border: "1.5px solid " + C.green }}>PAID</div>
+                ) : (
+                  <button onClick={handlePaidPrint} disabled={placing} style={{ width: "100%", padding: 15, border: "none", borderRadius: 10, background: "linear-gradient(135deg, " + C.green + " 0%, #15803D 100%)", color: "#fff", fontWeight: 900, fontSize: 15, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: "0 6px 16px " + C.green + "55", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    {placing ? <Spinner /> : (payMode === "due" ? "Due me save karo - " + inr(totalAmount) : "Paid - " + inr(totalAmount) + " (" + String(payMode).toUpperCase() + ")")}
+                  </button>
                 )}
+                <div style={{ display: "grid", gridTemplateColumns: (!existingOrder.paid && onSwitchAdd) ? "1fr 1fr 1fr" : "1fr 1fr", gap: 8 }}>
+                  <button onClick={handleSaveBill} disabled={placing} style={{ padding: 11, border: "none", borderRadius: 8, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Save</button>
+                  <button onClick={handlePrintBill} disabled={placing} style={{ padding: 11, border: "1.5px solid " + C.ink, borderRadius: 8, background: "transparent", color: C.ink, fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Print Bill</button>
+                  {!existingOrder.paid && onSwitchAdd && (
+                    <button onClick={onSwitchAdd} disabled={placing} style={{ padding: 11, border: "1.5px solid " + C.green, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 13, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>+ Add Items</button>
+                  )}
+                </div>
                 {isOwner && !existingOrder.paid && (
-                  <button onClick={() => setCancelOpen(true)} style={{ gridColumn: "span 2", padding: 12, border: "1.5px solid " + C.gray, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Cancel Order</button>
+                  <button onClick={() => setCancelOpen(true)} style={{ padding: 8, border: "1px solid " + C.line, borderRadius: 8, background: "transparent", color: C.red, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Order cancel karein</button>
                 )}
               </div>
             )}
