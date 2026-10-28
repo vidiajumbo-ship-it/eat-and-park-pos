@@ -91,7 +91,7 @@ const RESTAURANT = {
   address: "Girja More, Ara - Buxar Main Road, Pakri, Ara",
   phones: ["7303267750", "8271918062"],
   gstin: "",
-  upi: "YOURNAME@upi",
+  upi: "heckeyhr@ybl",
 };
 
 const FRESH_MS = 30 * 60 * 1000;
