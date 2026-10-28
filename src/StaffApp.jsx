@@ -4,7 +4,7 @@ import { db, auth } from "./firebase";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, getDoc, updateDoc, addDoc,
-  query, where, runTransaction, orderBy, limit
+  query, where, runTransaction, deleteDoc, getDocs, orderBy, limit
 } from "firebase/firestore";
 
 // ===========================================================================
@@ -545,6 +545,7 @@ const isOwner = true;
           { id: "orders", label: `📋 Orders${newCount ? ` (${newCount})` : ""}` },
           { id: "kot", label: `🍳 Kitchen${newCount ? ` (${newCount})` : ""}` },
           { id: "dashboard", label: "📊 Dashboard" },
+          { id: "history", label: "🕘 History" },
           { id: "inventory", label: "🧾 Saman" },
           { id: "audit", label: "📝 Audit" },
         ].map(tab => (
@@ -578,6 +579,7 @@ const isOwner = true;
         {activeTab === "kot" && <KOTView C={C} isMobile={isMobile} orders={orders} setOrders={setOrders} />}
 {activeTab === "inventory" && <InventoryPanel C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
         {activeTab === "stock" && <StockPanel C={C} isMobile={isMobile} menu={menu} />}
+        {activeTab === "history" && <HistoryView C={C} isMobile={isMobile} isOwner={isOwner} />}
         {activeTab === "audit" && <AuditLogView C={C} isMobile={isMobile} />}
         {activeTab === "dashboard" && (
           <DashboardView C={C} isMobile={isMobile} orders={orders} dueOrders={dueOrders} menu={menu}
@@ -605,7 +607,7 @@ const isOwner = true;
               <div style={{ fontWeight: 800, fontSize: 15, color: C.ink, marginTop: 4 }}>{staffData?.name || "Staff"}</div>
               <div style={{ fontSize: 12, color: C.gray, marginTop: 2 }}>{staffData?.role || "waiter"}</div>
             </div>
-            {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }, { id: "audit", label: "Audit Log", icon: "📝" }].map(tab => (
+            {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "history", label: "History", icon: "🕘" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }, { id: "audit", label: "Audit Log", icon: "📝" }].map(tab => (
               <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.redLight : "transparent", color: activeTab === tab.id ? C.red : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
                 <span style={{ fontSize: 18 }}>{tab.icon}</span><span>{tab.label}</span>
               </button>
@@ -2356,6 +2358,158 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
           <button onClick={save} disabled={saving} style={{ padding: "13px 28px", border: "none", borderRadius: 10, background: "linear-gradient(135deg, " + C.red + " 0%, #B91C1C 100%)", color: "#fff", fontWeight: 900, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8 }}>{saving ? <Spinner /> : "Save Stock"}</button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ===========================================================================
+// HISTORY VIEW - purane orders dekho / print / delete
+// ===========================================================================
+function HistoryView({ C, isMobile, isOwner }) {
+  const toast = useToast();
+  const haptic = useHaptic();
+  const [from, setFrom] = useState(invDateKey());
+  const [to, setTo] = useState(invDateKey());
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
+  const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState(null);
+  const [delFor, setDelFor] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const a = from <= to ? from : to;
+      const b = from <= to ? to : from;
+      const start = new Date(a + "T00:00:00").getTime();
+      const end = new Date(b + "T00:00:00").getTime() + 86400000;
+      const snap = await getDocs(query(collection(db, "orders"), where("createdAt", ">=", start), where("createdAt", "<", end)));
+      setList(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((x, y) => (y.createdAt || 0) - (x.createdAt || 0)));
+    } catch (e) { toast("History load nahi hui: " + e.message, "error"); }
+    finally { setLoading(false); }
+  }, [from, to]);
+  useEffect(() => { load(); }, [load]);
+
+  const quick = (daysBack) => {
+    haptic();
+    setFrom(invDateKey(new Date(Date.now() - daysBack * 86400000)));
+    setTo(invDateKey(daysBack === 1 ? new Date(Date.now() - 86400000) : new Date()));
+  };
+
+  const isDue = (o) => o.paymentStatus === "due" && !o.paid && o.status !== "cancelled";
+  const isActive = (o) => !o.paid && o.status !== "cancelled" && !isDue(o);
+  const ql = q.trim().toLowerCase();
+  const rows = list.filter((o) => {
+    if (filter === "paid" && !o.paid) return false;
+    if (filter === "due" && !isDue(o)) return false;
+    if (filter === "cancelled" && o.status !== "cancelled") return false;
+    if (filter === "active" && !isActive(o)) return false;
+    if (!ql) return true;
+    const hay = [(o.id || "").slice(1, 9), o.table, o.customer && o.customer.name, o.customer && o.customer.phone, o.dueName, o.duePhone, o.waiter]
+      .concat((o.items || []).map((it) => it.name)).join(" ").toLowerCase();
+    return hay.indexOf(ql) >= 0;
+  });
+  const paidTotal = list.filter((o) => o.paid && o.status !== "cancelled").reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+
+  const doDelete = async () => {
+    if (!delFor || busy) return;
+    setBusy(true);
+    try {
+      await deleteDoc(doc(db, "orders", delFor.id));
+      logAudit("order_deleted", { orderId: delFor.id, table: delFor.table || "", total: delFor.finalTotal || 0, status: delFor.status || "", paid: !!delFor.paid });
+      setList((prev) => prev.filter((x) => x.id !== delFor.id));
+      toast("Order delete ho gaya", "success");
+      setDelFor(null);
+    } catch (e) { toast(e.message, "error"); } finally { setBusy(false); }
+  };
+
+  const chip = (id, label) => (
+    <button key={id} onClick={() => { haptic(); setFilter(id); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: "1px solid " + (filter === id ? C.red : C.line), background: filter === id ? C.red : C.card, color: filter === id ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
+  );
+  const dateInput = { padding: "8px 10px", border: "1px solid " + C.line, borderRadius: 8, fontSize: 13, background: C.card, color: C.ink, fontWeight: 700, outline: "none" };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Order History</h2>
+        <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 2 }}>{list.length} orders - Paid total {inr(paidTotal)}</div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+        <button onClick={() => quick(0)} style={{ padding: "7px 12px", borderRadius: 20, border: "1px solid " + C.line, background: C.card, color: C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Today</button>
+        <button onClick={() => quick(1)} style={{ padding: "7px 12px", borderRadius: 20, border: "1px solid " + C.line, background: C.card, color: C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Yesterday</button>
+        <button onClick={() => quick(6)} style={{ padding: "7px 12px", borderRadius: 20, border: "1px solid " + C.line, background: C.card, color: C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>7 Days</button>
+        <button onClick={() => quick(29)} style={{ padding: "7px 12px", borderRadius: 20, border: "1px solid " + C.line, background: C.card, color: C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>30 Days</button>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color: C.gray }}>FROM</span>
+        <input type="date" value={from} max={invDateKey()} onChange={(e) => e.target.value && setFrom(e.target.value)} style={dateInput} />
+        <span style={{ fontSize: 11, fontWeight: 800, color: C.gray }}>TO</span>
+        <input type="date" value={to} max={invDateKey()} onChange={(e) => e.target.value && setTo(e.target.value)} style={dateInput} />
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        {chip("all", "All")}{chip("active", "Active")}{chip("paid", "Paid")}{chip("due", "Due")}{chip("cancelled", "Cancelled")}
+      </div>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search (table, bill no, naam, item)..." style={{ width: "100%", boxSizing: "border-box", padding: "10px 14px", border: "1px solid " + C.line, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink, marginBottom: 12 }} />
+
+      {loading && <div style={{ textAlign: "center", padding: 30, color: C.gray, fontSize: 13 }}><Spinner color={C.red} /> Load ho raha hai...</div>}
+      {!loading && rows.length === 0 && <div style={{ textAlign: "center", padding: 50, color: C.gray }}><div style={{ fontSize: 40, marginBottom: 8 }}>😌</div><div style={{ fontSize: 13, fontWeight: 700 }}>Koi order nahi mila</div></div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {!loading && rows.map((o) => {
+          const cancelled = o.status === "cancelled";
+          const open = openId === o.id;
+          const when = new Date(o.createdAt || 0).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+          const st = STATUS[o.status] || STATUS.new;
+          return (
+            <div key={o.id} style={{ background: C.card, border: "1px solid " + (cancelled ? C.gray : C.line), borderRadius: 12, opacity: cancelled ? 0.8 : 1 }}>
+              <button onClick={() => { haptic(); setOpenId(open ? null : o.id); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: isMobile ? "10px 10px" : "12px 14px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: C.ink }}>
+                <div style={{ fontSize: 22 }}>{o.orderType === "parcel" ? "🛍️" : "🍽️"}</div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
+                    <span style={{ fontWeight: 800, fontSize: 14 }}>{o.orderType === "parcel" ? "Parcel" : "Table " + o.table}</span>
+                    {cancelled ? <span style={{ background: C.cardAlt, color: C.gray, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>CANCELLED</span>
+                      : <span style={{ background: C[st.color + "Light"] || C.light, color: C[st.color] || C.gray, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>{st.label}</span>}
+                    {o.paid && <span style={{ background: C.greenLight, color: C.green, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>PAID</span>}
+                    {isDue(o) && <span style={{ background: C.redLight, color: C.red, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>DUE</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.gray }}>#{(o.id || "").slice(1, 5).toUpperCase()} - {when} - {(o.items || []).length} items</div>
+                </div>
+                <div style={{ fontWeight: 900, color: C.red, fontFamily: "monospace", fontSize: isMobile ? 14 : 16, flexShrink: 0 }}>{inr(o.finalTotal || 0)}</div>
+                <span style={{ color: C.gray, fontSize: 10 }}>{open ? "▲" : "▼"}</span>
+              </button>
+              {open && (
+                <div style={{ padding: isMobile ? "0 10px 12px" : "0 14px 14px", borderTop: "1px solid " + C.line }}>
+                  <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.7, padding: "8px 0" }}>
+                    {(o.items || []).map((it, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                        <span>{it.qty}x {it.name}{it.portion ? " (" + it.portion + ")" : ""}</span>
+                        <span style={{ color: C.gray, fontFamily: "monospace", flexShrink: 0 }}>{inr(it.price * it.qty)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.gray, marginBottom: 8 }}>
+                    {o.waiter ? "Waiter: " + o.waiter + " - " : ""}{o.payment ? "Pay: " + String(o.payment).toUpperCase() : ""}{o.dueName ? " - Due: " + o.dueName : ""}{cancelled && o.cancelledReason ? " - Reason: " + o.cancelledReason : ""}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: isOwner ? "1fr 1fr" : "1fr", gap: 6 }}>
+                    <button onClick={() => printBill(o)} style={{ padding: 10, border: "1.5px solid " + C.red, borderRadius: 8, background: "transparent", color: C.red, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Print Bill</button>
+                    {isOwner && <button onClick={() => setDelFor(o)} style={{ padding: 10, border: "none", borderRadius: 8, background: C.red, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <ModalShell C={C} open={!!delFor} onClose={() => setDelFor(null)} isMobile={isMobile} title="Order delete karein?" icon="🗑️" maxWidth={360}>
+        {delFor && <div style={{ fontSize: 13, color: C.ink, marginBottom: 6, fontWeight: 700 }}>{delFor.orderType === "parcel" ? "Parcel" : "Table " + delFor.table} - #{(delFor.id || "").slice(1, 5).toUpperCase()} - {inr(delFor.finalTotal || 0)}</div>}
+        <div style={{ fontSize: 12, color: C.gray, marginBottom: 14 }}>Ye order hamesha ke liye hat jayega aur dashboard ke revenue/report se bhi nikal jayega. Wapas nahi aayega.</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setDelFor(null)} style={{ flex: 1, padding: 12, borderRadius: 8, border: "1px solid " + C.line, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Nahi</button>
+          <button onClick={doDelete} disabled={busy} style={{ flex: 1, padding: 12, borderRadius: 8, border: "none", background: C.red, color: "#fff", fontWeight: 800, cursor: busy ? "not-allowed" : "pointer" }}>{busy ? <Spinner /> : "Haan, Delete"}</button>
+        </div>
+      </ModalShell>
     </div>
   );
 }
