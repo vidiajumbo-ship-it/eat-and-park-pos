@@ -343,6 +343,7 @@ function StaffAppInner() {
   const [ordersFilter, setOrdersFilter] = useState("all");
   const [ordersRange, setOrdersRange] = useState(null);
   const [confetti, setConfetti] = useState(false);
+  const [muted, setMuted] = useState(() => localStorage.getItem("staff_mute") === "1");
   const prevNewIdsRef = useRef(null);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem("staff_view_mode") || "auto");
   const [autoMobile, setAutoMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
@@ -362,7 +363,7 @@ function StaffAppInner() {
   const viewIcon = viewMode === "auto" ? "🔄" : viewMode === "mobile" ? "📱" : "💻";
 
   const C = darkMode ? DARK : LIGHT;
-const isOwner = true;
+const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role || "").toLowerCase());
 
   useEffect(() => { localStorage.setItem("staff_dark", darkMode ? "1" : "0"); document.body.style.background = C.bg; }, [darkMode]);
 
@@ -405,7 +406,7 @@ const isOwner = true;
     if (user && "Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {});
   }, [user]);
 
-  const playSound = () => { try { const a = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"); a.volume = 0.6; a.play().catch(() => {}); } catch (e) {} };
+  const playSound = () => { if (localStorage.getItem("staff_mute") === "1") return; try { const a = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"); a.volume = 0.6; a.play().catch(() => {}); } catch (e) {} };
   const clickSound = () => { try { const a = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT");
     a.volume = 0.15; a.play().catch(() => {}); } catch (e) {} };
 
@@ -526,6 +527,7 @@ const isOwner = true;
           </div>
         </div>
         <div style={{ display: "flex", gap: isMobile ? 4 : 8, alignItems: "center", flexShrink: 0 }}>
+          <button onClick={() => { const n = !muted; setMuted(n); localStorage.setItem("staff_mute", n ? "1" : "0"); }} title="Sound" style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 38, height: 38, borderRadius: 8, fontSize: 16, cursor: "pointer" }}>{muted ? "🔇" : "🔔"}</button>
           <button onClick={cycleViewMode} title={`View: ${viewMode}`} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 38, height: 38, borderRadius: 8, fontSize: 16, cursor: "pointer" }}>{viewIcon}</button>
           {!isMobile && (
             <button onClick={() => { const n = lang === "en" ? "hi" : "en"; setLang(n); localStorage.setItem("staff_lang", n); }} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 44, height: 38, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 800 }}>{lang === "en" ? "EN" : "हि"}</button>
@@ -884,7 +886,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...patch } : o));
     try {
       await updateDoc(doc(db, "orders", order.id), patch);
-      toast("Payment received!", "success");
+      logAudit("paid", { orderId: order.id, total: order.finalTotal || 0, mode }); toast("Payment received!", "success");
       if (onPaidSuccess) onPaidSuccess();
     } catch (e) {
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, paid: false, paymentStatus: "pending" } : o));
@@ -991,7 +993,7 @@ function KOTView({ C, isMobile, orders, setOrders }) {
   const haptic = useHaptic();
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(x => x + 1), 15000); return () => clearInterval(iv); }, []);
-  const kotOrders = orders.filter(o => o.status === "new" || o.status === "preparing");
+  const kotOrders = orders.filter(o => (o.status === "new" || o.status === "preparing") && Date.now() - (o.createdAt || 0) < 18 * 3600 * 1000);
   const advanceOrder = async (order) => {
     const idx = STATUS_FLOW.indexOf(order.status);
     if (idx < 0 || idx >= STATUS_FLOW.length - 1) return;
@@ -1037,7 +1039,7 @@ function KOTView({ C, isMobile, orders, setOrders }) {
 // DASHBOARD VIEW (with animated numbers)
 // ===========================================================================
 function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, onOrderClick }) {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = invDateKey();
   const [range, setRange] = useState("today");
   const [customDate, setCustomDate] = useState(todayStr);
   const haptic = useHaptic();
@@ -1053,13 +1055,15 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
   }, [orders, range, customDate]);
 
   const todayRevenue = filtered.filter(o => o.paid && o.status !== "cancelled").reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
-  const todayTotal = filtered.length;
-  const paidCount = filtered.filter(o => o.paid).length;
+  const todayTotal = filtered.filter(o => o.status !== "cancelled").length;
+  const paidCount = filtered.filter(o => o.paid && o.status !== "cancelled").length;
   const activeOrders = filtered.filter(o => o.status !== "served" && o.status !== "cancelled").length;
   const avgOrder = paidCount ? Math.round(todayRevenue / paidCount) : 0;
   const statusCounts = { new: 0, preparing: 0, ready: 0, served: 0 };
   filtered.forEach(o => { if (statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
   const recentOrders = [...filtered].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
+  const hourCounts = Array.from({ length: 24 }, () => 0);
+  filtered.forEach(o => { hourCounts[new Date(o.createdAt).getHours()]++; });
   const rangeLabel = { today: "Today", yesterday: "Yesterday", "7days": "Last 7 Days", "30days": "Last 30 Days", month: "This Month", custom: `Date: ${customDate}` }[range] || "Today";
 
   return (
@@ -1115,8 +1119,8 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
         <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: C.ink, marginBottom: 16 }}>Orders by Hour - {rangeLabel}</div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 120 }}>
           {Array.from({ length: 24 }, (_, h) => {
-            const count = filtered.filter(o => new Date(o.createdAt).getHours() === h).length;
-            const maxCount = Math.max(1, ...Array.from({ length: 24 }, (_, hh) => filtered.filter(o => new Date(o.createdAt).getHours() === hh).length));
+            const count = hourCounts[h];
+            const maxCount = Math.max(1, ...hourCounts);
             const height = (count / maxCount) * 100;
             return (
               <div key={h} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
@@ -1323,7 +1327,7 @@ function TableMergeModal({ C, isMobile, primaryOrder, allOrders, onClose }) {
     setBusy(true);
     try {
       const other = allOrders.find(o => o.id === selectedId);
-      if (!other) return;
+      if (!other) { setBusy(false); return; }
       await updateDoc(doc(db, "orders", primaryOrder.id), {
         items: [...(primaryOrder.items || []), ...(other.items || [])],
         kots: [...(primaryOrder.kots || []), ...(other.kots || [])],
@@ -1332,7 +1336,7 @@ function TableMergeModal({ C, isMobile, primaryOrder, allOrders, onClose }) {
         mergedFrom: [...(primaryOrder.mergedFrom || []), other.table],
       });
       await updateDoc(doc(db, "orders", other.id), { status: "cancelled", cancelledAt: Date.now(), cancelledReason: "Merged into " + primaryOrder.table });
-      toast("Merged successfully", "success");
+      logAudit("tables_merged", { orderId: primaryOrder.id, table: primaryOrder.table, merged: other.table, total: primaryOrder.finalTotal || 0 }); toast("Merged successfully", "success");
       onClose();
     } catch (e) { toast(e.message, "error"); setBusy(false); }
   };
@@ -1577,6 +1581,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     const finalTotal = Math.max(0, sub - d) + g;
     const newKotItems = finalItems.map(it => ({ ...it, qty: it.qty - (existingMap[it.itemId] || 0), kotNumber: nextKotNo })).filter(it => it.qty > 0);
     const removedItems = existing.filter(it => !cart[it.itemId] || cart[it.itemId] <= 0);
+    if (removedItems.length) logAudit("items_removed", { orderId: existingOrder.id, table: existingOrder.table || "", items: removedItems.map(i => i.qty + "x " + i.name).join(", ") });
     const extra = {};
     if (newKotItems.length || removedItems.length) {
       const baseKots = existingOrder.kots?.length ? existingOrder.kots : [{ id: uid("kot"), kotNumber: 1, items: existing, createdAt: existingOrder.createdAt, status: existingOrder.status }];
@@ -1656,12 +1661,12 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         return;
       }
       const applied = await applyCartChanges();
-      const paidPatch = { paid: true, paymentStatus: "paid", paidAt: Date.now() };
+      const paidPatch = { paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: payMode };
       if (existingOrder.orderType === "parcel") paidPatch.status = "served";
       await updateDoc(doc(db, "orders", existingOrder.id), paidPatch);
       printBill({ ...existingOrder, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: true });
       haptic(80);
-      toast("Payment received! Bill printing", "success");
+      logAudit("paid", { orderId: existingOrder.id, total: applied.finalTotal, mode: payMode }); toast("Payment received! Bill printing", "success");
       if (onPaidSuccess) onPaidSuccess();
       onBack();
     } catch (e) { toast(e.message, "error"); } finally { lockRef.current = false; setPlacing(false); }
@@ -2658,7 +2663,7 @@ function AuditLogView({ C, isMobile }) {
     return () => unsub();
   }, []);
   const iconOf = (a) => a === "void_order" ? "🗑" : a === "restore_order" ? "↩" : a === "undo_paid" ? "↺" : a === "due_settled" ? "💰" : a === "table_moved" ? "🔀" : "📝";
-  const labelOf = (a) => ({ void_order: "Void", restore_order: "Restore", undo_paid: "Undo Paid", due_settled: "Due Settled", table_moved: "Table Moved", due_created: "Due Created", cancel_order: "Cancel" }[a] || a);
+  const labelOf = (a) => ({ void_order: "Void", restore_order: "Restore", undo_paid: "Undo Paid", due_settled: "Due Settled", table_moved: "Table Moved", due_created: "Due Created", cancel_order: "Cancel", paid: "Paid", tables_merged: "Tables Merged", items_removed: "Items Removed", order_deleted: "Deleted", menu_item_added: "Menu Item Added" }[a] || a);
   return (
     <div>
       <h2 style={{ margin: "0 0 16px", fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Audit Log</h2>
@@ -2678,6 +2683,8 @@ function AuditLogView({ C, isMobile }) {
                     {l.reason ? ' - "' + l.reason + '"' : ""}
                     {l.table ? " - T" + l.table : ""}
                     {l.wasPaid ? " - was PAID" : ""}
+                    {l.mode ? " - " + String(l.mode).toUpperCase() : ""}
+                    {l.items ? " - " + l.items : ""}
                   </div>
                 </div>
               </div>
