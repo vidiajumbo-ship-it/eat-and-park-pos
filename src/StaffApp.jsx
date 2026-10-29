@@ -565,6 +565,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
           { id: "audit", label: "📝 Audit" },
           { id: "expenses", label: "💸 Kharcha" },
           { id: "reports", label: "📈 Reports" },
+          { id: "import", label: "📥 Import" },
         ].map(tab => (
           <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSelectedTable(null); setOrdersRange(null); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: activeTab === tab.id ? C.gold : C.gray, fontWeight: 700, fontSize: isMobile ? 12 : 13, cursor: "pointer", borderBottom: activeTab === tab.id ? `3px solid ${C.gold}` : "3px solid transparent", whiteSpace: "nowrap", flexShrink: 0 }}>{tab.label}</button>
         ))}
@@ -600,6 +601,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
         {activeTab === "audit" && <AuditLogView C={C} isMobile={isMobile} />}
         {activeTab === "expenses" && <ExpensesView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
         {activeTab === "reports" && <ReportsView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
+        {activeTab === "import" && <ImportView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} onDone={() => {}} />}
         {activeTab === "dashboard" && (
           <DashboardView C={C} isMobile={isMobile} orders={orders} dueOrders={dueOrders} menu={menu}
             onStatusClick={(status, bounds) => { setOrdersFilter(status); setOrdersRange(bounds || null); setActiveTab("orders"); }}
@@ -626,7 +628,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
               <div style={{ fontWeight: 800, fontSize: 15, color: C.ink, marginTop: 4 }}>{staffData?.name || "Staff"}</div>
               <div style={{ fontSize: 12, color: C.gray, marginTop: 2 }}>{staffData?.role || "waiter"}</div>
             </div>
-            {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "history", label: "History", icon: "🕘" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }, { id: "audit", label: "Audit Log", icon: "📝" }, { id: "expenses", label: "Kharcha", icon: "💸" }, { id: "reports", label: "Reports / P&L", icon: "📈" }].map(tab => (
+            {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "history", label: "History", icon: "🕘" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }, { id: "audit", label: "Audit Log", icon: "📝" }, { id: "expenses", label: "Kharcha", icon: "💸" }, { id: "reports", label: "Reports / P&L", icon: "📈" }, { id: "import", label: "Bulk Import", icon: "📥" }].map(tab => (
               <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.goldLight : "transparent", color: activeTab === tab.id ? C.gold : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
                 <span style={{ fontSize: 18 }}>{tab.icon}</span><span>{tab.label}</span>
               </button>
@@ -2722,7 +2724,7 @@ function AuditLogView({ C, isMobile }) {
     return () => unsub();
   }, []);
   const iconOf = (a) => a === "void_order" ? "🗑" : a === "restore_order" ? "↩" : a === "undo_paid" ? "↺" : a === "due_settled" ? "💰" : a === "table_moved" ? "🔀" : "📝";
-  const labelOf = (a) => ({ void_order: "Void", restore_order: "Restore", undo_paid: "Undo Paid", due_settled: "Due Settled", table_moved: "Table Moved", due_created: "Due Created", cancel_order: "Cancel", expense_added: "Kharcha Added", expense_deleted: "Kharcha Deleted", day_closed: "Day Closed", rate_changed: "Rate Changed", paid: "Paid", due_edited: "Due Edited", tables_merged: "Tables Merged", items_removed: "Items Removed", order_deleted: "Deleted", menu_item_added: "Menu Item Added" }[a] || a);
+  const labelOf = (a) => ({ void_order: "Void", restore_order: "Restore", undo_paid: "Undo Paid", due_settled: "Due Settled", table_moved: "Table Moved", due_created: "Due Created", cancel_order: "Cancel", expense_added: "Kharcha Added", expense_deleted: "Kharcha Deleted", day_closed: "Day Closed", rate_changed: "Rate Changed", vendor_added: "Vendor Added", vendor_paid: "Vendor Paid", paid: "Paid", due_edited: "Due Edited", tables_merged: "Tables Merged", items_removed: "Items Removed", order_deleted: "Deleted", menu_item_added: "Menu Item Added" }[a] || a);
   return (
     <div>
       <h2 style={{ margin: "0 0 16px", fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Audit Log</h2>
@@ -2870,6 +2872,30 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
   const [note, setNote] = useState("");
   const [date, setDate] = useState(invDateKey());
   const [saving, setSaving] = useState(false);
+  const [cats, setCats] = useState(EXP_CATS);
+  const [vendors, setVendors] = useState([]);
+  const [vendorId, setVendorId] = useState("");
+  const [newCat, setNewCat] = useState("");
+  const [showNewCat, setShowNewCat] = useState(false);
+
+  useEffect(() => {
+    loadCustomCats().then(setCats);
+    getDocs(collection(db, "vendors"))
+      .then((snap) => setVendors(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((v) => v.active !== false)))
+      .catch(() => {});
+  }, []);
+
+  const addCat = async () => {
+    const c = newCat.trim();
+    if (!c) return;
+    if (cats.includes(c)) { toast("Ye category pehle se hai", "warning"); return; }
+    const list = [...cats, c];
+    try {
+      await saveCustomCats(list);
+      setCats(list); setCat(c); setNewCat(""); setShowNewCat(false);
+      toast("Category add ho gayi", "success");
+    } catch (e) { toast(e.message, "error"); }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -2896,11 +2922,11 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
     if (saving) return;
     setSaving(true);
     try {
-      await addDoc(collection(db, "expenses"), { date, amount: amt, category: cat, mode, note: note.trim(), by: waiterName || "Staff", createdAt: Date.now() });
+      await addDoc(collection(db, "expenses"), { date, amount: amt, category: cat, mode, vendorId: vendorId || null, note: note.trim(), by: waiterName || "Staff", createdAt: Date.now() });
       logAudit("expense_added", { total: amt, reason: cat + (note.trim() ? " - " + note.trim() : "") });
       haptic(25);
       toast("Kharcha save ho gaya: " + inr(amt), "success");
-      setAmount(""); setNote("");
+      setAmount(""); setNote(""); setVendorId("");
     } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
   };
 
@@ -2931,9 +2957,29 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
         <div style={lbl}>Amount (Rs)</div>
         <input type="number" inputMode="decimal" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" style={{ ...field, fontSize: 22, fontWeight: 900, fontFamily: "monospace", marginBottom: 12 }} />
         <div style={lbl}>Category</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>{EXP_CATS.map((c) => chip(cat === c, c, () => { haptic(); setCat(c); }))}</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>{cats.map((c) => chip(cat === c, c, () => { haptic(); setCat(c); }))}
+          <button onClick={() => setShowNewCat((v) => !v)} style={{ padding: "7px 13px", borderRadius: 20, border: "1px dashed " + C.gray, background: "transparent", color: C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>+ Naya</button>
+        </div>
+        {showNewCat && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            <input value={newCat} onChange={(e) => setNewCat(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addCat()} placeholder="Naya category naam (jaise: Chai/Snacks)" style={{ ...field, padding: "8px 10px", fontSize: 13 }} />
+            <button onClick={addCat} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: G, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Add</button>
+          </div>
+        )}
         <div style={lbl}>Kaise diya</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>{[["cash", "Cash"], ["upi", "UPI"], ["bank", "Bank"]].map(([id, l]) => chip(mode === id, l, () => setMode(id), id))}</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>{[["cash", "Cash"], ["upi", "UPI"], ["bank", "Bank"], ["credit", "Udhaar"]].map(([id, l]) => chip(mode === id, l, () => { setMode(id); if (id !== "credit") setVendorId(""); }, id))}</div>
+        {mode === "credit" && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={lbl}>Vendor (kiska due hai?)</div>
+            <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} style={field}>
+              <option value="">-- Vendor chuno (optional) --</option>
+              {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+            <div style={{ fontSize: 11, color: C.gray, marginTop: 6, fontWeight: 700 }}>
+              ⚠️ Udhaar = cash nahi gaya, P&L mein kharcha count hoga, vendor ka due banega. Baad mein "Reports → Vendor Due" tab se payment karo.
+            </div>
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10, marginBottom: 12 }}>
           <div><div style={lbl}>Note (optional)</div><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Jaise: paneer 5kg, Ramesh" style={field} /></div>
           <div><div style={lbl}>Date</div><input type="date" value={date} max={invDateKey()} onChange={(e) => e.target.value && setDate(e.target.value)} style={field} /></div>
@@ -2994,6 +3040,8 @@ function ReportsView({ C, isMobile, isOwner, waiterName }) {
   const [expenses, setExpenses] = useState([]);
   const [closes, setCloses] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [rTab, setRTab] = useState("pnl");
+  const [vendorDue, setVendorDue] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -3087,10 +3135,15 @@ function ReportsView({ C, isMobile, isOwner, waiterName }) {
     if (cc === null || cc.trim() === "") { toast("Gine hue cash likhna zaroori hai", "warning"); return; }
     const s = stats;
     const cashExp = expenses.filter((e) => (e.mode || "cash") === "cash").reduce((t, e) => t + (Number(e.amount) || 0), 0);
+    let cashVendorPay = 0;
+    try {
+      const pSnap = await getDocs(query(collection(db, "vendorPayments"), where("date", "==", todayKey), where("mode", "==", "cash")));
+      cashVendorPay = pSnap.docs.reduce((t, d) => t + (Number(d.data().amount) || 0), 0);
+    } catch (e) {}
     const opening = Number(op) || 0;
     const counted = Number(cc) || 0;
-    const expected = opening + s.pay.cash - cashExp;
-    const rec = { date: todayKey, revenue: s.revenue, cash: s.pay.cash, upi: s.pay.upi, card: s.pay.card, duePending: s.duePending, expenses: s.expTotal, cashExpenses: cashExp, profit: s.profit, orders: s.valid.length, openingCash: opening, countedCash: counted, expectedCash: expected, cashDiff: counted - expected, by: waiterName || "Staff", at: Date.now() };
+    const expected = opening + s.pay.cash - cashExp - cashVendorPay;
+    const rec = { date: todayKey, revenue: s.revenue, cash: s.pay.cash, upi: s.pay.upi, card: s.pay.card, cashVendorPayments: cashVendorPay, duePending: s.duePending, expenses: s.expTotal, cashExpenses: cashExp, profit: s.profit, orders: s.valid.length, openingCash: opening, countedCash: counted, expectedCash: expected, cashDiff: counted - expected, by: waiterName || "Staff", at: Date.now() };
     try {
       await setDoc(doc(db, "dayClose", todayKey), rec);
       logAudit("day_closed", { total: s.revenue, reason: "Cash fark: " + (counted - expected) });
@@ -3127,6 +3180,14 @@ function ReportsView({ C, isMobile, isOwner, waiterName }) {
         <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Reports &amp; Profit / Loss</h2>
         <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 2 }}>{rangeLabel} - {s.valid.length} orders</div>
       </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        <button onClick={() => setRTab("pnl")} style={{ padding: "8px 16px", borderRadius: 10, border: "1px solid " + (rTab === "pnl" ? G : C.line), background: rTab === "pnl" ? G : C.card, color: rTab === "pnl" ? "#fff" : C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>📈 P&L</button>
+        <button onClick={() => setRTab("vendors")} style={{ padding: "8px 16px", borderRadius: 10, border: "1px solid " + (rTab === "vendors" ? G : C.line), background: rTab === "vendors" ? G : C.card, color: rTab === "vendors" ? "#fff" : C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>🏪 Vendor Due{vendorDue > 0 ? " (" + inr(vendorDue) + ")" : ""}</button>
+      </div>
+
+      {rTab === "vendors" && <VendorView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} onDuesChange={setVendorDue} />}
+
+      {rTab === "pnl" && (<>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
         {chip("today", "Aaj")}{chip("yesterday", "Kal")}{chip("7days", "7 Din")}{chip("month", "Is Mahina")}{chip("lastmonth", "Pichla Mahina")}
       </div>
@@ -3239,10 +3300,584 @@ function ReportsView({ C, isMobile, isOwner, waiterName }) {
           </div>
         </>
       )}
+      </>)}
     </div>
   );
 }
 
+
+
+// ===========================================================================
+// VENDOR DUE TRACKING (patch 5)
+// collections: vendors/{id}, vendorPayments/{id}
+// Expense mode="credit" => due create, cash out NAHI, P&L expense HAAN
+// vendorPayments       => due kam, P&L expense NAHI, cash out HAAN
+// ===========================================================================
+
+const modeLabel = (m) => ({ cash: "Cash", upi: "UPI", bank: "Bank", credit: "Udhaar" }[m] || m);
+
+async function loadVendorDues() {
+  const [vSnap, eSnap, pSnap] = await Promise.all([
+    getDocs(collection(db, "vendors")),
+    getDocs(query(collection(db, "expenses"), where("mode", "==", "credit"))),
+    getDocs(collection(db, "vendorPayments")),
+  ]);
+  const map = {};
+  vSnap.docs.forEach((d) => {
+    const v = { id: d.id, ...d.data() };
+    map[v.id] = { ...v, purchases: 0, paid: 0, due: Number(v.openingDue) || 0 };
+  });
+  eSnap.docs.forEach((d) => {
+    const e = d.data();
+    if (e.vendorId && map[e.vendorId]) map[e.vendorId].purchases += Number(e.amount) || 0;
+  });
+  pSnap.docs.forEach((d) => {
+    const p = d.data();
+    if (p.vendorId && map[p.vendorId]) map[p.vendorId].paid += Number(p.amount) || 0;
+  });
+  return Object.values(map)
+    .map((v) => ({ ...v, due: (Number(v.openingDue) || 0) + v.purchases - v.paid }))
+    .sort((a, b) => b.due - a.due);
+}
+
+async function loadCustomCats() {
+  try {
+    const s = await getDoc(doc(db, "settings", "expenseCats"));
+    if (s.exists() && Array.isArray(s.data().list) && s.data().list.length) return s.data().list;
+  } catch (e) {}
+  return EXP_CATS;
+}
+async function saveCustomCats(list) {
+  await setDoc(doc(db, "settings", "expenseCats"), { list, updatedAt: Date.now() });
+}
+
+// ---------------------------------------------------------------------------
+// VENDOR LEDGER / PAYMENT VIEW
+// ---------------------------------------------------------------------------
+function VendorView({ C, isMobile, isOwner, waiterName, onDuesChange }) {
+  const toast = useToast(); const haptic = useHaptic();
+  const G = goldOf(C); const GT = goldTextOf(C);
+  const [vendors, setVendors] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newOpen, setNewOpen] = useState("");
+  const [payVendor, setPayVendor] = useState("");
+  const [payAmount, setPayAmount] = useState("");
+  const [payMode, setPayMode] = useState("cash");
+  const [payNote, setPayNote] = useState("");
+  const [payDate, setPayDate] = useState(invDateKey());
+  const [saving, setSaving] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const dues = await loadVendorDues();
+      setVendors(dues);
+      const ps = await getDocs(query(collection(db, "vendorPayments"), orderBy("createdAt", "desc"), limit(50)));
+      setPayments(ps.docs.map((d) => ({ id: d.id, ...d.data() })));
+      if (onDuesChange) onDuesChange(dues.reduce((s, v) => s + Math.max(0, v.due), 0));
+    } catch (e) { toast("Vendor load nahi hua: " + e.message, "error"); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const addVendor = async () => {
+    const n = newName.trim();
+    if (!n) { toast("Vendor ka naam likho", "warning"); return; }
+    if (saving) return;
+    setSaving(true);
+    try {
+      await addDoc(collection(db, "vendors"), {
+        name: n, phone: newPhone.trim(),
+        openingDue: Number(newOpen) || 0,
+        active: true, createdAt: Date.now(),
+      });
+      logAudit("vendor_added", { reason: n });
+      toast("Vendor add ho gaya", "success"); haptic(20);
+      setNewName(""); setNewPhone(""); setNewOpen("");
+      refresh();
+    } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
+  };
+
+  const payNow = async () => {
+    const amt = Number(payAmount);
+    if (!payVendor) { toast("Vendor chuno", "warning"); return; }
+    if (!(amt > 0)) { toast("Sahi amount likho", "warning"); return; }
+    if (saving) return;
+    setSaving(true);
+    try {
+      await addDoc(collection(db, "vendorPayments"), {
+        vendorId: payVendor, amount: amt, mode: payMode,
+        note: payNote.trim(), date: payDate,
+        by: waiterName || "Staff", createdAt: Date.now(),
+      });
+      logAudit("vendor_paid", { total: amt, reason: "Vendor " + payVendor + " - " + payMode });
+      toast("Payment save ho gayi: " + inr(amt), "success"); haptic(25);
+      setPayAmount(""); setPayNote("");
+      refresh();
+    } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
+  };
+
+  const deleteVendor = async (v) => {
+    if (!isOwner) return;
+    if (!window.confirm(v.name + " ko delete karein? (payments/purchases history rahegi)")) return;
+    try {
+      await deleteDoc(doc(db, "vendors", v.id));
+      toast("Vendor delete ho gaya", "success");
+      refresh();
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const field = { width: "100%", boxSizing: "border-box", padding: "11px 12px", border: "1.5px solid " + C.line, borderRadius: 10, fontSize: 15, background: C.card, color: C.ink, outline: "none", fontFamily: "inherit" };
+  const lbl = { fontSize: 11, fontWeight: 800, color: C.gray, marginBottom: 5, textTransform: "uppercase" };
+  const box = { background: C.card, border: "1px solid " + C.line, borderRadius: 14, padding: isMobile ? 14 : 18, marginBottom: 16 };
+
+  const totalDue = vendors.reduce((s, v) => s + Math.max(0, v.due), 0);
+
+  if (!isOwner) {
+    return (
+      <div style={{ textAlign: "center", padding: 50, color: C.gray }}>
+        <div style={{ fontSize: 44 }}>🔒</div>
+        <div style={{ fontSize: 14, fontWeight: 800, marginTop: 8 }}>Vendor sirf owner dekh sakta hai</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 4px", fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Vendor Due</h2>
+      <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginBottom: 14 }}>
+        Vendor ka udhaar aur payment - ye kharcha NAHI hai, alag track hota hai
+      </div>
+
+      <div style={{ background: C.amberLight || C.cardAlt, border: "1px solid " + (C.amber || G), borderRadius: 14, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, textTransform: "uppercase" }}>Kul Vendor Due</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: C.amber || GT, fontFamily: "monospace", marginTop: 4 }}>{inr(totalDue)}</div>
+        </div>
+        <div style={{ fontSize: 11, color: C.gray, fontWeight: 700, textAlign: "right" }}>{vendors.filter((v) => v.due > 0).length} vendor<br/>due wale</div>
+      </div>
+
+      <div style={box}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 12 }}>➕ Naya Vendor</div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Vendor name" style={field} />
+          <input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="Phone" style={field} />
+          <input value={newOpen} onChange={(e) => setNewOpen(e.target.value)} type="number" placeholder="Purana due" style={field} />
+        </div>
+        <button onClick={addVendor} disabled={saving} style={{ width: "100%", padding: 12, border: "none", borderRadius: 10, background: G, color: "#fff", fontWeight: 800, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}>{saving ? "Saving..." : "Vendor Add Karo"}</button>
+      </div>
+
+      {vendors.length > 0 && (
+        <div style={box}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 12 }}>💵 Vendor ko Paisa Do (Payment)</div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            <select value={payVendor} onChange={(e) => setPayVendor(e.target.value)} style={field}>
+              <option value="">-- Vendor chuno --</option>
+              {vendors.map((v) => <option key={v.id} value={v.id}>{v.name} (due {inr(Math.max(0, v.due))})</option>)}
+            </select>
+            <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="Amount Rs" style={field} />
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+            {[["cash", "Cash"], ["upi", "UPI"], ["bank", "Bank"]].map(([id, l]) => (
+              <button key={id} onClick={() => setPayMode(id)} style={{ padding: "7px 13px", borderRadius: 20, border: "1px solid " + (payMode === id ? G : C.line), background: payMode === id ? G : C.card, color: payMode === id ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 8, marginBottom: 10 }}>
+            <input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="Note (optional)" style={field} />
+            <input type="date" value={payDate} max={invDateKey()} onChange={(e) => e.target.value && setPayDate(e.target.value)} style={field} />
+          </div>
+          <button onClick={payNow} disabled={saving} style={{ width: "100%", padding: 14, border: "none", borderRadius: 10, background: "linear-gradient(135deg, " + G + " 0%, " + (C.goldDark || G) + " 100%)", color: "#fff", fontWeight: 900, fontSize: 15, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}>{saving ? "Saving..." : "Payment Save Karo"}</button>
+          <div style={{ fontSize: 11, color: C.gray, marginTop: 8, textAlign: "center", fontWeight: 700 }}>⚠️ Ye P&L expense nahi hai - sirf due kam karega</div>
+        </div>
+      )}
+
+      {loading && <div style={{ textAlign: "center", padding: 20 }}><Spinner color={G} /></div>}
+
+      {!loading && vendors.length === 0 && (
+        <div style={{ textAlign: "center", padding: 40, color: C.gray, fontSize: 13, fontWeight: 700 }}>Abhi koi vendor nahi - upar se add karo</div>
+      )}
+
+      {!loading && vendors.map((v) => (
+        <div key={v.id} style={{ background: C.card, border: "1px solid " + C.line, borderRadius: 12, padding: 14, marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>
+                {v.name}
+                {v.phone && <span style={{ color: C.gray, fontWeight: 600, fontSize: 12 }}> · {v.phone}</span>}
+              </div>
+              <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>
+                Opening {inr(v.openingDue || 0)} · Purchase {inr(v.purchases)} · Paid {inr(v.paid)}
+              </div>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ fontSize: 10, color: C.gray, fontWeight: 700 }}>DUE</div>
+              <div style={{ fontSize: 17, fontWeight: 900, color: v.due > 0 ? C.red : C.green, fontFamily: "monospace" }}>{inr(Math.max(0, v.due))}</div>
+            </div>
+            {isOwner && <button onClick={() => deleteVendor(v)} style={{ border: "none", background: "transparent", color: C.gray, fontSize: 16, cursor: "pointer", padding: 4 }} title="Delete">x</button>}
+          </div>
+        </div>
+      ))}
+
+      {payments.length > 0 && (
+        <div style={box}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 10 }}>🕐 Recent Payments</div>
+          {payments.slice(0, 20).map((p) => {
+            const v = vendors.find((x) => x.id === p.vendorId);
+            return (
+              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderTop: "1px dashed " + C.line, fontSize: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: C.ink }}>{v ? v.name : p.vendorId}</div>
+                  <div style={{ color: C.gray, fontSize: 11 }}>{p.date} · {modeLabel(p.mode)}{p.note ? " · " + p.note : ""}</div>
+                </div>
+                <div style={{ fontWeight: 900, color: C.green, fontFamily: "monospace" }}>{inr(p.amount)}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ===========================================================================
+// BULK IMPORT (patch 6)
+// Gemini se nikala hua JSON import karke vendors + expenses auto-create
+// ===========================================================================
+
+function ImportView({ C, isMobile, isOwner, waiterName, onDone }) {
+  const toast = useToast(); const haptic = useHaptic();
+  const G = goldOf(C); const GT = goldTextOf(C);
+  const [rawJson, setRawJson] = useState("");
+  const [parsed, setParsed] = useState(null);
+  const [error, setError] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState(null);
+  const [existingVendors, setExistingVendors] = useState([]);
+  const [modeOverride, setModeOverride] = useState("");
+
+  useEffect(() => {
+    getDocs(collection(db, "vendors"))
+      .then((s) => setExistingVendors(s.docs.map((d) => ({ id: d.id, ...d.data() }))))
+      .catch(() => {});
+  }, []);
+
+  const parseJson = (text, overrideArg) => {
+    const override = overrideArg === undefined ? modeOverride : overrideArg;
+    setError(""); setResult(null);
+    if (!text.trim()) { setParsed(null); return; }
+    try {
+      const clean = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+      const obj = JSON.parse(clean);
+      const bills = Array.isArray(obj) ? obj : (obj.bills || []);
+      if (!Array.isArray(bills)) throw new Error("JSON mein 'bills' array nahi mila");
+      const normalized = bills.map((b, i) => ({
+        _idx: i,
+        vendorName: String(b.vendorName || "").trim(),
+        vendorPhone: b.vendorPhone ? String(b.vendorPhone).trim() : "",
+        date: b.date || invDateKey(),
+        amount: Number(b.amount) || 0,
+        category: b.category || "Anya",
+        mode: override || b.mode || "credit",
+        note: b.note || "",
+        confidence: Number(b.confidence) || 1,
+        _valid: !!b.vendorName && Number(b.amount) > 0,
+        _skip: false,
+        _existingVendorId: "",
+      }));
+      normalized.forEach((n) => {
+        const match = existingVendors.find((v) => v.name.toLowerCase() === n.vendorName.toLowerCase());
+        if (match) n._existingVendorId = match.id;
+      });
+      setParsed(normalized);
+    } catch (e) {
+      setParsed(null);
+      setError("JSON galat hai: " + e.message);
+    }
+  };
+
+  const handleFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (!file.name.endsWith(".json")) { toast("Sirf .json file daalo", "warning"); return; }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const txt = String(ev.target.result || "");
+      setRawJson(txt);
+      parseJson(txt);
+    };
+    reader.readAsText(file);
+  };
+
+  const toggleSkip = (idx) => {
+    setParsed((prev) => prev.map((p) => p._idx === idx ? { ...p, _skip: !p._skip } : p));
+  };
+  const editField = (idx, field, value) => {
+    setParsed((prev) => prev.map((p) => {
+      if (p._idx !== idx) return p;
+      const upd = { ...p, [field]: value };
+      upd._valid = !!upd.vendorName && Number(upd.amount) > 0;
+      return upd;
+    }));
+  };
+
+  const stats = useMemo(() => {
+    if (!parsed) return null;
+    const active = parsed.filter((p) => !p._skip && p._valid);
+    const newVendors = new Set();
+    active.forEach((p) => { if (!p._existingVendorId) newVendors.add(p.vendorName.toLowerCase()); });
+    return {
+      total: parsed.length,
+      importing: active.length,
+      skipped: parsed.filter((p) => p._skip).length,
+      invalid: parsed.filter((p) => !p._skip && !p._valid).length,
+      newVendors: newVendors.size,
+      totalAmount: active.reduce((s, p) => s + Number(p.amount || 0), 0),
+    };
+  }, [parsed]);
+
+  const runImport = async () => {
+    if (!parsed || !stats || stats.importing === 0) { toast("Kuch import karne layak nahi", "warning"); return; }
+    if (!window.confirm(stats.importing + " bills import honge. " + stats.newVendors + " naye vendor banenge. Confirm?")) return;
+    setImporting(true);
+    const imported = { expenses: 0, vendors: 0, errors: [] };
+    try {
+      const nameToId = {};
+      existingVendors.forEach((v) => { nameToId[v.name.toLowerCase()] = v.id; });
+
+      const newVendorNames = new Set();
+      parsed.filter((p) => !p._skip && p._valid && !p._existingVendorId).forEach((p) => newVendorNames.add(p.vendorName));
+      for (const vName of newVendorNames) {
+        try {
+          const ref = await addDoc(collection(db, "vendors"), {
+            name: vName, phone: "", openingDue: 0, active: true, createdAt: Date.now(),
+          });
+          nameToId[vName.toLowerCase()] = ref.id;
+          imported.vendors++;
+        } catch (e) {
+          imported.errors.push("Vendor '" + vName + "': " + e.message);
+        }
+      }
+
+      const active = parsed.filter((p) => !p._skip && p._valid);
+      for (let i = 0; i < active.length; i += 20) {
+        const chunk = active.slice(i, i + 20);
+        const batch = writeBatch(db);
+        chunk.forEach((p) => {
+          const vId = p._existingVendorId || nameToId[p.vendorName.toLowerCase()] || null;
+          const ref = doc(collection(db, "expenses"));
+          batch.set(ref, {
+            date: p.date,
+            amount: Number(p.amount),
+            category: p.category,
+            mode: p.mode,
+            vendorId: vId,
+            note: (p.note || "") + (p.vendorPhone ? " | " + p.vendorPhone : ""),
+            by: waiterName || "Staff",
+            createdAt: Date.now(),
+            importedFrom: "gemini",
+          });
+          imported.expenses++;
+        });
+        await batch.commit();
+      }
+
+      try {
+        await addDoc(collection(db, "auditLog"), {
+          action: "bulk_import",
+          amount: stats.totalAmount,
+          count: imported.expenses,
+          by: waiterName || "Staff",
+          at: Date.now(),
+          detail: imported.vendors + " new vendors, " + imported.expenses + " expenses",
+        });
+      } catch (e) {}
+
+      haptic(50);
+      setResult({ ok: true, ...imported, totalAmount: stats.totalAmount });
+      toast("Import ho gaya: " + imported.expenses + " expenses, " + imported.vendors + " naye vendor", "success");
+      if (onDone) onDone();
+    } catch (e) {
+      setResult({ ok: false, error: e.message });
+      toast("Import fail: " + e.message, "error");
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const reset = () => {
+    setRawJson(""); setParsed(null); setError(""); setResult(null);
+  };
+
+  const box = { background: C.card, border: "1px solid " + C.line, borderRadius: 14, padding: isMobile ? 14 : 18, marginBottom: 16 };
+  const field = { width: "100%", boxSizing: "border-box", padding: "11px 12px", border: "1.5px solid " + C.line, borderRadius: 10, fontSize: 14, background: C.card, color: C.ink, outline: "none", fontFamily: "inherit" };
+
+  if (!isOwner) {
+    return (
+      <div style={{ textAlign: "center", padding: 50, color: C.gray }}>
+        <div style={{ fontSize: 44 }}>🔒</div>
+        <div style={{ fontSize: 14, fontWeight: 800, marginTop: 8 }}>Bulk import sirf owner kar sakta hai</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 4px", fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>📥 Bulk Import</h2>
+      <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginBottom: 14 }}>
+        Gemini se nikala hua JSON file yahan daalo - vendors aur expenses auto-create ho jayenge
+      </div>
+
+      {!parsed && !result && (
+        <>
+          <div style={box}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 10 }}>📸 Step 1: Bills ki photo Gemini ko bhejo</div>
+            <div style={{ fontSize: 12, color: C.gray, lineHeight: 1.6, marginBottom: 12 }}>
+              Gemini ko bill photo + niche wala prompt bhejo. Wo aapko JSON dega. Us JSON ko <b>.json</b> file mein save karo.
+            </div>
+            <details style={{ marginBottom: 10 }}>
+              <summary style={{ cursor: "pointer", fontSize: 12, fontWeight: 800, color: GT, padding: "8px 0" }}>📋 Gemini Prompt dekho / copy karo</summary>
+              <pre style={{ background: C.cardAlt, padding: 12, borderRadius: 8, fontSize: 10, overflowX: "auto", color: C.ink, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{`Tum ek restaurant accounting assistant ho. Main tumhe purane bill/invoice ki photo bhej raha hoon. Tumhe isse structured JSON nikaalna hai.
+
+RULES:
+1. Sirf valid JSON return karo, koi explanation nahi.
+2. Agar koi field samajh nahi aaye toh null daalo.
+3. Amount number mein.
+4. Date YYYY-MM-DD format mein.
+5. Category choose karo: ["Saman / Kaccha maal", "Salary", "Kiraya", "Gas / Coyla", "Bijli / Pani", "Repair", "Packing", "Marketing", "Anya"]
+6. "paid" likha ho toh mode="cash", warna mode="credit".
+7. Multiple bills ho toh array.
+
+OUTPUT:
+{
+  "bills": [
+    {
+      "vendorName": "Ramesh Vegetables",
+      "vendorPhone": "9876543210",
+      "date": "2026-10-15",
+      "amount": 10000,
+      "category": "Saman / Kaccha maal",
+      "mode": "credit",
+      "note": "Paneer 5kg",
+      "confidence": 0.95
+    }
+  ]
+}`}</pre>
+            </details>
+          </div>
+
+          <div style={box}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 10 }}>📁 Step 2: JSON file upload karo</div>
+            <input type="file" accept=".json,application/json" onChange={handleFile} style={{ ...field, padding: 10, cursor: "pointer" }} />
+            <div style={{ fontSize: 11, color: C.gray, marginTop: 8, fontWeight: 700 }}>Ya niche seedha paste karo:</div>
+            <textarea
+              value={rawJson}
+              onChange={(e) => { setRawJson(e.target.value); parseJson(e.target.value); }}
+              placeholder='{"bills": [{"vendorName": "...", "amount": 1000, ...}]}'
+              style={{ ...field, minHeight: 160, marginTop: 8, fontFamily: "monospace", fontSize: 12 }}
+            />
+            {error && <div style={{ color: C.red, fontSize: 12, fontWeight: 700, marginTop: 8 }}>❌ {error}</div>}
+          </div>
+
+          <div style={box}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 10 }}>⚙️ Mode override (optional)</div>
+            <div style={{ fontSize: 11, color: C.gray, marginBottom: 8 }}>Agar Gemini galat mode de raha ho toh yahan sabke liye fix karo:</div>
+            <select value={modeOverride} onChange={(e) => { const v = e.target.value; setModeOverride(v); if (parsed) parseJson(rawJson, v); }} style={field}>
+              <option value="">-- Gemini ka mode use karo --</option>
+              <option value="cash">Sab Cash</option>
+              <option value="credit">Sab Udhaar</option>
+              <option value="upi">Sab UPI</option>
+              <option value="bank">Sab Bank</option>
+            </select>
+          </div>
+        </>
+      )}
+
+      {parsed && !result && (
+        <>
+          <div style={{ ...box, background: C.goldLight || C.cardAlt, border: "1.5px solid " + G }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10 }}>
+              <div><div style={{ fontSize: 10, color: C.gray, fontWeight: 800 }}>TOTAL</div><div style={{ fontSize: 20, fontWeight: 900, color: C.ink, fontFamily: "monospace" }}>{stats.total}</div></div>
+              <div><div style={{ fontSize: 10, color: C.gray, fontWeight: 800 }}>IMPORT</div><div style={{ fontSize: 20, fontWeight: 900, color: C.green, fontFamily: "monospace" }}>{stats.importing}</div></div>
+              <div><div style={{ fontSize: 10, color: C.gray, fontWeight: 800 }}>NEW VENDORS</div><div style={{ fontSize: 20, fontWeight: 900, color: GT, fontFamily: "monospace" }}>{stats.newVendors}</div></div>
+              <div><div style={{ fontSize: 10, color: C.gray, fontWeight: 800 }}>AMOUNT</div><div style={{ fontSize: 16, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(stats.totalAmount)}</div></div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+            <button onClick={runImport} disabled={importing || stats.importing === 0} style={{ flex: 1, minWidth: 140, padding: 14, border: "none", borderRadius: 10, background: importing ? C.line : "linear-gradient(135deg, " + G + " 0%, " + (C.goldDark || G) + " 100%)", color: importing ? C.gray : "#fff", fontWeight: 900, fontSize: 15, cursor: importing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>{importing ? "Import ho raha hai..." : "✅ " + stats.importing + " Bills Import Karo"}</button>
+            <button onClick={reset} disabled={importing} style={{ padding: "14px 20px", border: "1.5px solid " + C.line, borderRadius: 10, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+          </div>
+
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 8 }}>Preview ({parsed.length} bills)</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {parsed.map((p) => (
+              <div key={p._idx} style={{ background: p._skip ? C.cardAlt : C.card, border: "1px solid " + (p._valid ? C.line : C.red), borderRadius: 10, padding: 10, opacity: p._skip ? 0.5 : 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flex: 1, minWidth: 0 }}>
+                    <input type="checkbox" checked={!p._skip} onChange={() => toggleSkip(p._idx)} style={{ cursor: "pointer" }} />
+                    <input
+                      value={p.vendorName}
+                      onChange={(e) => editField(p._idx, "vendorName", e.target.value)}
+                      placeholder="Vendor name"
+                      style={{ ...field, padding: "6px 8px", fontSize: 13, fontWeight: 800 }}
+                    />
+                  </div>
+                  <input
+                    value={p.amount}
+                    onChange={(e) => editField(p._idx, "amount", e.target.value)}
+                    type="number"
+                    placeholder="Amount"
+                    style={{ ...field, padding: "6px 8px", fontSize: 13, width: 100, fontFamily: "monospace", fontWeight: 900 }}
+                  />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 6, fontSize: 11 }}>
+                  <input value={p.date} onChange={(e) => editField(p._idx, "date", e.target.value)} type="date" style={{ ...field, padding: "5px 7px", fontSize: 11 }} />
+                  <select value={p.category} onChange={(e) => editField(p._idx, "category", e.target.value)} style={{ ...field, padding: "5px 7px", fontSize: 11 }}>
+                    {EXP_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <select value={p.mode} onChange={(e) => editField(p._idx, "mode", e.target.value)} style={{ ...field, padding: "5px 7px", fontSize: 11 }}>
+                    <option value="cash">Cash</option>
+                    <option value="upi">UPI</option>
+                    <option value="bank">Bank</option>
+                    <option value="credit">Udhaar</option>
+                  </select>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 800, color: p._existingVendorId ? C.green : GT, padding: "5px 7px", background: C.cardAlt, borderRadius: 6 }}>
+                    {p._existingVendorId ? "✓ existing" : "★ naya"}
+                    <span style={{ color: C.gray, marginLeft: "auto" }}>{Math.round(p.confidence * 100)}%</span>
+                  </div>
+                </div>
+                {p.note && <div style={{ fontSize: 11, color: C.gray, marginTop: 6, fontStyle: "italic" }}>{p.note}</div>}
+                {!p._valid && <div style={{ fontSize: 11, color: C.red, marginTop: 4, fontWeight: 700 }}>⚠️ Vendor name ya amount missing</div>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {result && (
+        <div style={{ ...box, border: "2px solid " + (result.ok ? C.green : C.red), textAlign: "center" }}>
+          <div style={{ fontSize: 44 }}>{result.ok ? "✅" : "❌"}</div>
+          <div style={{ fontSize: 16, fontWeight: 900, color: result.ok ? C.green : C.red, marginTop: 8 }}>{result.ok ? "Import Successful" : "Import Failed"}</div>
+          {result.ok ? (
+            <div style={{ marginTop: 12, fontSize: 13, color: C.ink, fontWeight: 700 }}>
+              <div>{result.expenses} expenses add huye</div>
+              <div>{result.vendors} naye vendors bane</div>
+              <div>Total: {inr(result.totalAmount)}</div>
+              {result.errors && result.errors.length > 0 && <div style={{ color: C.amber, marginTop: 8, fontSize: 11 }}>{result.errors.length} errors - check console</div>}
+            </div>
+          ) : (
+            <div style={{ marginTop: 12, fontSize: 12, color: C.red }}>{result.error}</div>
+          )}
+          <button onClick={reset} style={{ marginTop: 16, padding: "12px 24px", border: "none", borderRadius: 10, background: G, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Naya Import Karo</button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { err: null }; }

@@ -4,33 +4,37 @@ import { db, auth } from "./firebase";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, getDoc, updateDoc, addDoc,
-  query, where, runTransaction, deleteDoc, getDocs, orderBy, limit
+  query, where, runTransaction, deleteDoc, getDocs, orderBy, limit, writeBatch
 } from "firebase/firestore";
 
 // ===========================================================================
 // COLORS
 // ===========================================================================
 const LIGHT = {
-  bg: "#F9FAFB", card: "#fff", cardAlt: "#F3F4F6", ink: "#111827",
-  gray: "#6B7280", light: "#F9FAFB", line: "#E5E7EB",
+  bg: "#FAF7EF", card: "#FFFFFF", cardAlt: "#F4EEDD", ink: "#1C1608",
+  gray: "#7A7058", light: "#FAF7EF", line: "#E9E0C9",
   red: "#DC2626", redLight: "#FEF2F2",
   green: "#16A34A", greenLight: "#F0FDF4",
   amber: "#F59E0B", amberLight: "#FFFBEB",
   blue: "#2563EB", blueLight: "#EFF6FF",
+  gold: "#B8860B", goldDark: "#7A5806", goldLight: "#FBF3D9", goldText: "#8A6200",
 };
 const DARK = {
-  bg: "#0F172A", card: "#1E293B", cardAlt: "#334155", ink: "#F1F5F9",
-  gray: "#94A3B8", light: "#1E293B", line: "#334155",
+  bg: "#14110A", card: "#1F1A10", cardAlt: "#2C2516", ink: "#F7F0DA",
+  gray: "#B0A585", light: "#1F1A10", line: "#3D3319",
   red: "#EF4444", redLight: "#450A0A",
   green: "#22C55E", greenLight: "#052E16",
   amber: "#FBBF24", amberLight: "#451A03",
   blue: "#3B82F6", blueLight: "#1E3A8A",
+  gold: "#D4A017", goldDark: "#8F6A0A", goldLight: "#3A2C08", goldText: "#F0C85A",
 };
 
 // ===========================================================================
 // GLOBAL CSS (animations, press states, shimmer)
 // ===========================================================================
 const GLOBAL_CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&display=swap');
+h2 { font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; letter-spacing: 0.2px; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -47,7 +51,7 @@ button { -webkit-tap-highlight-color: transparent; transition: transform 0.08s e
 button:active:not(:disabled) { transform: scale(0.96); }
 button:disabled { opacity: 0.55; }
 input, textarea { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
-input:focus, textarea:focus { border-color: #DC2626 !important; box-shadow: 0 0 0 3px rgba(220,38,38,0.12); }
+input:focus, textarea:focus { border-color: #B8860B !important; box-shadow: 0 0 0 3px rgba(184,134,11,0.18); }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -298,7 +302,7 @@ function Spinner({ size = 16, color = "#fff" }) {
 function SplashScreen({ C }) {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: "system-ui, sans-serif", flexDirection: "column", gap: 20 }}>
-      <div style={{ width: 100, height: 100, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 52, boxShadow: `0 20px 60px ${C.red}55`, animation: "successBounce 0.6s ease-out" }}>🍽️</div>
+      <div style={{ width: 100, height: 100, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 52, boxShadow: `0 20px 60px ${C.gold}55`, animation: "successBounce 0.6s ease-out" }}>🍽️</div>
       <div style={{ fontWeight: 900, fontSize: 22, color: C.ink, letterSpacing: "-0.02em" }}>Eat & Park</div>
       <div style={{ fontWeight: 600, fontSize: 12, color: C.gray, textTransform: "uppercase", letterSpacing: 2 }}>Staff POS</div>
       <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
@@ -343,7 +347,17 @@ function StaffAppInner() {
   const [ordersFilter, setOrdersFilter] = useState("all");
   const [ordersRange, setOrdersRange] = useState(null);
   const [confetti, setConfetti] = useState(false);
+  const [muted, setMuted] = useState(() => localStorage.getItem("staff_mute") === "1");
   const prevNewIdsRef = useRef(null);
+  const [lowCount, setLowCount] = useState(0);
+  useEffect(() => {
+    if (!user) return;
+    let invItems = [], invStock = {};
+    const calc = () => setLowCount(invItems.filter((it) => Number(it.min) > 0 && invStock[it.id] !== undefined && Number(invStock[it.id]) <= Number(it.min)).length);
+    const u1 = onSnapshot(doc(db, "inventory", "items"), (s) => { invItems = s.exists() && Array.isArray(s.data().list) ? s.data().list : []; calc(); }, () => {});
+    const u2 = onSnapshot(doc(db, "inventory", "state"), (s) => { invStock = s.exists() ? (s.data().stock || {}) : {}; calc(); }, () => {});
+    return () => { u1(); u2(); };
+  }, [user]);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem("staff_view_mode") || "auto");
   const [autoMobile, setAutoMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
 
@@ -362,7 +376,7 @@ function StaffAppInner() {
   const viewIcon = viewMode === "auto" ? "🔄" : viewMode === "mobile" ? "📱" : "💻";
 
   const C = darkMode ? DARK : LIGHT;
-const isOwner = true;
+const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role || "").toLowerCase());
 
   useEffect(() => { localStorage.setItem("staff_dark", darkMode ? "1" : "0"); document.body.style.background = C.bg; }, [darkMode]);
 
@@ -405,7 +419,7 @@ const isOwner = true;
     if (user && "Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {});
   }, [user]);
 
-  const playSound = () => { try { const a = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"); a.volume = 0.6; a.play().catch(() => {}); } catch (e) {} };
+  const playSound = () => { if (localStorage.getItem("staff_mute") === "1") return; try { const a = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"); a.volume = 0.6; a.play().catch(() => {}); } catch (e) {} };
   const clickSound = () => { try { const a = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT");
     a.volume = 0.15; a.play().catch(() => {}); } catch (e) {} };
 
@@ -484,7 +498,7 @@ const isOwner = true;
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${C.bg} 0%, ${C.cardAlt} 100%)`, fontFamily: "system-ui, sans-serif", padding: 16 }}>
         <form onSubmit={handleLogin} style={{ background: C.card, borderRadius: 20, padding: isMobile ? 24 : 36, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", border: `1px solid ${C.line}`, animation: "scaleIn 0.35s ease-out" }}>
           <div style={{ textAlign: "center", marginBottom: 28 }}>
-            <div style={{ width: 80, height: 80, margin: "0 auto 12px", background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, boxShadow: `0 8px 24px ${C.red}40` }}>🍽️</div>
+            <div style={{ width: 80, height: 80, margin: "0 auto 12px", background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, boxShadow: `0 8px 24px ${C.gold}40` }}>🍽️</div>
             <div style={{ fontSize: 26, fontWeight: 800, color: C.ink, letterSpacing: "-0.02em" }}>Eat & Park</div>
             <div style={{ fontSize: 13, color: C.gray, marginTop: 4, fontWeight: 600 }}>Staff POS - Sign In</div>
           </div>
@@ -497,7 +511,7 @@ const isOwner = true;
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="********" style={{ width: "100%", padding: "13px 16px", border: `1.5px solid ${C.line}`, borderRadius: 10, fontSize: 14, boxSizing: "border-box", outline: "none", background: C.card, color: C.ink }} required />
           </div>
           {loginError && <div style={{ background: C.redLight, color: C.red, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, marginBottom: 18 }}>Warning: {loginError}</div>}
-          <button type="submit" style={{ width: "100%", padding: "15px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", boxShadow: `0 8px 20px ${C.red}40` }}>Sign In</button>
+          <button type="submit" style={{ width: "100%", padding: "15px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", boxShadow: `0 8px 20px ${C.gold}40` }}>Sign In</button>
           <div style={{ textAlign: "center", marginTop: 22, fontSize: 12, color: C.gray }}>
             <a href="/" style={{ color: C.blue, textDecoration: "none", fontWeight: 700 }}>Back to Customer App</a>
           </div>
@@ -516,7 +530,7 @@ const isOwner = true;
       <Confetti show={confetti} />
 
       {/* TOP BAR */}
-      <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", padding: isMobile ? "10px 10px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 16px rgba(220,38,38,0.25)", position: "sticky", top: 0, zIndex: 50, gap: 8 }}>
+      <div style={{ background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", padding: isMobile ? "10px 10px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 16px rgba(184,134,11,0.30)", position: "sticky", top: 0, zIndex: 50, gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, minWidth: 0, flex: 1 }}>
           <button onClick={() => { haptic(); setSidebarOpen(true); }} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: isMobile ? 34 : 38, height: isMobile ? 34 : 38, borderRadius: 8, fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>☰</button>
           {!isMobile && <div style={{ width: 42, height: 42, background: "rgba(255,255,255,0.2)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>}
@@ -526,6 +540,7 @@ const isOwner = true;
           </div>
         </div>
         <div style={{ display: "flex", gap: isMobile ? 4 : 8, alignItems: "center", flexShrink: 0 }}>
+          <button onClick={() => { const n = !muted; setMuted(n); localStorage.setItem("staff_mute", n ? "1" : "0"); }} title="Sound" style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 38, height: 38, borderRadius: 8, fontSize: 16, cursor: "pointer" }}>{muted ? "🔇" : "🔔"}</button>
           <button onClick={cycleViewMode} title={`View: ${viewMode}`} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 38, height: 38, borderRadius: 8, fontSize: 16, cursor: "pointer" }}>{viewIcon}</button>
           {!isMobile && (
             <button onClick={() => { const n = lang === "en" ? "hi" : "en"; setLang(n); localStorage.setItem("staff_lang", n); }} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 44, height: 38, borderRadius: 8, fontSize: 12, cursor: "pointer", fontWeight: 800 }}>{lang === "en" ? "EN" : "हि"}</button>
@@ -546,10 +561,12 @@ const isOwner = true;
           { id: "kot", label: `🍳 Kitchen${newCount ? ` (${newCount})` : ""}` },
           { id: "dashboard", label: "📊 Dashboard" },
           { id: "history", label: "🕘 History" },
-          { id: "inventory", label: "🧾 Saman" },
+          { id: "inventory", label: "🧾 Saman" + (lowCount ? " (" + lowCount + ")" : "") },
           { id: "audit", label: "📝 Audit" },
+          { id: "expenses", label: "💸 Kharcha" },
+          { id: "reports", label: "📈 Reports" },
         ].map(tab => (
-          <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSelectedTable(null); setOrdersRange(null); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: activeTab === tab.id ? C.red : C.gray, fontWeight: 700, fontSize: isMobile ? 12 : 13, cursor: "pointer", borderBottom: activeTab === tab.id ? `3px solid ${C.red}` : "3px solid transparent", whiteSpace: "nowrap", flexShrink: 0 }}>{tab.label}</button>
+          <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSelectedTable(null); setOrdersRange(null); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: activeTab === tab.id ? C.gold : C.gray, fontWeight: 700, fontSize: isMobile ? 12 : 13, cursor: "pointer", borderBottom: activeTab === tab.id ? `3px solid ${C.gold}` : "3px solid transparent", whiteSpace: "nowrap", flexShrink: 0 }}>{tab.label}</button>
         ))}
       </div>
 
@@ -581,6 +598,8 @@ const isOwner = true;
         {activeTab === "stock" && <StockPanel C={C} isMobile={isMobile} menu={menu} />}
         {activeTab === "history" && <HistoryView C={C} isMobile={isMobile} isOwner={isOwner} />}
         {activeTab === "audit" && <AuditLogView C={C} isMobile={isMobile} />}
+        {activeTab === "expenses" && <ExpensesView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
+        {activeTab === "reports" && <ReportsView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
         {activeTab === "dashboard" && (
           <DashboardView C={C} isMobile={isMobile} orders={orders} dueOrders={dueOrders} menu={menu}
             onStatusClick={(status, bounds) => { setOrdersFilter(status); setOrdersRange(bounds || null); setActiveTab("orders"); }}
@@ -597,18 +616,18 @@ const isOwner = true;
           <div onClick={e => e.stopPropagation()} style={{ width: isMobile ? "82%" : 280, maxWidth: isMobile ? 320 : undefined, background: C.card, height: "100%", padding: 20, display: "flex", flexDirection: "column", gap: 6, boxShadow: "4px 0 24px rgba(0,0,0,0.15)", overflowY: "auto", animation: "slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 44, height: 44, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>
+                <div style={{ width: 44, height: 44, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>
                 <div><div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Eat & Park</div><div style={{ fontSize: 11, color: C.gray }}>Staff Panel</div></div>
               </div>
               <button onClick={() => setSidebarOpen(false)} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.gray }}>X</button>
             </div>
-            <div style={{ background: `linear-gradient(135deg, ${C.red}10 0%, ${C.red}05 100%)`, border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
+            <div style={{ background: `linear-gradient(135deg, ${C.gold}22 0%, ${C.gold}08 100%)`, border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.5 }}>Logged in as</div>
               <div style={{ fontWeight: 800, fontSize: 15, color: C.ink, marginTop: 4 }}>{staffData?.name || "Staff"}</div>
               <div style={{ fontSize: 12, color: C.gray, marginTop: 2 }}>{staffData?.role || "waiter"}</div>
             </div>
-            {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "history", label: "History", icon: "🕘" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }, { id: "audit", label: "Audit Log", icon: "📝" }].map(tab => (
-              <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.redLight : "transparent", color: activeTab === tab.id ? C.red : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
+            {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "history", label: "History", icon: "🕘" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }, { id: "audit", label: "Audit Log", icon: "📝" }, { id: "expenses", label: "Kharcha", icon: "💸" }, { id: "reports", label: "Reports / P&L", icon: "📈" }].map(tab => (
+              <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.goldLight : "transparent", color: activeTab === tab.id ? C.gold : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
                 <span style={{ fontSize: 18 }}>{tab.icon}</span><span>{tab.label}</span>
               </button>
             ))}
@@ -667,7 +686,7 @@ function ParcelView({ C, isMobile, orders, onNew, onBill, onAdd }) {
           <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Parcel ({list.length})</h2>
           <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 2 }}>Baaki payment: {inr(total)}</div>
         </div>
-        <button onClick={onNew} style={{ padding: "11px 18px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>+ New Parcel</button>
+        <button onClick={onNew} style={{ padding: "11px 18px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>+ New Parcel</button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
         {list.map(o => {
@@ -695,7 +714,7 @@ function ParcelView({ C, isMobile, orders, onNew, onBill, onAdd }) {
               </div>
               <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 8, marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: C.gray, fontWeight: 600 }}>Total</span>
-                <span style={{ fontSize: 18, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</span>
+                <span style={{ fontSize: 18, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                 <button onClick={() => onBill(o)} style={{ padding: 9, border: "none", borderRadius: 8, background: C.red, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Bill / Paid</button>
@@ -713,6 +732,8 @@ function ParcelView({ C, isMobile, orders, onNew, onBill, onAdd }) {
 }
 
 function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, onMerge, onSplit, onMove, onFeedback, search, setSearch, todayRevenue, activeOrders }) {
+  const [, setTick] = useState(0);
+  useEffect(() => { const iv = setInterval(() => setTick((x) => x + 1), 30000); return () => clearInterval(iv); }, []);
   const tableData = useMemo(() => {
     const map = {};
     for (let i = 1; i <= TABLE_COUNT; i++) map[i] = { table: i, order: null };
@@ -763,7 +784,7 @@ function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, 
               </div>
               {t.order ? (
                 <div style={{ marginTop: 6 }}>
-                  <div style={{ fontSize: isMobile ? 10 : 11, color: C.gray, fontWeight: 700 }}>#{t.order.id?.slice(1,5).toUpperCase()} - {timeAgo(t.order.createdAt)}</div>
+                  <div style={{ fontSize: isMobile ? 10 : 11, color: (Date.now() - (t.order.createdAt || 0)) > 3600000 ? C.amber : C.gray, fontWeight: 700 }}>{(Date.now() - (t.order.createdAt || 0)) > 3600000 ? "⏱ " : ""}#{t.order.id?.slice(1,5).toUpperCase()} - {timeAgo(t.order.createdAt)}</div>
                   <div style={{ fontSize: isMobile ? 10 : 11, color: C.gray, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.order.items?.length || 0} items - {inr(t.order.finalTotal || 0)}</div>
                 </div>
               ) : <div style={{ fontSize: isMobile ? 10 : 11, color: C.gray, fontWeight: 700, textTransform: "uppercase", marginTop: 6 }}>Available</div>}
@@ -884,7 +905,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...patch } : o));
     try {
       await updateDoc(doc(db, "orders", order.id), patch);
-      toast("Payment received!", "success");
+      logAudit("paid", { orderId: order.id, total: order.finalTotal || 0, mode }); toast("Payment received!", "success");
       if (onPaidSuccess) onPaidSuccess();
     } catch (e) {
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, paid: false, paymentStatus: "pending" } : o));
@@ -912,7 +933,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
         )}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {["all", "active", ...STATUS_FLOW, "paid", "cancelled"].map(f => (
-            <button key={f} onClick={() => { haptic(); setFilter(f); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: "1px solid " + (filter === f ? C.red : C.line), background: filter === f ? C.red : C.card, color: filter === f ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", textTransform: "capitalize", fontFamily: "inherit" }}>{f}</button>
+            <button key={f} onClick={() => { haptic(); setFilter(f); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: "1px solid " + (filter === f ? C.gold : C.line), background: filter === f ? C.gold : C.card, color: filter === f ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", textTransform: "capitalize", fontFamily: "inherit" }}>{f}</button>
           ))}
         </div>
       </div>
@@ -929,7 +950,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
               <span style={{ fontSize: 11, color: C.gray, whiteSpace: "nowrap" }}>#{o.id?.slice(1,5).toUpperCase()} - {timeAgo(o.createdAt)}</span>
               <span style={{ background: stBg, color: stColor, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>{st.label}</span>
               {o.paid && <span style={{ background: C.greenLight, color: C.green, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>PAID</span>}
-              <span style={{ marginLeft: "auto", fontWeight: 900, color: C.red, fontFamily: "monospace", fontSize: 13, whiteSpace: "nowrap" }}>{inr(o.finalTotal || 0)}</span>
+              <span style={{ marginLeft: "auto", fontWeight: 900, color: C.goldText, fontFamily: "monospace", fontSize: 13, whiteSpace: "nowrap" }}>{inr(o.finalTotal || 0)}</span>
               <span style={{ color: C.gray, fontSize: 10 }}>▼</span>
             </button>
           );
@@ -955,7 +976,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
               </div>
               <div style={{ borderTop: "1px solid " + C.line, paddingTop: 10, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: C.gray, fontWeight: 600 }}>Total</span>
-                <span style={{ fontSize: isMobile ? 16 : 18, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</span>
+                <span style={{ fontSize: isMobile ? 16 : 18, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</span>
               </div>
               {o.paid && <div style={{ background: C.greenLight, color: C.green, padding: "6px 10px", borderRadius: 6, fontSize: 11, fontWeight: 800, marginBottom: 10, textAlign: "center" }}>PAID {o.payment ? "(" + o.payment.toUpperCase() + ")" : ""}</div>}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
@@ -991,7 +1012,7 @@ function KOTView({ C, isMobile, orders, setOrders }) {
   const haptic = useHaptic();
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(x => x + 1), 15000); return () => clearInterval(iv); }, []);
-  const kotOrders = orders.filter(o => o.status === "new" || o.status === "preparing");
+  const kotOrders = orders.filter(o => (o.status === "new" || o.status === "preparing") && Date.now() - (o.createdAt || 0) < 18 * 3600 * 1000);
   const advanceOrder = async (order) => {
     const idx = STATUS_FLOW.indexOf(order.status);
     if (idx < 0 || idx >= STATUS_FLOW.length - 1) return;
@@ -1037,7 +1058,7 @@ function KOTView({ C, isMobile, orders, setOrders }) {
 // DASHBOARD VIEW (with animated numbers)
 // ===========================================================================
 function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, onOrderClick }) {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = invDateKey();
   const [range, setRange] = useState("today");
   const [customDate, setCustomDate] = useState(todayStr);
   const haptic = useHaptic();
@@ -1053,13 +1074,15 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
   }, [orders, range, customDate]);
 
   const todayRevenue = filtered.filter(o => o.paid && o.status !== "cancelled").reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
-  const todayTotal = filtered.length;
-  const paidCount = filtered.filter(o => o.paid).length;
+  const todayTotal = filtered.filter(o => o.status !== "cancelled").length;
+  const paidCount = filtered.filter(o => o.paid && o.status !== "cancelled").length;
   const activeOrders = filtered.filter(o => o.status !== "served" && o.status !== "cancelled").length;
   const avgOrder = paidCount ? Math.round(todayRevenue / paidCount) : 0;
   const statusCounts = { new: 0, preparing: 0, ready: 0, served: 0 };
   filtered.forEach(o => { if (statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
   const recentOrders = [...filtered].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
+  const hourCounts = Array.from({ length: 24 }, () => 0);
+  filtered.forEach(o => { hourCounts[new Date(o.createdAt).getHours()]++; });
   const rangeLabel = { today: "Today", yesterday: "Yesterday", "7days": "Last 7 Days", "30days": "Last 30 Days", month: "This Month", custom: `Date: ${customDate}` }[range] || "Today";
 
   return (
@@ -1073,7 +1096,7 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
         {[{ id: "today", label: "Today" }, { id: "yesterday", label: "Yesterday" }, { id: "7days", label: "7 Days" }, { id: "30days", label: "30 Days" }, { id: "month", label: "Month" }].map(r => (
-          <button key={r.id} onClick={() => { haptic(); setRange(r.id); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: `1px solid ${range === r.id ? C.red : C.line}`, background: range === r.id ? C.red : C.card, color: range === r.id ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", fontFamily: "inherit" }}>{r.label}</button>
+          <button key={r.id} onClick={() => { haptic(); setRange(r.id); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: `1px solid ${range === r.id ? C.gold : C.line}`, background: range === r.id ? C.gold : C.card, color: range === r.id ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", fontFamily: "inherit" }}>{r.label}</button>
         ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(180px, 1fr))", gap: isMobile ? 10 : 14, marginBottom: 24 }}>
@@ -1115,13 +1138,13 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
         <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: C.ink, marginBottom: 16 }}>Orders by Hour - {rangeLabel}</div>
         <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 120 }}>
           {Array.from({ length: 24 }, (_, h) => {
-            const count = filtered.filter(o => new Date(o.createdAt).getHours() === h).length;
-            const maxCount = Math.max(1, ...Array.from({ length: 24 }, (_, hh) => filtered.filter(o => new Date(o.createdAt).getHours() === hh).length));
+            const count = hourCounts[h];
+            const maxCount = Math.max(1, ...hourCounts);
             const height = (count / maxCount) * 100;
             return (
               <div key={h} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                 <div style={{ width: "100%", height: 100, display: "flex", alignItems: "flex-end" }}>
-                  <div title={`${h}:00 - ${count}`} style={{ width: "100%", height: `${height}%`, minHeight: count > 0 ? 4 : 0, background: `linear-gradient(180deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 3, transition: "all 0.4s" }} />
+                  <div title={`${h}:00 - ${count}`} style={{ width: "100%", height: `${height}%`, minHeight: count > 0 ? 4 : 0, background: `linear-gradient(180deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 3, transition: "all 0.4s" }} />
                 </div>
                 {h % 4 === 0 && <div style={{ fontSize: 9, color: C.gray, fontWeight: 700 }}>{h}</div>}
               </div>
@@ -1156,7 +1179,7 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</div>
+                  <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</div>
                 </div>
               </button>
             );
@@ -1323,16 +1346,18 @@ function TableMergeModal({ C, isMobile, primaryOrder, allOrders, onClose }) {
     setBusy(true);
     try {
       const other = allOrders.find(o => o.id === selectedId);
-      if (!other) return;
-      await updateDoc(doc(db, "orders", primaryOrder.id), {
+      if (!other) { setBusy(false); return; }
+      const mb = writeBatch(db);
+      mb.update(doc(db, "orders", primaryOrder.id), {
         items: [...(primaryOrder.items || []), ...(other.items || [])],
         kots: [...(primaryOrder.kots || []), ...(other.kots || [])],
         subtotal: (Number(primaryOrder.subtotal) || 0) + (Number(other.subtotal) || 0),
         finalTotal: (Number(primaryOrder.finalTotal) || 0) + (Number(other.finalTotal) || 0),
         mergedFrom: [...(primaryOrder.mergedFrom || []), other.table],
       });
-      await updateDoc(doc(db, "orders", other.id), { status: "cancelled", cancelledAt: Date.now(), cancelledReason: "Merged into " + primaryOrder.table });
-      toast("Merged successfully", "success");
+      mb.update(doc(db, "orders", other.id), { status: "cancelled", cancelledAt: Date.now(), cancelledReason: "Merged into " + primaryOrder.table });
+      await mb.commit();
+      logAudit("tables_merged", { orderId: primaryOrder.id, table: primaryOrder.table, merged: other.table, total: primaryOrder.finalTotal || 0 }); toast("Merged successfully", "success");
       onClose();
     } catch (e) { toast(e.message, "error"); setBusy(false); }
   };
@@ -1341,7 +1366,7 @@ function TableMergeModal({ C, isMobile, primaryOrder, allOrders, onClose }) {
       <div style={{ fontSize: 12, color: C.gray, marginBottom: 16 }}>Is order (Table {primaryOrder.table}) me dusra table merge karo</div>
       {otherOrders.length === 0 && <div style={{ padding: 20, textAlign: "center", color: C.gray }}>Koi aur running order nahi</div>}
       {otherOrders.map(o => (
-        <button key={o.id} onClick={() => setSelectedId(o.id)} style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: 12, marginBottom: 8, border: `2px solid ${selectedId === o.id ? C.red : C.line}`, borderRadius: 8, background: selectedId === o.id ? C.redLight : "transparent", cursor: "pointer", fontFamily: "inherit" }}>
+        <button key={o.id} onClick={() => setSelectedId(o.id)} style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: 12, marginBottom: 8, border: `2px solid ${selectedId === o.id ? C.gold : C.line}`, borderRadius: 8, background: selectedId === o.id ? C.redLight : "transparent", cursor: "pointer", fontFamily: "inherit" }}>
           <span style={{ fontWeight: 700, color: C.ink }}>Table {o.table}</span>
           <span style={{ color: C.gray }}>{inr(o.finalTotal || 0)}</span>
         </button>
@@ -1376,7 +1401,7 @@ function TableMoveModal({ C, isMobile, order, allOrders, onClose }) {
       {free.length === 0 && <div style={{ padding: 20, textAlign: "center", color: C.gray }}>Koi table khali nahi</div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
         {free.map(n => (
-          <button key={n} onClick={() => setTo(n)} style={{ padding: "14px 0", borderRadius: 10, border: `2px solid ${to === n ? C.red : C.line}`, background: to === n ? C.redLight : "transparent", color: to === n ? C.red : C.ink, fontWeight: 900, fontSize: 16, cursor: "pointer", fontFamily: "monospace" }}>{n}</button>
+          <button key={n} onClick={() => setTo(n)} style={{ padding: "14px 0", borderRadius: 10, border: `2px solid ${to === n ? C.gold : C.line}`, background: to === n ? C.redLight : "transparent", color: to === n ? C.gold : C.ink, fontWeight: 900, fontSize: 16, cursor: "pointer", fontFamily: "monospace" }}>{n}</button>
         ))}
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
@@ -1467,6 +1492,17 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     } catch (e) { toast(e.message, "error"); } finally { setSavingMenu(false); }
   };
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [rates, setRates] = useState({});
+  const editRate = (id, cur, name) => {
+    if (!isOwner) { toast("Rate sirf owner badal sakta hai", "warning"); return; }
+    const v = window.prompt((name || "Item") + " ka naya rate (Rs)?", String(cur));
+    if (v === null) return;
+    const n = Number(v);
+    if (v.trim() === "" || !(n >= 0)) { toast("Sahi rate likho", "warning"); return; }
+    haptic(8);
+    setRates((prev) => ({ ...prev, [id]: n }));
+    logAudit("rate_changed", { table: table === "parcel" ? "" : table, reason: (name || "Item") + ": " + cur + " -> " + n });
+  };
   const [showAdj, setShowAdj] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const handlePrintBill = async () => {
@@ -1535,12 +1571,17 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const existingItems = existingOrder?.items || [];
   const existingSubtotal = existingItems.reduce((s, it) => s + (it.price * it.qty), 0);
 
+  const favItems = useMemo(() => {
+    const cnt = {};
+    orders.forEach((o) => { if (o.status === "cancelled") return; (o.items || []).forEach((it) => { cnt[it.itemId] = (cnt[it.itemId] || 0) + (Number(it.qty) || 0); }); });
+    return menu.filter((m) => m.available && cnt[m.id]).sort((a, b) => cnt[b.id] - cnt[a.id]).slice(0, 8);
+  }, [orders, menu]);
   const categories = useMemo(() => ["All", ...Array.from(new Set(menu.map(m => m.category)))], [menu]);
   const filtered = useMemo(() => menu.filter(m => m.available && (category === "All" || m.category === category) && (!debouncedSearch.trim() || m.name.toLowerCase().includes(debouncedSearch.toLowerCase()))), [menu, category, debouncedSearch]);
 
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
   const resolveItem = (id) => { const m = menu.find(x => x.id === id); const ex = existingItems.find(e => e.itemId === id); if (ex && !addMoreMode) return ex; return m || ex || null; };
-  const cartSubtotal = cartItems.reduce((s, [id, q]) => { const m = resolveItem(id); return s + (m?.price || 0) * q; }, 0);
+  const cartSubtotal = cartItems.reduce((s, [id, q]) => { const m = resolveItem(id); return s + (rates[id] ?? m?.price ?? 0) * q; }, 0);
   const grossSub = addMoreMode ? existingSubtotal + cartSubtotal : cartSubtotal;
   const discAmt = Math.round(grossSub * discount / 100);
   const gstAmt = Math.round((grossSub - discAmt) * gstRate / 100);
@@ -1567,8 +1608,8 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       if (qty <= 0) return;
       const m = menu.find(x => x.id === id);
       const ex = existing.find(e => e.itemId === id);
-      if (ex) finalItems.push({ itemId: id, name: ex.name, portion: ex.portion || "", price: ex.price, qty, kotNumber: ex.kotNumber || 1 });
-      else if (m) finalItems.push({ itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty, kotNumber: nextKotNo });
+      if (ex) finalItems.push({ itemId: id, name: ex.name, portion: ex.portion || "", price: rates[id] ?? ex.price, qty, kotNumber: ex.kotNumber || 1 });
+      else if (m) finalItems.push({ itemId: id, name: m.name, portion: m.portion || "", price: rates[id] ?? m.price, qty, kotNumber: nextKotNo });
     });
     if (finalItems.length === 0) throw new Error("Bill me kam se kam 1 item hona chahiye");
     const sub = finalItems.reduce((s, it) => s + it.price * it.qty, 0);
@@ -1577,6 +1618,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     const finalTotal = Math.max(0, sub - d) + g;
     const newKotItems = finalItems.map(it => ({ ...it, qty: it.qty - (existingMap[it.itemId] || 0), kotNumber: nextKotNo })).filter(it => it.qty > 0);
     const removedItems = existing.filter(it => !cart[it.itemId] || cart[it.itemId] <= 0);
+    if (removedItems.length) logAudit("items_removed", { orderId: existingOrder.id, table: existingOrder.table || "", items: removedItems.map(i => i.qty + "x " + i.name).join(", ") });
     const extra = {};
     if (newKotItems.length || removedItems.length) {
       const baseKots = existingOrder.kots?.length ? existingOrder.kots : [{ id: uid("kot"), kotNumber: 1, items: existing, createdAt: existingOrder.createdAt, status: existingOrder.status }];
@@ -1602,7 +1644,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         const base = existingOrder;
         const baseKots = base.kots?.length ? base.kots : [{ id: uid("kot"), kotNumber: 1, items: base.items || [], createdAt: base.createdAt, status: base.status }];
         const nextNo = Math.max(1, ...baseKots.map(k => k.kotNumber || 1)) + 1;
-        const newItems = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty, kotNumber: nextNo }; });
+        const newItems = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: rates[id] ?? m.price, qty, kotNumber: nextNo }; });
         const addedTotal = newItems.reduce((s, it) => s + it.price * it.qty, 0);
         const runKot = { id: uid("kot"), kotNumber: nextNo, items: newItems, createdAt: Date.now(), status: "new", isRunning: true };
         await updateDoc(doc(db, "orders", base.id), { kots: [...baseKots, runKot], items: [...(base.items || []), ...newItems], status: "new", finalTotal: (Number(base.finalTotal) || 0) + addedTotal, subtotal: (Number(base.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
@@ -1615,7 +1657,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     }
     setPlacing(true);
     try {
-      const items = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty, kotNumber: 1 }; });
+      const items = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: rates[id] ?? m.price, qty, kotNumber: 1 }; });
       const orderId = uid("o");
       const sub = cartSubtotal;
       const d = Math.round((sub * discount) / 100);
@@ -1646,7 +1688,9 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         if (cartItems.length === 0) { toast("Bill me kam se kam 1 item hona chahiye", "warning"); setPlacing(false); return; }
         const dn = window.prompt("Customer ka naam (due)?", "");
         if (dn === null) { setPlacing(false); return; }
-        const dp = window.prompt("Phone number?", "") || "";
+        if (!dn.trim()) { toast("Due ke liye naam likhna zaroori hai", "warning"); setPlacing(false); return; }
+        const dp = (window.prompt("Phone number? (10 digit)", "") || "").replace(/\D/g, "");
+        if (dp.length < 10) { toast("Sahi 10 digit phone zaroori hai", "warning"); setPlacing(false); return; }
         const applied = await applyCartChanges();
         await updateDoc(doc(db, "orders", existingOrder.id), { payment: "due", paid: false, paymentStatus: "due", status: "served", dueName: dn || "Unknown", duePhone: dp, dueAt: Date.now() });
         logAudit("due_created", { orderId: existingOrder.id, total: applied.finalTotal, name: dn || "" });
@@ -1656,12 +1700,12 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         return;
       }
       const applied = await applyCartChanges();
-      const paidPatch = { paid: true, paymentStatus: "paid", paidAt: Date.now() };
+      const paidPatch = { paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: payMode };
       if (existingOrder.orderType === "parcel") paidPatch.status = "served";
       await updateDoc(doc(db, "orders", existingOrder.id), paidPatch);
       printBill({ ...existingOrder, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: true });
       haptic(80);
-      toast("Payment received! Bill printing", "success");
+      logAudit("paid", { orderId: existingOrder.id, total: applied.finalTotal, mode: payMode }); toast("Payment received! Bill printing", "success");
       if (onPaidSuccess) onPaidSuccess();
       onBack();
     } catch (e) { toast(e.message, "error"); } finally { lockRef.current = false; setPlacing(false); }
@@ -1675,7 +1719,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       if (!baseOrder) return;
       const baseKots = baseOrder.kots?.length ? baseOrder.kots : [{ id: uid("kot"), kotNumber: 1, items: baseOrder.items || [], createdAt: baseOrder.createdAt, status: baseOrder.status }];
       const nextNo = Math.max(1, ...baseKots.map(k => k.kotNumber || 1)) + 1;
-      const newItems = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: m.price, qty, kotNumber: nextNo }; });
+      const newItems = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: rates[id] ?? m.price, qty, kotNumber: nextNo }; });
       const addedTotal = newItems.reduce((s, it) => s + it.price * it.qty, 0);
       const runKot = { id: uid("kot"), kotNumber: nextNo, items: newItems, createdAt: Date.now(), status: "new", isRunning: true };
       await updateDoc(doc(db, "orders", orderId), { kots: [...baseKots, runKot], items: [...(baseOrder.items || []), ...newItems], status: "new", finalTotal: (Number(baseOrder.finalTotal) || 0) + addedTotal, subtotal: (Number(baseOrder.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
@@ -1687,7 +1731,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
 
   return (
     <div style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 100, display: "flex", flexDirection: "column", animation: "fadeIn 0.2s" }}>
-      <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", padding: isMobile ? "10px 12px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+      <div style={{ background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", padding: isMobile ? "10px 12px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: isMobile ? "8px 12px" : "9px 16px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: isMobile ? 12 : 13, flexShrink: 0 }}>Back</button>
         <div style={{ fontWeight: 800, fontSize: isMobile ? 13 : 16, textAlign: "center", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {existingOrder ? (addMoreMode ? `Add - ${table === "parcel" ? "Parcel" : "T" + table}` : `Bill - ${table === "parcel" ? "Parcel" : "T" + table} - ${existingItems.length} items`) : (table === "parcel" ? "New - Parcel" : `New - Table ${table}`)}
@@ -1704,10 +1748,17 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
 
       <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", gap: 12, overflow: isMobile ? "auto" : "hidden", padding: isMobile ? 8 : 12, paddingBottom: isMobile ? 80 : 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, overflow: "hidden", height: isMobile ? "44vh" : undefined, flex: isMobile ? undefined : 1, flexShrink: 0, minWidth: 0 }}>
+          {favItems.length > 0 && !search.trim() && (
+            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, flexShrink: 0 }}>
+              {favItems.map((m) => (
+                <button key={"fav" + m.id} onClick={() => setQty(m.id, (cart[m.id] || 0) + 1)} style={{ padding: "7px 12px", borderRadius: 20, border: "1px solid " + (C.gold || C.red), background: cart[m.id] ? (C.gold || C.red) : C.card, color: cart[m.id] ? "#fff" : C.ink, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>⭐ {m.name}{cart[m.id] ? " ×" + cart[m.id] : ""}</button>
+              ))}
+            </div>
+          )}
           <input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{ padding: "10px 14px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink }} />
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
             {categories.map(c => (
-              <button key={c} onClick={() => { haptic(); setCategory(c); }} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${category === c ? C.red : C.line}`, background: category === c ? C.red : C.card, color: category === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
+              <button key={c} onClick={() => { haptic(); setCategory(c); }} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${category === c ? C.gold : C.line}`, background: category === c ? C.gold : C.card, color: category === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
             ))}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill, minmax(170px, 1fr))", gap: 8, overflowY: "auto", flex: 1 }}>
@@ -1716,7 +1767,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               return (
                 <button key={m.id} onClick={() => setQty(m.id, q + 1)} style={{ textAlign: "left", padding: isMobile ? 10 : 12, borderRadius: 10, border: `1.5px solid ${q > 0 ? C.green : C.line}`, background: C.card, cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isMobile ? 60 : 68, color: C.ink }}>
                   <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: C.ink, marginBottom: 4, lineHeight: 1.2 }}>{m.name}</div>
-                  <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(m.price)}</div>
+                  <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(m.price)}</div>
                   {q > 0 && <span style={{ position: "absolute", top: 6, right: 6, background: C.green, color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 10, fontWeight: 800, animation: "successBounce 0.3s" }}>{q}</span>}
                 </button>
               );
@@ -1749,14 +1800,14 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
                       {m.name}{m.portion ? " (" + m.portion + ")" : ""}
                       {isNew && <span style={{ marginLeft: 6, background: C.green, color: "#fff", fontSize: 8, padding: "1px 5px", borderRadius: 3, fontWeight: 800, verticalAlign: "middle" }}>NEW</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: C.gray, marginTop: 2, fontFamily: "monospace" }}>{inr(m.price)} x {q}</div>
+                    <div style={{ fontSize: 11, color: C.gray, marginTop: 2, fontFamily: "monospace", cursor: "pointer", textDecoration: "underline dotted" }} onClick={() => editRate(id, rates[id] ?? m.price, m.name)}>✎ {inr(rates[id] ?? m.price)} x {q}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", width: 84, justifyContent: "center", border: "1px solid " + C.line, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
                     <button onClick={() => setQty(id, q - 1)} style={{ width: 26, height: 26, border: "none", background: C.cardAlt, color: C.ink, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>-</button>
                     <span style={{ flex: 1, textAlign: "center", fontWeight: 900, fontSize: 13, color: C.ink }}>{q}</span>
                     <button onClick={() => setQty(id, q + 1)} style={{ width: 26, height: 26, border: "none", background: C.cardAlt, color: C.ink, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
                   </div>
-                  <div style={{ width: 64, textAlign: "right", fontWeight: 800, fontSize: 13, color: C.ink, fontFamily: "monospace", flexShrink: 0 }}>{inr(m.price * q)}</div>
+                  <div style={{ width: 64, textAlign: "right", fontWeight: 800, fontSize: 13, color: C.ink, fontFamily: "monospace", flexShrink: 0 }}>{inr((rates[id] ?? m.price) * q)}</div>
                   <button onClick={() => setQty(id, 0)} style={{ width: 16, background: "transparent", border: "none", color: C.gray, fontSize: 13, cursor: "pointer", padding: 0, flexShrink: 0 }}>x</button>
                 </div>
               );
@@ -1779,13 +1830,13 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
             {!addMoreMode && (
               <div style={{ display: showAdj ? "flex" : "none", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>GST</span>
-                {[0,5,12,18].map(g => <button key={g} onClick={() => setGstRate(g)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${gstRate === g ? C.red : C.line}`, background: gstRate === g ? C.redLight : C.card, color: gstRate === g ? C.red : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{g === 0 ? "No" : `${g}%`}</button>)}
+                {[0,5,12,18].map(g => <button key={g} onClick={() => setGstRate(g)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${gstRate === g ? C.gold : C.line}`, background: gstRate === g ? C.redLight : C.card, color: gstRate === g ? C.gold : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{g === 0 ? "No" : `${g}%`}</button>)}
               </div>
             )}
             {!addMoreMode && (
               <div style={{ display: showAdj ? "flex" : "none", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>PAY</span>
-                {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["due", "Due"]].map(([id, label]) => <button key={id} onClick={() => setPayMode(id)} style={{ padding: "3px 9px", borderRadius: 4, border: `1px solid ${payMode === id ? C.red : C.line}`, background: payMode === id ? C.red : C.card, color: payMode === id ? "#fff" : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>)}
+                {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["due", "Due"]].map(([id, label]) => <button key={id} onClick={() => setPayMode(id)} style={{ padding: "3px 9px", borderRadius: 4, border: `1px solid ${payMode === id ? C.gold : C.line}`, background: payMode === id ? C.gold : C.card, color: payMode === id ? "#fff" : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>)}
               </div>
             )}
             <div style={{ background: C.card, borderRadius: 6, padding: 8, marginBottom: 6 }}>
@@ -1797,7 +1848,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               {!addMoreMode && gstRate > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.red }}><span>GST {gstRate}%</span><span style={{ fontFamily: "monospace" }}>+{inr(gstAmt)}</span></div>}
               {!addMoreMode && discount === 0 && gstRate === 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11 }}><span style={{ color: C.gray }}>Subtotal</span><span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>{inr(grossSub)}</span></div>}
             </div>
-            <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: `0 4px 12px ${C.red}40` }}>
+            <div style={{ background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: `0 4px 12px ${C.gold}40` }}>
               <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, letterSpacing: 0.5 }}>TOTAL</span>
               <span style={{ color: "#fff", fontSize: 20, fontWeight: 900, fontFamily: "monospace" }}>{inr(addMoreMode ? grossSub : totalAmount)}</span>
             </div>
@@ -1823,7 +1874,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               <button onClick={handlePlaceOrder} disabled={cartItems.length === 0 || placing} style={{ width: "100%", padding: 10, marginTop: 8, border: "none", borderRadius: 10, background: cartItems.length === 0 ? C.line : `linear-gradient(135deg, ${C.green} 0%, #15803D 100%)`, color: cartItems.length === 0 ? C.gray : "#fff", fontWeight: 800, fontSize: 14, cursor: cartItems.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{placing ? <><Spinner /> Adding...</> : "Add Items to Running KOT"}</button>
             )}
             {!existingOrder && (
-              <button onClick={handlePlaceOrder} disabled={cartItems.length === 0 || placing} style={{ width: "100%", padding: 10, marginTop: 8, border: "none", borderRadius: 10, background: cartItems.length === 0 ? C.line : `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: cartItems.length === 0 ? C.gray : "#fff", fontWeight: 800, fontSize: 14, cursor: cartItems.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: cartItems.length === 0 ? "none" : `0 6px 16px ${C.red}40`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{placing ? <><Spinner /> Placing...</> : "Send KOT"}</button>
+              <button onClick={handlePlaceOrder} disabled={cartItems.length === 0 || placing} style={{ width: "100%", padding: 10, marginTop: 8, border: "none", borderRadius: 10, background: cartItems.length === 0 ? C.line : `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: cartItems.length === 0 ? C.gray : "#fff", fontWeight: 800, fontSize: 14, cursor: cartItems.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: cartItems.length === 0 ? "none" : `0 6px 16px ${C.gold}40`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{placing ? <><Spinner /> Placing...</> : "Send KOT"}</button>
             )}
           </div>
         </div>
@@ -1845,7 +1896,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, marginBottom: 6 }}>CATEGORY</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, maxHeight: 120, overflowY: "auto" }}>
           {Array.from(new Set(menu.map((m) => m.category).filter(Boolean))).map((c) => (
-            <button key={c} onClick={() => setNewCat(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (newCat === c ? C.red : C.line), background: newCat === c ? C.red : C.card, color: newCat === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{c}</button>
+            <button key={c} onClick={() => setNewCat(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (newCat === c ? C.gold : C.line), background: newCat === c ? C.gold : C.card, color: newCat === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{c}</button>
           ))}
         </div>
         <input value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="Ya nayi category likho" style={{ width: "100%", boxSizing: "border-box", padding: 11, border: "1px solid " + C.line, borderRadius: 8, fontSize: 14, background: C.card, color: C.ink, marginBottom: 16, outline: "none" }} />
@@ -1860,9 +1911,9 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.card, borderTop: `1px solid ${C.line}`, padding: 12, boxShadow: "0 -4px 16px rgba(0,0,0,0.1)", zIndex: 101, display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10, color: C.gray, fontWeight: 800, textTransform: "uppercase" }}>{cartItems.length} items</div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(totalAmount)}</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(totalAmount)}</div>
           </div>
-          <button onClick={existingOrder ? handleSaveBill : handlePlaceOrder} disabled={placing} style={{ padding: "14px 24px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", fontWeight: 900, fontSize: 14, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: `0 6px 16px ${C.red}55`, display: "flex", alignItems: "center", gap: 8 }}>{placing ? <Spinner /> : existingOrder ? "Save Bill" : "Place Order"}</button>
+          <button onClick={existingOrder ? handleSaveBill : handlePlaceOrder} disabled={placing} style={{ padding: "14px 24px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", fontWeight: 900, fontSize: 14, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: `0 6px 16px ${C.gold}55`, display: "flex", alignItems: "center", gap: 8 }}>{placing ? <Spinner /> : existingOrder ? "Save Bill" : "Place Order"}</button>
         </div>
       )}
     </div>
@@ -1956,6 +2007,18 @@ function DueLedger({ C, isMobile, orders }) {
   const toast = useToast();
   const dues = orders.filter(o => o.paymentStatus === "due" && o.status !== "cancelled" && !o.paid);
   const total = dues.reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+  const editDue = async (o) => {
+    const n = window.prompt("Customer ka naam?", o.dueName && o.dueName !== "Unknown" ? o.dueName : "");
+    if (n === null) return;
+    if (!n.trim()) { toast("Naam zaroori hai", "warning"); return; }
+    const p = (window.prompt("Phone (10 digit)?", o.duePhone || "") || "").replace(/\D/g, "");
+    if (p.length < 10) { toast("Sahi 10 digit phone zaroori hai", "warning"); return; }
+    try {
+      await updateDoc(doc(db, "orders", o.id), { dueName: n.trim(), duePhone: p });
+      logAudit("due_edited", { orderId: o.id, total: o.finalTotal || 0 });
+      toast("Due update ho gaya", "success");
+    } catch (e) { toast(e.message, "error"); }
+  };
   const settle = async (o, mode) => {
     try {
       await updateDoc(doc(db, "orders", o.id), { paid: true, paymentStatus: "paid", payment: mode, paidAt: Date.now(), settledFromDue: true });
@@ -1968,7 +2031,7 @@ function DueLedger({ C, isMobile, orders }) {
     <div style={{ background: C.card, border: `1px solid ${C.red}`, borderRadius: 14, padding: isMobile ? 14 : 20, marginBottom: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8 }}>
         <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: C.ink }}>Due Ledger</div>
-        <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(total)}</div>
+        <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(total)}</div>
       </div>
       {dues.sort((a, b) => b.createdAt - a.createdAt).map(o => (
         <div key={o.id} style={{ background: C.cardAlt, borderRadius: 10, padding: 12, marginBottom: 8 }}>
@@ -1977,11 +2040,12 @@ function DueLedger({ C, isMobile, orders }) {
               <div style={{ fontWeight: 800, fontSize: isMobile ? 13 : 14, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.dueName || "Unknown"} {o.duePhone ? `- ${o.duePhone}` : ""}</div>
               <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{o.orderType === "parcel" ? "Parcel" : "Table " + o.table} - {new Date(o.dueAt || o.createdAt).toLocaleDateString("en-IN")}</div>
             </div>
-            <div style={{ fontWeight: 900, color: C.red, fontFamily: "monospace", fontSize: isMobile ? 14 : 15, flexShrink: 0 }}>{inr(o.finalTotal || 0)}</div>
+            <div style={{ fontWeight: 900, color: C.goldText, fontFamily: "monospace", fontSize: isMobile ? 14 : 15, flexShrink: 0 }}>{inr(o.finalTotal || 0)}</div>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             <button onClick={() => settle(o, "cash")} style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Cash</button>
             <button onClick={() => settle(o, "upi")} style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>UPI</button>
+            <button onClick={() => editDue(o)} style={{ padding: "8px 10px", border: `1.5px solid ${C.gray}`, borderRadius: 6, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
             <button onClick={() => whatsappBill(o)} style={{ padding: "8px 10px", border: `1.5px solid ${C.green}`, borderRadius: 6, background: "transparent", color: C.green, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>WA</button>
           </div>
         </div>
@@ -2352,7 +2416,7 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
 
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         {[["entry", "📝 Daily Entry"], ["order", "🛒 Order List" + (lowItems.length ? " (" + lowItems.length + ")" : "")]].map(([id, label]) => (
-          <button key={id} onClick={() => { haptic(); setView(id); }} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: "1.5px solid " + (view === id ? C.red : C.line), background: view === id ? C.red : C.card, color: view === id ? "#fff" : C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
+          <button key={id} onClick={() => { haptic(); setView(id); }} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: "1.5px solid " + (view === id ? C.gold : C.line), background: view === id ? C.gold : C.card, color: view === id ? "#fff" : C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
         ))}
       </div>
 
@@ -2361,7 +2425,7 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Item search..." style={{ width: "100%", boxSizing: "border-box", padding: "10px 14px", border: "1px solid " + C.line, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink, marginBottom: 8 }} />
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 4 }}>
             {cats.map((c) => (
-              <button key={c} onClick={() => setCat(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (cat === c ? C.red : C.line), background: cat === c ? C.red : C.card, color: cat === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
+              <button key={c} onClick={() => setCat(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (cat === c ? C.gold : C.line), background: cat === c ? C.gold : C.card, color: cat === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
             ))}
           </div>
           {loadingDay && <div style={{ textAlign: "center", padding: 20, color: C.gray, fontSize: 13 }}><Spinner color={C.red} /> Load ho raha hai...</div>}
@@ -2406,8 +2470,8 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
       {view === "order" && (
         <div>
           <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-            <button onClick={() => setShowAll(false)} style={{ padding: "7px 14px", borderRadius: 20, border: "1px solid " + (!showAll ? C.red : C.line), background: !showAll ? C.red : C.card, color: !showAll ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Sirf kam stock</button>
-            <button onClick={() => setShowAll(true)} style={{ padding: "7px 14px", borderRadius: 20, border: "1px solid " + (showAll ? C.red : C.line), background: showAll ? C.red : C.card, color: showAll ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Poori 15 din ki list</button>
+            <button onClick={() => setShowAll(false)} style={{ padding: "7px 14px", borderRadius: 20, border: "1px solid " + (!showAll ? C.gold : C.line), background: !showAll ? C.gold : C.card, color: !showAll ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Sirf kam stock</button>
+            <button onClick={() => setShowAll(true)} style={{ padding: "7px 14px", borderRadius: 20, border: "1px solid " + (showAll ? C.gold : C.line), background: showAll ? C.gold : C.card, color: showAll ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Poori 15 din ki list</button>
           </div>
           {orderList.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.gray }}><div style={{ fontSize: 40, marginBottom: 8 }}>👍</div><div style={{ fontSize: 13, fontWeight: 700 }}>Abhi kuch mangane ki zarurat nahi</div></div>}
           {Array.from(new Set(orderList.map((x) => x.cat))).map((c) => (
@@ -2421,7 +2485,7 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
                       <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{it.name}</div>
                       <div style={{ fontSize: 11, color: C.gray }}>Abhi: {cur === null ? "-" : invFmt(cur)} {it.unit}</div>
                     </div>
-                    <div style={{ fontWeight: 900, fontSize: 15, color: C.red, fontFamily: "monospace", flexShrink: 0 }}>{it.ord} {it.unit}</div>
+                    <div style={{ fontWeight: 900, fontSize: 15, color: C.goldText, fontFamily: "monospace", flexShrink: 0 }}>{it.ord} {it.unit}</div>
                   </div>
                 );
               })}
@@ -2439,7 +2503,7 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
       {dirty && view === "entry" && (
         <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, background: C.card, borderTop: "1px solid " + C.line, padding: 12, boxShadow: "0 -4px 16px rgba(0,0,0,0.1)", zIndex: 60, display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ flex: 1, fontSize: 12, fontWeight: 800, color: C.amber }}>Unsaved changes</div>
-          <button onClick={save} disabled={saving} style={{ padding: "13px 28px", border: "none", borderRadius: 10, background: "linear-gradient(135deg, " + C.red + " 0%, #B91C1C 100%)", color: "#fff", fontWeight: 900, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8 }}>{saving ? <Spinner /> : "Save Stock"}</button>
+          <button onClick={save} disabled={saving} style={{ padding: "13px 28px", border: "none", borderRadius: 10, background: "linear-gradient(135deg, " + C.gold + " 0%, " + C.goldDark + " 100%)", color: "#fff", fontWeight: 900, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8 }}>{saving ? <Spinner /> : "Save Stock"}</button>
         </div>
       )}
     </div>
@@ -2510,7 +2574,7 @@ function HistoryView({ C, isMobile, isOwner }) {
   };
 
   const chip = (id, label) => (
-    <button key={id} onClick={() => { haptic(); setFilter(id); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: "1px solid " + (filter === id ? C.red : C.line), background: filter === id ? C.red : C.card, color: filter === id ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
+    <button key={id} onClick={() => { haptic(); setFilter(id); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: "1px solid " + (filter === id ? C.gold : C.line), background: filter === id ? C.gold : C.card, color: filter === id ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
   );
   const dateInput = { padding: "8px 10px", border: "1px solid " + C.line, borderRadius: 8, fontSize: 13, background: C.card, color: C.ink, fontWeight: 700, outline: "none" };
 
@@ -2559,7 +2623,7 @@ function HistoryView({ C, isMobile, isOwner }) {
                   </div>
                   <div style={{ fontSize: 11, color: C.gray }}>#{(o.id || "").slice(1, 5).toUpperCase()} - {when} - {(o.items || []).length} items</div>
                 </div>
-                <div style={{ fontWeight: 900, color: C.red, fontFamily: "monospace", fontSize: isMobile ? 14 : 16, flexShrink: 0 }}>{inr(o.finalTotal || 0)}</div>
+                <div style={{ fontWeight: 900, color: C.goldText, fontFamily: "monospace", fontSize: isMobile ? 14 : 16, flexShrink: 0 }}>{inr(o.finalTotal || 0)}</div>
                 <span style={{ color: C.gray, fontSize: 10 }}>{open ? "▲" : "▼"}</span>
               </button>
               {open && (
@@ -2658,7 +2722,7 @@ function AuditLogView({ C, isMobile }) {
     return () => unsub();
   }, []);
   const iconOf = (a) => a === "void_order" ? "🗑" : a === "restore_order" ? "↩" : a === "undo_paid" ? "↺" : a === "due_settled" ? "💰" : a === "table_moved" ? "🔀" : "📝";
-  const labelOf = (a) => ({ void_order: "Void", restore_order: "Restore", undo_paid: "Undo Paid", due_settled: "Due Settled", table_moved: "Table Moved", due_created: "Due Created", cancel_order: "Cancel" }[a] || a);
+  const labelOf = (a) => ({ void_order: "Void", restore_order: "Restore", undo_paid: "Undo Paid", due_settled: "Due Settled", table_moved: "Table Moved", due_created: "Due Created", cancel_order: "Cancel", expense_added: "Kharcha Added", expense_deleted: "Kharcha Deleted", day_closed: "Day Closed", rate_changed: "Rate Changed", vendor_added: "Vendor Added", vendor_paid: "Vendor Paid", paid: "Paid", due_edited: "Due Edited", tables_merged: "Tables Merged", items_removed: "Items Removed", order_deleted: "Deleted", menu_item_added: "Menu Item Added" }[a] || a);
   return (
     <div>
       <h2 style={{ margin: "0 0 16px", fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Audit Log</h2>
@@ -2678,6 +2742,8 @@ function AuditLogView({ C, isMobile }) {
                     {l.reason ? ' - "' + l.reason + '"' : ""}
                     {l.table ? " - T" + l.table : ""}
                     {l.wasPaid ? " - was PAID" : ""}
+                    {l.mode ? " - " + String(l.mode).toUpperCase() : ""}
+                    {l.items ? " - " + l.items : ""}
                   </div>
                 </div>
               </div>
@@ -2693,6 +2759,787 @@ function AuditLogView({ C, isMobile }) {
 // ===========================================================================
 // ERROR BOUNDARY
 // ===========================================================================
+
+// ===========================================================================
+// KHARCHA (EXPENSES) + REPORTS / P&L + DAY CLOSE   (patch 4)
+// Firestore collections: expenses/{id}, dayClose/{YYYY-MM-DD}
+// ===========================================================================
+const EXP_CATS = ["Saman / Kaccha maal", "Salary", "Kiraya", "Gas / Coyla", "Bijli / Pani", "Repair", "Packing", "Marketing", "Anya"];
+const goldOf = (C) => C.gold || C.red;
+const goldTextOf = (C) => C.goldText || C.red;
+const rs = (n) => "Rs " + (Number(n) || 0).toLocaleString("en-IN");
+const xmlEsc = (s) => String(s === null || s === undefined ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// Multi-sheet Excel file (SpreadsheetML) - koi library nahi chahiye
+function downloadXls(filename, sheets) {
+  const body = sheets.map((sh) => {
+    const name = xmlEsc(String(sh.name).replace(/[\\/?*\[\]:]/g, " ").slice(0, 31));
+    const rows = sh.rows.map((r) => "<Row>" + r.map((c) => {
+      const isNum = typeof c === "number" && isFinite(c);
+      return '<Cell><Data ss:Type="' + (isNum ? "Number" : "String") + '">' + xmlEsc(c) + "</Data></Cell>";
+    }).join("") + "</Row>").join("");
+    return '<Worksheet ss:Name="' + name + '"><Table>' + rows + "</Table></Worksheet>";
+  }).join("");
+  const xml = '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">' + body + "</Workbook>";
+  const blob = new Blob([xml], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+const loadOrdersRange = async (fromKey, toKey) => {
+  const start = new Date(fromKey + "T00:00:00").getTime();
+  const end = new Date(toKey + "T00:00:00").getTime() + 86400000;
+  const snap = await getDocs(query(collection(db, "orders"), where("createdAt", ">=", start), where("createdAt", "<", end)));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+const loadExpensesRange = async (fromKey, toKey) => {
+  const snap = await getDocs(query(collection(db, "expenses"), where("date", ">=", fromKey), where("date", "<=", toKey)));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+function calcStats(orders, expenses) {
+  const sum = (arr, f) => arr.reduce((s, x) => s + (Number(f(x)) || 0), 0);
+  const valid = orders.filter((o) => o.status !== "cancelled");
+  const paid = valid.filter((o) => o.paid);
+  const duePending = sum(valid.filter((o) => o.paymentStatus === "due" && !o.paid), (o) => o.finalTotal);
+  const revenue = sum(paid, (o) => o.finalTotal);
+  const pay = { cash: 0, upi: 0, card: 0 };
+  paid.forEach((o) => { const m = String(o.payment || "cash").toLowerCase(); pay[m] = (pay[m] || 0) + (Number(o.finalTotal) || 0); });
+  const expTotal = sum(expenses, (e) => e.amount);
+  const expByCat = {};
+  expenses.forEach((e) => { const c = e.category || "Anya"; expByCat[c] = (expByCat[c] || 0) + (Number(e.amount) || 0); });
+  const catRows = Object.entries(expByCat).sort((a, b) => b[1] - a[1]);
+  const saman = sum(expenses.filter((e) => /saman|maal/i.test(e.category || "")), (e) => e.amount);
+  const profit = revenue - expTotal;
+  const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+  const dayMap = {};
+  const dayOf = (k) => { if (!dayMap[k]) dayMap[k] = { date: k, orders: 0, revenue: 0, expense: 0 }; return dayMap[k]; };
+  valid.forEach((o) => { const d = dayOf(invDateKey(new Date(o.createdAt || 0))); d.orders++; if (o.paid) d.revenue += Number(o.finalTotal) || 0; });
+  expenses.forEach((e) => { if (e.date) dayOf(e.date).expense += Number(e.amount) || 0; });
+  const daily = Object.values(dayMap).sort((a, b) => (a.date < b.date ? -1 : 1)).map((d) => ({ ...d, profit: d.revenue - d.expense }));
+  const itemMap = {};
+  paid.forEach((o) => (o.items || []).forEach((it) => {
+    const k = it.name + (it.portion ? " (" + it.portion + ")" : "");
+    if (!itemMap[k]) itemMap[k] = { name: k, qty: 0, amt: 0 };
+    itemMap[k].qty += Number(it.qty) || 0;
+    itemMap[k].amt += (Number(it.price) || 0) * (Number(it.qty) || 0);
+  }));
+  const items = Object.values(itemMap).sort((a, b) => b.amt - a.amt);
+  const wMap = {};
+  paid.forEach((o) => { const w = o.waiter || "Staff"; if (!wMap[w]) wMap[w] = { name: w, orders: 0, amt: 0 }; wMap[w].orders++; wMap[w].amt += Number(o.finalTotal) || 0; });
+  const waiters = Object.values(wMap).sort((a, b) => b.amt - a.amt);
+  return {
+    valid, paid, revenue, pay, duePending, expTotal, catRows, saman, profit, margin, daily, items, waiters,
+    cancelled: orders.length - valid.length,
+    avg: paid.length ? Math.round(revenue / paid.length) : 0,
+    discount: sum(paid, (o) => o.billDiscount),
+    gst: sum(paid, (o) => o.gstAmount),
+  };
+}
+
+function StatCard({ C, isMobile, label, value, color, sub }) {
+  return (
+    <div style={{ background: C.card, border: "1px solid " + C.line, borderRadius: 14, padding: isMobile ? 12 : 18 }}>
+      <div style={{ fontSize: 10, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: isMobile ? 17 : 26, fontWeight: 900, color, fontFamily: "monospace", marginTop: 6, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: C.gray, fontWeight: 700, marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// KHARCHA (EXPENSES) TAB
+// ---------------------------------------------------------------------------
+function ExpensesView({ C, isMobile, isOwner, waiterName }) {
+  const toast = useToast();
+  const haptic = useHaptic();
+  const G = goldOf(C);
+  const GT = goldTextOf(C);
+  const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(1); return invDateKey(d); });
+  const [to, setTo] = useState(invDateKey());
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [amount, setAmount] = useState("");
+  const [cat, setCat] = useState(EXP_CATS[0]);
+  const [mode, setMode] = useState("cash");
+  const [note, setNote] = useState("");
+  const [date, setDate] = useState(invDateKey());
+  const [saving, setSaving] = useState(false);
+  const [cats, setCats] = useState(EXP_CATS);
+  const [vendors, setVendors] = useState([]);
+  const [vendorId, setVendorId] = useState("");
+  const [newCat, setNewCat] = useState("");
+  const [showNewCat, setShowNewCat] = useState(false);
+
+  useEffect(() => {
+    loadCustomCats().then(setCats);
+    getDocs(collection(db, "vendors"))
+      .then((snap) => setVendors(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((v) => v.active !== false)))
+      .catch(() => {});
+  }, []);
+
+  const addCat = async () => {
+    const c = newCat.trim();
+    if (!c) return;
+    if (cats.includes(c)) { toast("Ye category pehle se hai", "warning"); return; }
+    const list = [...cats, c];
+    try {
+      await saveCustomCats(list);
+      setCats(list); setCat(c); setNewCat(""); setShowNewCat(false);
+      toast("Category add ho gayi", "success");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    const a = from <= to ? from : to;
+    const b = from <= to ? to : from;
+    const unsub = onSnapshot(
+      query(collection(db, "expenses"), where("date", ">=", a), where("date", "<=", b)),
+      (snap) => {
+        setList(snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((x, y) => (x.date === y.date ? (y.createdAt || 0) - (x.createdAt || 0) : x.date < y.date ? 1 : -1)));
+        setLoading(false);
+      },
+      (e) => { setLoading(false); toast("Kharcha load nahi hua: " + e.message, "error"); }
+    );
+    return () => unsub();
+  }, [from, to]);
+
+  const total = list.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  const byCat = {};
+  list.forEach((e) => { byCat[e.category || "Anya"] = (byCat[e.category || "Anya"] || 0) + (Number(e.amount) || 0); });
+
+  const save = async () => {
+    const amt = Number(amount);
+    if (!(amt > 0)) { toast("Sahi amount likho", "warning"); return; }
+    if (saving) return;
+    setSaving(true);
+    try {
+      await addDoc(collection(db, "expenses"), { date, amount: amt, category: cat, mode, vendorId: vendorId || null, note: note.trim(), by: waiterName || "Staff", createdAt: Date.now() });
+      logAudit("expense_added", { total: amt, reason: cat + (note.trim() ? " - " + note.trim() : "") });
+      haptic(25);
+      toast("Kharcha save ho gaya: " + inr(amt), "success");
+      setAmount(""); setNote(""); setVendorId("");
+    } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
+  };
+
+  const remove = async (e) => {
+    if (!isOwner) { toast("Sirf owner kharcha delete kar sakta hai", "warning"); return; }
+    if (!window.confirm(e.category + " - " + inr(e.amount) + " delete karein?")) return;
+    try {
+      await deleteDoc(doc(db, "expenses", e.id));
+      logAudit("expense_deleted", { total: Number(e.amount) || 0, reason: (e.category || "") + (e.note ? " - " + e.note : "") });
+      toast("Delete ho gaya", "success");
+    } catch (err) { toast(err.message, "error"); }
+  };
+
+  const chip = (active, label, onClick, key) => (
+    <button key={key || label} onClick={onClick} style={{ padding: "7px 13px", borderRadius: 20, border: "1px solid " + (active ? G : C.line), background: active ? G : C.card, color: active ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>{label}</button>
+  );
+  const field = { width: "100%", boxSizing: "border-box", padding: "11px 12px", border: "1.5px solid " + C.line, borderRadius: 10, fontSize: 15, background: C.card, color: C.ink, outline: "none", fontFamily: "inherit" };
+  const lbl = { fontSize: 11, fontWeight: 800, color: C.gray, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.4 };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 14 }}>
+        <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Kharcha</h2>
+        <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 2 }}>Roz ka kharcha yahan likho - P&amp;L report isi se banti hai</div>
+      </div>
+
+      <div style={{ background: C.card, border: "1px solid " + C.line, borderRadius: 14, padding: isMobile ? 12 : 18, marginBottom: 16 }}>
+        <div style={lbl}>Amount (Rs)</div>
+        <input type="number" inputMode="decimal" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" style={{ ...field, fontSize: 22, fontWeight: 900, fontFamily: "monospace", marginBottom: 12 }} />
+        <div style={lbl}>Category</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>{cats.map((c) => chip(cat === c, c, () => { haptic(); setCat(c); }))}
+          <button onClick={() => setShowNewCat((v) => !v)} style={{ padding: "7px 13px", borderRadius: 20, border: "1px dashed " + C.gray, background: "transparent", color: C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>+ Naya</button>
+        </div>
+        {showNewCat && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+            <input value={newCat} onChange={(e) => setNewCat(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addCat()} placeholder="Naya category naam (jaise: Chai/Snacks)" style={{ ...field, padding: "8px 10px", fontSize: 13 }} />
+            <button onClick={addCat} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: G, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Add</button>
+          </div>
+        )}
+        <div style={lbl}>Kaise diya</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>{[["cash", "Cash"], ["upi", "UPI"], ["bank", "Bank"], ["credit", "Udhaar"]].map(([id, l]) => chip(mode === id, l, () => { setMode(id); if (id !== "credit") setVendorId(""); }, id))}</div>
+        {mode === "credit" && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={lbl}>Vendor (kiska due hai?)</div>
+            <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} style={field}>
+              <option value="">-- Vendor chuno (optional) --</option>
+              {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+            <div style={{ fontSize: 11, color: C.gray, marginTop: 6, fontWeight: 700 }}>
+              ⚠️ Udhaar = cash nahi gaya, P&L mein kharcha count hoga, vendor ka due banega. Baad mein "Reports → Vendor Due" tab se payment karo.
+            </div>
+          </div>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10, marginBottom: 12 }}>
+          <div><div style={lbl}>Note (optional)</div><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Jaise: paneer 5kg, Ramesh" style={field} /></div>
+          <div><div style={lbl}>Date</div><input type="date" value={date} max={invDateKey()} onChange={(e) => e.target.value && setDate(e.target.value)} style={field} /></div>
+        </div>
+        <button onClick={save} disabled={saving} style={{ width: "100%", padding: 14, border: "none", borderRadius: 10, background: "linear-gradient(135deg, " + G + " 0%, " + (C.goldDark || G) + " 100%)", color: "#fff", fontWeight: 900, fontSize: 15, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{saving ? <Spinner /> : "Kharcha Save Karo"}</button>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+        {chip(false, "Aaj", () => { setFrom(invDateKey()); setTo(invDateKey()); })}
+        {chip(false, "Is mahine", () => { const d = new Date(); d.setDate(1); setFrom(invDateKey(d)); setTo(invDateKey()); })}
+        <input type="date" value={from} max={invDateKey()} onChange={(e) => e.target.value && setFrom(e.target.value)} style={{ ...field, width: "auto", padding: "7px 10px", fontSize: 13 }} />
+        <span style={{ color: C.gray, fontSize: 12, fontWeight: 800 }}>se</span>
+        <input type="date" value={to} max={invDateKey()} onChange={(e) => e.target.value && setTo(e.target.value)} style={{ ...field, width: "auto", padding: "7px 10px", fontSize: 13 }} />
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.card, border: "1px solid " + C.line, borderRadius: 12, padding: "12px 16px", marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: C.gray, textTransform: "uppercase" }}>Kul kharcha ({list.length})</span>
+        <span style={{ fontSize: 20, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(total)}</span>
+      </div>
+      {Object.keys(byCat).length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          {Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([c, v]) => (
+            <span key={c} style={{ background: C.cardAlt, color: C.ink, padding: "5px 10px", borderRadius: 14, fontSize: 11, fontWeight: 800 }}>{c}: <span style={{ color: GT, fontFamily: "monospace" }}>{inr(v)}</span></span>
+          ))}
+        </div>
+      )}
+
+      {loading && <div style={{ textAlign: "center", padding: 24 }}><Spinner color={G} /></div>}
+      {!loading && list.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.gray, fontSize: 13, fontWeight: 700 }}>Is period me koi kharcha nahi</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {list.map((e) => (
+          <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, background: C.card, border: "1px solid " + C.line, borderRadius: 10, padding: "10px 12px" }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: C.ink }}>{e.category}{e.note ? <span style={{ color: C.gray, fontWeight: 600 }}> - {e.note}</span> : ""}</div>
+              <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{e.date} - {String(e.mode || "cash").toUpperCase()}{e.by ? " - " + e.by : ""}</div>
+            </div>
+            <div style={{ fontWeight: 900, color: C.red, fontFamily: "monospace", fontSize: 15, flexShrink: 0 }}>{inr(e.amount)}</div>
+            {isOwner && <button onClick={() => remove(e)} style={{ border: "none", background: "transparent", color: C.gray, fontSize: 16, cursor: "pointer", padding: 4 }}>x</button>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// REPORTS: PROFIT / LOSS + DOWNLOAD + DAY CLOSE
+// ---------------------------------------------------------------------------
+function ReportsView({ C, isMobile, isOwner, waiterName }) {
+  const toast = useToast();
+  const haptic = useHaptic();
+  const G = goldOf(C);
+  const GT = goldTextOf(C);
+  const [preset, setPreset] = useState("month");
+  const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(1); return invDateKey(d); });
+  const [to, setTo] = useState(invDateKey());
+  const [orders, setOrders] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [closes, setCloses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [rTab, setRTab] = useState("pnl");
+  const [vendorDue, setVendorDue] = useState(0);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const a = from <= to ? from : to;
+      const b = from <= to ? to : from;
+      const [o, e] = await Promise.all([loadOrdersRange(a, b), loadExpensesRange(a, b)]);
+      setOrders(o);
+      setExpenses(e);
+    } catch (err) { toast("Report load nahi hui: " + err.message, "error"); }
+    finally { setLoading(false); }
+  }, [from, to]);
+  useEffect(() => { if (isOwner) load(); }, [load, isOwner]);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    const unsub = onSnapshot(query(collection(db, "dayClose"), orderBy("date", "desc"), limit(15)),
+      (s) => setCloses(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => {});
+    return () => unsub();
+  }, [isOwner]);
+
+  const stats = useMemo(() => calcStats(orders, expenses), [orders, expenses]);
+  const rangeLabel = from === to ? from : from + " se " + to;
+  const todayKey = invDateKey();
+  const isTodayOnly = from === todayKey && to === todayKey;
+
+  const setRange = (p) => {
+    haptic();
+    setPreset(p);
+    const now = new Date();
+    const k = (d) => invDateKey(d);
+    if (p === "today") { setFrom(k(now)); setTo(k(now)); }
+    else if (p === "yesterday") { const d = new Date(now); d.setDate(d.getDate() - 1); setFrom(k(d)); setTo(k(d)); }
+    else if (p === "7days") { const d = new Date(now); d.setDate(d.getDate() - 6); setFrom(k(d)); setTo(k(now)); }
+    else if (p === "month") { setFrom(k(new Date(now.getFullYear(), now.getMonth(), 1))); setTo(k(now)); }
+    else if (p === "lastmonth") { setFrom(k(new Date(now.getFullYear(), now.getMonth() - 1, 1))); setTo(k(new Date(now.getFullYear(), now.getMonth(), 0))); }
+  };
+
+  const downloadExcel = () => {
+    const s = stats;
+    const ordRows = [...orders].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).map((o) => [
+      (o.id || "").slice(1, 9).toUpperCase(), new Date(o.createdAt || 0).toLocaleString("en-IN"), o.orderType || "", o.table || "", o.waiter || "",
+      (o.items || []).map((it) => it.qty + "x " + it.name).join("; "), Number(o.subtotal) || 0, Number(o.billDiscount) || 0, Number(o.gstAmount) || 0,
+      Number(o.finalTotal) || 0, o.payment || "", o.status === "cancelled" ? "Cancelled" : o.paymentStatus === "due" && !o.paid ? "Due" : o.paid ? "Paid" : "Pending",
+    ]);
+    downloadXls("EatPark-PnL-" + from + "_" + to + ".xls", [
+      { name: "Summary", rows: [
+        [RESTAURANT.name + " - Profit & Loss"], ["Period", rangeLabel], [],
+        ["Revenue (paid)", s.revenue], ["Kharcha", s.expTotal], ["Net Profit", s.profit], ["Margin %", Math.round(s.margin * 10) / 10], [],
+        ["Orders (cancelled nahi)", s.valid.length], ["Paid orders", s.paid.length], ["Avg bill", s.avg], ["Discount diya", s.discount], ["GST", s.gst],
+        ["Due baaki", s.duePending], ["Cancelled orders", s.cancelled], [],
+        ["Cash", s.pay.cash], ["UPI", s.pay.upi], ["Card", s.pay.card],
+      ] },
+      { name: "Daily", rows: [["Date", "Orders", "Revenue", "Kharcha", "Profit"], ...s.daily.map((d) => [d.date, d.orders, d.revenue, d.expense, d.profit])] },
+      { name: "Kharcha Category", rows: [["Category", "Amount"], ...s.catRows.map(([c, v]) => [c, v])] },
+      { name: "Items", rows: [["Item", "Qty", "Amount"], ...s.items.map((i) => [i.name, i.qty, i.amt])] },
+      { name: "Waiters", rows: [["Waiter", "Orders", "Amount"], ...s.waiters.map((w) => [w.name, w.orders, w.amt])] },
+      { name: "Kharcha", rows: [["Date", "Category", "Amount", "Mode", "Note", "By"], ...[...expenses].sort((a, b) => (a.date < b.date ? -1 : 1)).map((e) => [e.date || "", e.category || "", Number(e.amount) || 0, e.mode || "cash", e.note || "", e.by || ""])] },
+      { name: "Orders", rows: [["Bill", "Date", "Type", "Table", "Waiter", "Items", "Subtotal", "Discount", "GST", "Total", "Payment", "Status"], ...ordRows] },
+    ]);
+    toast("Excel download ho rahi hai", "success");
+  };
+
+  const printPnl = () => {
+    const s = stats;
+    const row = (k, v, b) => "<tr><td>" + (b ? "<b>" + k + "</b>" : k) + "</td><td style='text-align:right'>" + (b ? "<b>" + v + "</b>" : v) + "</td></tr>";
+    const body = "<h1>" + esc(RESTAURANT.name) + "</h1><div class='sub'>Profit &amp; Loss - " + esc(rangeLabel) + "</div>" +
+      "<table>" + row("Revenue (paid)", rs(s.revenue)) + row("Kharcha", rs(s.expTotal)) + row(s.profit >= 0 ? "NET PROFIT" : "NET LOSS", rs(Math.abs(s.profit)), true) + row("Margin", (Math.round(s.margin * 10) / 10) + "%") + "</table>" +
+      "<h3>Payment</h3><table>" + row("Cash", rs(s.pay.cash)) + row("UPI", rs(s.pay.upi)) + row("Card", rs(s.pay.card)) + row("Due baaki", rs(s.duePending)) + row("Discount diya", rs(s.discount)) + row("GST", rs(s.gst)) + "</table>" +
+      "<h3>Kharcha (category)</h3><table>" + (s.catRows.map(([c, v]) => row(esc(c), rs(v))).join("") || row("-", "-")) + "</table>" +
+      "<h3>Daily</h3><table><tr><th>Date</th><th>Orders</th><th>Revenue</th><th>Kharcha</th><th>Profit</th></tr>" + s.daily.map((d) => "<tr><td>" + d.date + "</td><td>" + d.orders + "</td><td>" + rs(d.revenue) + "</td><td>" + rs(d.expense) + "</td><td>" + (d.profit < 0 ? "-" : "") + rs(Math.abs(d.profit)) + "</td></tr>").join("") + "</table>" +
+      "<h3>Top 10 items</h3><table><tr><th>Item</th><th>Qty</th><th>Amount</th></tr>" + s.items.slice(0, 10).map((i) => "<tr><td>" + esc(i.name) + "</td><td>" + i.qty + "</td><td>" + rs(i.amt) + "</td></tr>").join("") + "</table>" +
+      "<div class='sub' style='margin-top:14px'>Generated " + new Date().toLocaleString("en-IN") + "</div>";
+    const css = "@page{margin:14mm}*{color:#000}body{font-family:Arial,sans-serif;font-size:12px;margin:0}h1{margin:0;font-size:22px}h3{margin:14px 0 4px;font-size:13px}.sub{font-size:12px;margin:2px 0 10px}table{width:100%;border-collapse:collapse;margin-bottom:6px}td,th{padding:5px 6px;border-bottom:1px solid #bbb;text-align:left}th{background:#eee}";
+    printHtml("P&L " + rangeLabel, body, { css });
+  };
+
+  const shareWhatsapp = () => {
+    const s = stats;
+    const msg = "*" + RESTAURANT.name + " - P&L*\n" + rangeLabel + "\n\nRevenue: " + rs(s.revenue) + "\nKharcha: " + rs(s.expTotal) + "\n*" + (s.profit >= 0 ? "Profit: " : "Loss: ") + rs(Math.abs(s.profit)) + "*\nMargin: " + (Math.round(s.margin * 10) / 10) + "%\n\nCash: " + rs(s.pay.cash) + "\nUPI: " + rs(s.pay.upi) + "\nCard: " + rs(s.pay.card) + "\nDue baaki: " + rs(s.duePending);
+    window.open("https://wa.me/?text=" + encodeURIComponent(msg), "_blank");
+  };
+
+  const closeDay = async () => {
+    if (!isTodayOnly) { toast("Pehle 'Aaj' chuno, phir Day Close karo", "warning"); return; }
+    const existing = closes.find((c) => c.date === todayKey);
+    if (existing && !window.confirm("Aaj ka din pehle band ho chuka hai. Dobara save karein?")) return;
+    const op = window.prompt("Subah ka opening cash (Rs)?", existing ? String(existing.openingCash || 0) : "0");
+    if (op === null) return;
+    const cc = window.prompt("Abhi drawer me kitna cash gina? (Rs)", "");
+    if (cc === null || cc.trim() === "") { toast("Gine hue cash likhna zaroori hai", "warning"); return; }
+    const s = stats;
+    const cashExp = expenses.filter((e) => (e.mode || "cash") === "cash").reduce((t, e) => t + (Number(e.amount) || 0), 0);
+    let cashVendorPay = 0;
+    try {
+      const pSnap = await getDocs(query(collection(db, "vendorPayments"), where("date", "==", todayKey), where("mode", "==", "cash")));
+      cashVendorPay = pSnap.docs.reduce((t, d) => t + (Number(d.data().amount) || 0), 0);
+    } catch (e) {}
+    const opening = Number(op) || 0;
+    const counted = Number(cc) || 0;
+    const expected = opening + s.pay.cash - cashExp - cashVendorPay;
+    const rec = { date: todayKey, revenue: s.revenue, cash: s.pay.cash, upi: s.pay.upi, card: s.pay.card, cashVendorPayments: cashVendorPay, duePending: s.duePending, expenses: s.expTotal, cashExpenses: cashExp, profit: s.profit, orders: s.valid.length, openingCash: opening, countedCash: counted, expectedCash: expected, cashDiff: counted - expected, by: waiterName || "Staff", at: Date.now() };
+    try {
+      await setDoc(doc(db, "dayClose", todayKey), rec);
+      logAudit("day_closed", { total: s.revenue, reason: "Cash fark: " + (counted - expected) });
+      haptic(40);
+      toast(counted === expected ? "Din band - cash bilkul sahi!" : "Din band - cash fark: " + inr(counted - expected), counted === expected ? "success" : "warning", { duration: 4500 });
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  if (!isOwner) {
+    return (
+      <div style={{ textAlign: "center", padding: 50, color: C.gray }}>
+        <div style={{ fontSize: 44 }}>🔒</div>
+        <div style={{ fontSize: 14, fontWeight: 800, marginTop: 8 }}>Reports sirf owner dekh sakta hai</div>
+      </div>
+    );
+  }
+
+  const s = stats;
+  const box = { background: C.card, border: "1px solid " + C.line, borderRadius: 14, padding: isMobile ? 14 : 20, marginBottom: 16 };
+  const boxTitle = { fontSize: isMobile ? 13 : 15, fontWeight: 800, color: C.ink, marginBottom: 14 };
+  const chip = (id, label) => (
+    <button key={id} onClick={() => setRange(id)} style={{ padding: isMobile ? "6px 11px" : "7px 14px", borderRadius: 20, border: "1px solid " + (preset === id ? G : C.line), background: preset === id ? G : C.card, color: preset === id ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
+  );
+  const dateInput = { padding: "8px 10px", border: "1px solid " + C.line, borderRadius: 8, fontSize: 13, background: C.card, color: C.ink, fontWeight: 700, outline: "none" };
+  const actBtn = (label, onClick, filled) => (
+    <button onClick={onClick} disabled={loading} style={{ flex: 1, minWidth: isMobile ? 110 : 130, padding: "11px 12px", borderRadius: 10, border: filled ? "none" : "1.5px solid " + G, background: filled ? G : "transparent", color: filled ? "#fff" : GT, fontWeight: 800, fontSize: 13, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit" }}>{label}</button>
+  );
+  const maxDay = Math.max(1, ...s.daily.map((d) => Math.max(d.revenue, d.expense)));
+  const maxItem = s.items.length ? s.items[0].amt : 1;
+
+  return (
+    <div>
+      <div style={{ marginBottom: 12 }}>
+        <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Reports &amp; Profit / Loss</h2>
+        <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 2 }}>{rangeLabel} - {s.valid.length} orders</div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+        <button onClick={() => setRTab("pnl")} style={{ padding: "8px 16px", borderRadius: 10, border: "1px solid " + (rTab === "pnl" ? G : C.line), background: rTab === "pnl" ? G : C.card, color: rTab === "pnl" ? "#fff" : C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>📈 P&L</button>
+        <button onClick={() => setRTab("vendors")} style={{ padding: "8px 16px", borderRadius: 10, border: "1px solid " + (rTab === "vendors" ? G : C.line), background: rTab === "vendors" ? G : C.card, color: rTab === "vendors" ? "#fff" : C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>🏪 Vendor Due{vendorDue > 0 ? " (" + inr(vendorDue) + ")" : ""}</button>
+      </div>
+
+      {rTab === "vendors" && <VendorView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} onDuesChange={setVendorDue} />}
+
+      {rTab === "pnl" && (<>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        {chip("today", "Aaj")}{chip("yesterday", "Kal")}{chip("7days", "7 Din")}{chip("month", "Is Mahina")}{chip("lastmonth", "Pichla Mahina")}
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color: C.gray }}>FROM</span>
+        <input type="date" value={from} max={todayKey} onChange={(e) => { if (e.target.value) { setPreset("custom"); setFrom(e.target.value); } }} style={dateInput} />
+        <span style={{ fontSize: 11, fontWeight: 800, color: C.gray }}>TO</span>
+        <input type="date" value={to} max={todayKey} onChange={(e) => { if (e.target.value) { setPreset("custom"); setTo(e.target.value); } }} style={dateInput} />
+      </div>
+
+      {loading && <div style={{ textAlign: "center", padding: 30, color: C.gray, fontSize: 13 }}><Spinner color={G} /> Report ban rahi hai...</div>}
+      {!loading && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: isMobile ? 10 : 14, marginBottom: 16 }}>
+            <StatCard C={C} isMobile={isMobile} label="Revenue" value={inr(s.revenue)} color={C.green} sub={s.paid.length + " paid orders"} />
+            <StatCard C={C} isMobile={isMobile} label="Kharcha" value={inr(s.expTotal)} color={C.red} sub={expenses.length + " entries"} />
+            <StatCard C={C} isMobile={isMobile} label={s.profit >= 0 ? "Net Profit" : "Net Loss"} value={(s.profit < 0 ? "-" : "") + inr(Math.abs(s.profit))} color={s.profit >= 0 ? C.green : C.red} sub={"Margin " + (Math.round(s.margin * 10) / 10) + "%"} />
+            <StatCard C={C} isMobile={isMobile} label="Due baaki" value={inr(s.duePending)} color={C.amber} sub={"Avg bill " + inr(s.avg)} />
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+            {actBtn("⬇ Excel", downloadExcel, true)}
+            {actBtn("🖨 PDF / Print", printPnl, false)}
+            {actBtn("WhatsApp", shareWhatsapp, false)}
+          </div>
+
+          <div style={box}>
+            <div style={boxTitle}>Payment Split</div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 10 }}>
+              {[["Cash", s.pay.cash, C.green], ["UPI", s.pay.upi, C.blue], ["Card", s.pay.card, C.amber], ["Discount diya", s.discount, C.gray]].map(([l, v, c]) => (
+                <div key={l} style={{ background: C.cardAlt, borderRadius: 10, padding: 12 }}>
+                  <div style={{ fontSize: 10, color: C.gray, fontWeight: 800 }}>{l}</div>
+                  <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 900, color: c, fontFamily: "monospace", marginTop: 4 }}>{inr(v)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={box}>
+            <div style={boxTitle}>Kharcha Category-wise</div>
+            {s.catRows.length === 0 && <div style={{ color: C.gray, fontSize: 13, textAlign: "center", padding: 10 }}>Kharcha tab me entry karo</div>}
+            {s.catRows.map(([c, v]) => (
+              <div key={c} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700, color: C.ink, marginBottom: 3 }}>
+                  <span>{c}</span><span style={{ fontFamily: "monospace", color: C.gray }}>{inr(v)} ({s.expTotal ? Math.round((v / s.expTotal) * 100) : 0}%)</span>
+                </div>
+                <div style={{ height: 6, background: C.line, borderRadius: 3, overflow: "hidden" }}><div style={{ width: (s.expTotal ? (v / s.expTotal) * 100 : 0) + "%", height: "100%", background: G }} /></div>
+              </div>
+            ))}
+            {s.revenue > 0 && s.saman > 0 && <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 8 }}>Saman / kaccha maal = bikri ka <b style={{ color: GT }}>{Math.round((s.saman / s.revenue) * 100)}%</b> (food cost)</div>}
+          </div>
+
+          <div style={box}>
+            <div style={boxTitle}>Daily Revenue vs Kharcha <span style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>(hara = bikri, laal = kharcha)</span></div>
+            {s.daily.length === 0 && <div style={{ color: C.gray, fontSize: 13, textAlign: "center", padding: 10 }}>Koi data nahi</div>}
+            {s.daily.map((d) => (
+              <div key={d.date} style={{ marginBottom: 11 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700, color: C.ink, marginBottom: 3 }}>
+                  <span>{d.date.slice(5)} <span style={{ color: C.gray }}>({d.orders})</span></span>
+                  <span style={{ fontFamily: "monospace", color: d.profit >= 0 ? C.green : C.red }}>{d.profit >= 0 ? "+" : "-"}{inr(Math.abs(d.profit))}</span>
+                </div>
+                <div style={{ height: 6, background: C.line, borderRadius: 3, overflow: "hidden", marginBottom: 2 }}><div style={{ width: (d.revenue / maxDay) * 100 + "%", height: "100%", background: C.green }} /></div>
+                <div style={{ height: 6, background: C.line, borderRadius: 3, overflow: "hidden" }}><div style={{ width: (d.expense / maxDay) * 100 + "%", height: "100%", background: C.red }} /></div>
+              </div>
+            ))}
+          </div>
+
+          <div style={box}>
+            <div style={boxTitle}>Top Items (amount se)</div>
+            {s.items.length === 0 && <div style={{ color: C.gray, fontSize: 13, textAlign: "center", padding: 10 }}>Koi paid sale nahi</div>}
+            {s.items.slice(0, 10).map((it, i) => (
+              <div key={it.name} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12, fontWeight: 700, color: C.ink, marginBottom: 3 }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>#{i + 1} {it.name}</span>
+                  <span style={{ fontFamily: "monospace", color: C.gray, flexShrink: 0 }}>{it.qty} - {inr(it.amt)}</span>
+                </div>
+                <div style={{ height: 6, background: C.line, borderRadius: 3, overflow: "hidden" }}><div style={{ width: (it.amt / maxItem) * 100 + "%", height: "100%", background: G }} /></div>
+              </div>
+            ))}
+          </div>
+
+          {s.waiters.length > 0 && (
+            <div style={box}>
+              <div style={boxTitle}>Waiter-wise Sale</div>
+              {s.waiters.map((w) => (
+                <div key={w.name} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px dashed " + C.line, fontSize: 13, color: C.ink, fontWeight: 700 }}>
+                  <span>{w.name} <span style={{ color: C.gray, fontWeight: 600 }}>({w.orders} orders)</span></span>
+                  <span style={{ fontFamily: "monospace", color: GT }}>{inr(w.amt)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ ...box, border: "1.5px solid " + G }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+              <div style={{ ...boxTitle, marginBottom: 0 }}>🔒 Din Band (Day Close)</div>
+              <button onClick={closeDay} style={{ padding: "10px 16px", border: "none", borderRadius: 10, background: isTodayOnly ? G : C.line, color: isTodayOnly ? "#fff" : C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Aaj ka din band karo</button>
+            </div>
+            <div style={{ fontSize: 12, color: C.gray, marginBottom: 10 }}>{isTodayOnly ? "Opening cash aur gina hua cash daalo - system cash ka fark bata dega." : "Day Close ke liye upar 'Aaj' chuno."}</div>
+            {closes.length === 0 && <div style={{ color: C.gray, fontSize: 12, textAlign: "center", padding: 8 }}>Abhi koi din band nahi hua</div>}
+            {closes.map((c) => (
+              <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "9px 0", borderTop: "1px dashed " + C.line, fontSize: 12, color: C.ink, fontWeight: 700 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div>{c.date} <span style={{ color: C.gray, fontWeight: 600 }}>- Bikri {inr(c.revenue)} - Kharcha {inr(c.expenses)}</span></div>
+                  <div style={{ color: (c.profit || 0) >= 0 ? C.green : C.red, fontFamily: "monospace" }}>{(c.profit || 0) >= 0 ? "Profit " : "Loss "}{inr(Math.abs(c.profit || 0))}</div>
+                </div>
+                <span style={{ background: (c.cashDiff || 0) === 0 ? C.greenLight : C.amberLight, color: (c.cashDiff || 0) === 0 ? C.green : C.amber, padding: "3px 9px", borderRadius: 10, fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{(c.cashDiff || 0) === 0 ? "Cash sahi" : "Fark " + ((c.cashDiff || 0) > 0 ? "+" : "-") + inr(Math.abs(c.cashDiff || 0))}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      </>)}
+    </div>
+  );
+}
+
+
+
+// ===========================================================================
+// VENDOR DUE TRACKING (patch 5)
+// collections: vendors/{id}, vendorPayments/{id}
+// Expense mode="credit" => due create, cash out NAHI, P&L expense HAAN
+// vendorPayments       => due kam, P&L expense NAHI, cash out HAAN
+// ===========================================================================
+
+const modeLabel = (m) => ({ cash: "Cash", upi: "UPI", bank: "Bank", credit: "Udhaar" }[m] || m);
+
+async function loadVendorDues() {
+  const [vSnap, eSnap, pSnap] = await Promise.all([
+    getDocs(collection(db, "vendors")),
+    getDocs(query(collection(db, "expenses"), where("mode", "==", "credit"))),
+    getDocs(collection(db, "vendorPayments")),
+  ]);
+  const map = {};
+  vSnap.docs.forEach((d) => {
+    const v = { id: d.id, ...d.data() };
+    map[v.id] = { ...v, purchases: 0, paid: 0, due: Number(v.openingDue) || 0 };
+  });
+  eSnap.docs.forEach((d) => {
+    const e = d.data();
+    if (e.vendorId && map[e.vendorId]) map[e.vendorId].purchases += Number(e.amount) || 0;
+  });
+  pSnap.docs.forEach((d) => {
+    const p = d.data();
+    if (p.vendorId && map[p.vendorId]) map[p.vendorId].paid += Number(p.amount) || 0;
+  });
+  return Object.values(map)
+    .map((v) => ({ ...v, due: (Number(v.openingDue) || 0) + v.purchases - v.paid }))
+    .sort((a, b) => b.due - a.due);
+}
+
+async function loadCustomCats() {
+  try {
+    const s = await getDoc(doc(db, "settings", "expenseCats"));
+    if (s.exists() && Array.isArray(s.data().list) && s.data().list.length) return s.data().list;
+  } catch (e) {}
+  return EXP_CATS;
+}
+async function saveCustomCats(list) {
+  await setDoc(doc(db, "settings", "expenseCats"), { list, updatedAt: Date.now() });
+}
+
+// ---------------------------------------------------------------------------
+// VENDOR LEDGER / PAYMENT VIEW
+// ---------------------------------------------------------------------------
+function VendorView({ C, isMobile, isOwner, waiterName, onDuesChange }) {
+  const toast = useToast(); const haptic = useHaptic();
+  const G = goldOf(C); const GT = goldTextOf(C);
+  const [vendors, setVendors] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newOpen, setNewOpen] = useState("");
+  const [payVendor, setPayVendor] = useState("");
+  const [payAmount, setPayAmount] = useState("");
+  const [payMode, setPayMode] = useState("cash");
+  const [payNote, setPayNote] = useState("");
+  const [payDate, setPayDate] = useState(invDateKey());
+  const [saving, setSaving] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const dues = await loadVendorDues();
+      setVendors(dues);
+      const ps = await getDocs(query(collection(db, "vendorPayments"), orderBy("createdAt", "desc"), limit(50)));
+      setPayments(ps.docs.map((d) => ({ id: d.id, ...d.data() })));
+      if (onDuesChange) onDuesChange(dues.reduce((s, v) => s + Math.max(0, v.due), 0));
+    } catch (e) { toast("Vendor load nahi hua: " + e.message, "error"); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const addVendor = async () => {
+    const n = newName.trim();
+    if (!n) { toast("Vendor ka naam likho", "warning"); return; }
+    if (saving) return;
+    setSaving(true);
+    try {
+      await addDoc(collection(db, "vendors"), {
+        name: n, phone: newPhone.trim(),
+        openingDue: Number(newOpen) || 0,
+        active: true, createdAt: Date.now(),
+      });
+      logAudit("vendor_added", { reason: n });
+      toast("Vendor add ho gaya", "success"); haptic(20);
+      setNewName(""); setNewPhone(""); setNewOpen("");
+      refresh();
+    } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
+  };
+
+  const payNow = async () => {
+    const amt = Number(payAmount);
+    if (!payVendor) { toast("Vendor chuno", "warning"); return; }
+    if (!(amt > 0)) { toast("Sahi amount likho", "warning"); return; }
+    if (saving) return;
+    setSaving(true);
+    try {
+      await addDoc(collection(db, "vendorPayments"), {
+        vendorId: payVendor, amount: amt, mode: payMode,
+        note: payNote.trim(), date: payDate,
+        by: waiterName || "Staff", createdAt: Date.now(),
+      });
+      logAudit("vendor_paid", { total: amt, reason: "Vendor " + payVendor + " - " + payMode });
+      toast("Payment save ho gayi: " + inr(amt), "success"); haptic(25);
+      setPayAmount(""); setPayNote("");
+      refresh();
+    } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
+  };
+
+  const deleteVendor = async (v) => {
+    if (!isOwner) return;
+    if (!window.confirm(v.name + " ko delete karein? (payments/purchases history rahegi)")) return;
+    try {
+      await deleteDoc(doc(db, "vendors", v.id));
+      toast("Vendor delete ho gaya", "success");
+      refresh();
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const field = { width: "100%", boxSizing: "border-box", padding: "11px 12px", border: "1.5px solid " + C.line, borderRadius: 10, fontSize: 15, background: C.card, color: C.ink, outline: "none", fontFamily: "inherit" };
+  const lbl = { fontSize: 11, fontWeight: 800, color: C.gray, marginBottom: 5, textTransform: "uppercase" };
+  const box = { background: C.card, border: "1px solid " + C.line, borderRadius: 14, padding: isMobile ? 14 : 18, marginBottom: 16 };
+
+  const totalDue = vendors.reduce((s, v) => s + Math.max(0, v.due), 0);
+
+  if (!isOwner) {
+    return (
+      <div style={{ textAlign: "center", padding: 50, color: C.gray }}>
+        <div style={{ fontSize: 44 }}>🔒</div>
+        <div style={{ fontSize: 14, fontWeight: 800, marginTop: 8 }}>Vendor sirf owner dekh sakta hai</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2 style={{ margin: "0 0 4px", fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Vendor Due</h2>
+      <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginBottom: 14 }}>
+        Vendor ka udhaar aur payment - ye kharcha NAHI hai, alag track hota hai
+      </div>
+
+      <div style={{ background: C.amberLight || C.cardAlt, border: "1px solid " + (C.amber || G), borderRadius: 14, padding: 14, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, textTransform: "uppercase" }}>Kul Vendor Due</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: C.amber || GT, fontFamily: "monospace", marginTop: 4 }}>{inr(totalDue)}</div>
+        </div>
+        <div style={{ fontSize: 11, color: C.gray, fontWeight: 700, textAlign: "right" }}>{vendors.filter((v) => v.due > 0).length} vendor<br/>due wale</div>
+      </div>
+
+      <div style={box}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 12 }}>➕ Naya Vendor</div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Vendor name" style={field} />
+          <input value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="Phone" style={field} />
+          <input value={newOpen} onChange={(e) => setNewOpen(e.target.value)} type="number" placeholder="Purana due" style={field} />
+        </div>
+        <button onClick={addVendor} disabled={saving} style={{ width: "100%", padding: 12, border: "none", borderRadius: 10, background: G, color: "#fff", fontWeight: 800, fontSize: 13, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}>{saving ? "Saving..." : "Vendor Add Karo"}</button>
+      </div>
+
+      {vendors.length > 0 && (
+        <div style={box}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 12 }}>💵 Vendor ko Paisa Do (Payment)</div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            <select value={payVendor} onChange={(e) => setPayVendor(e.target.value)} style={field}>
+              <option value="">-- Vendor chuno --</option>
+              {vendors.map((v) => <option key={v.id} value={v.id}>{v.name} (due {inr(Math.max(0, v.due))})</option>)}
+            </select>
+            <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="Amount Rs" style={field} />
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+            {[["cash", "Cash"], ["upi", "UPI"], ["bank", "Bank"]].map(([id, l]) => (
+              <button key={id} onClick={() => setPayMode(id)} style={{ padding: "7px 13px", borderRadius: 20, border: "1px solid " + (payMode === id ? G : C.line), background: payMode === id ? G : C.card, color: payMode === id ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{l}</button>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 8, marginBottom: 10 }}>
+            <input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="Note (optional)" style={field} />
+            <input type="date" value={payDate} max={invDateKey()} onChange={(e) => e.target.value && setPayDate(e.target.value)} style={field} />
+          </div>
+          <button onClick={payNow} disabled={saving} style={{ width: "100%", padding: 14, border: "none", borderRadius: 10, background: "linear-gradient(135deg, " + G + " 0%, " + (C.goldDark || G) + " 100%)", color: "#fff", fontWeight: 900, fontSize: 15, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit" }}>{saving ? "Saving..." : "Payment Save Karo"}</button>
+          <div style={{ fontSize: 11, color: C.gray, marginTop: 8, textAlign: "center", fontWeight: 700 }}>⚠️ Ye P&L expense nahi hai - sirf due kam karega</div>
+        </div>
+      )}
+
+      {loading && <div style={{ textAlign: "center", padding: 20 }}><Spinner color={G} /></div>}
+
+      {!loading && vendors.length === 0 && (
+        <div style={{ textAlign: "center", padding: 40, color: C.gray, fontSize: 13, fontWeight: 700 }}>Abhi koi vendor nahi - upar se add karo</div>
+      )}
+
+      {!loading && vendors.map((v) => (
+        <div key={v.id} style={{ background: C.card, border: "1px solid " + C.line, borderRadius: 12, padding: 14, marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>
+                {v.name}
+                {v.phone && <span style={{ color: C.gray, fontWeight: 600, fontSize: 12 }}> · {v.phone}</span>}
+              </div>
+              <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>
+                Opening {inr(v.openingDue || 0)} · Purchase {inr(v.purchases)} · Paid {inr(v.paid)}
+              </div>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ fontSize: 10, color: C.gray, fontWeight: 700 }}>DUE</div>
+              <div style={{ fontSize: 17, fontWeight: 900, color: v.due > 0 ? C.red : C.green, fontFamily: "monospace" }}>{inr(Math.max(0, v.due))}</div>
+            </div>
+            {isOwner && <button onClick={() => deleteVendor(v)} style={{ border: "none", background: "transparent", color: C.gray, fontSize: 16, cursor: "pointer", padding: 4 }} title="Delete">x</button>}
+          </div>
+        </div>
+      ))}
+
+      {payments.length > 0 && (
+        <div style={box}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 10 }}>🕐 Recent Payments</div>
+          {payments.slice(0, 20).map((p) => {
+            const v = vendors.find((x) => x.id === p.vendorId);
+            return (
+              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderTop: "1px dashed " + C.line, fontSize: 12 }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: C.ink }}>{v ? v.name : p.vendorId}</div>
+                  <div style={{ color: C.gray, fontSize: 11 }}>{p.date} · {modeLabel(p.mode)}{p.note ? " · " + p.note : ""}</div>
+                </div>
+                <div style={{ fontWeight: 900, color: C.green, fontFamily: "monospace" }}>{inr(p.amount)}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { err: null }; }
   static getDerivedStateFromError(err) { return { err }; }
