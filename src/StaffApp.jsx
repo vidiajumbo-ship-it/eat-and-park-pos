@@ -1651,7 +1651,9 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         if (cartItems.length === 0) { toast("Bill me kam se kam 1 item hona chahiye", "warning"); setPlacing(false); return; }
         const dn = window.prompt("Customer ka naam (due)?", "");
         if (dn === null) { setPlacing(false); return; }
-        const dp = window.prompt("Phone number?", "") || "";
+        if (!dn.trim()) { toast("Due ke liye naam likhna zaroori hai", "warning"); setPlacing(false); return; }
+        const dp = (window.prompt("Phone number? (10 digit)", "") || "").replace(/\D/g, "");
+        if (dp.length < 10) { toast("Sahi 10 digit phone zaroori hai", "warning"); setPlacing(false); return; }
         const applied = await applyCartChanges();
         await updateDoc(doc(db, "orders", existingOrder.id), { payment: "due", paid: false, paymentStatus: "due", status: "served", dueName: dn || "Unknown", duePhone: dp, dueAt: Date.now() });
         logAudit("due_created", { orderId: existingOrder.id, total: applied.finalTotal, name: dn || "" });
@@ -1961,6 +1963,18 @@ function DueLedger({ C, isMobile, orders }) {
   const toast = useToast();
   const dues = orders.filter(o => o.paymentStatus === "due" && o.status !== "cancelled" && !o.paid);
   const total = dues.reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+  const editDue = async (o) => {
+    const n = window.prompt("Customer ka naam?", o.dueName && o.dueName !== "Unknown" ? o.dueName : "");
+    if (n === null) return;
+    if (!n.trim()) { toast("Naam zaroori hai", "warning"); return; }
+    const p = (window.prompt("Phone (10 digit)?", o.duePhone || "") || "").replace(/\D/g, "");
+    if (p.length < 10) { toast("Sahi 10 digit phone zaroori hai", "warning"); return; }
+    try {
+      await updateDoc(doc(db, "orders", o.id), { dueName: n.trim(), duePhone: p });
+      logAudit("due_edited", { orderId: o.id, total: o.finalTotal || 0 });
+      toast("Due update ho gaya", "success");
+    } catch (e) { toast(e.message, "error"); }
+  };
   const settle = async (o, mode) => {
     try {
       await updateDoc(doc(db, "orders", o.id), { paid: true, paymentStatus: "paid", payment: mode, paidAt: Date.now(), settledFromDue: true });
@@ -1987,6 +2001,7 @@ function DueLedger({ C, isMobile, orders }) {
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             <button onClick={() => settle(o, "cash")} style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Cash</button>
             <button onClick={() => settle(o, "upi")} style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, background: C.blue, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>UPI</button>
+            <button onClick={() => editDue(o)} style={{ padding: "8px 10px", border: `1.5px solid ${C.gray}`, borderRadius: 6, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Edit</button>
             <button onClick={() => whatsappBill(o)} style={{ padding: "8px 10px", border: `1.5px solid ${C.green}`, borderRadius: 6, background: "transparent", color: C.green, fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>WA</button>
           </div>
         </div>
@@ -2663,7 +2678,7 @@ function AuditLogView({ C, isMobile }) {
     return () => unsub();
   }, []);
   const iconOf = (a) => a === "void_order" ? "🗑" : a === "restore_order" ? "↩" : a === "undo_paid" ? "↺" : a === "due_settled" ? "💰" : a === "table_moved" ? "🔀" : "📝";
-  const labelOf = (a) => ({ void_order: "Void", restore_order: "Restore", undo_paid: "Undo Paid", due_settled: "Due Settled", table_moved: "Table Moved", due_created: "Due Created", cancel_order: "Cancel", paid: "Paid", tables_merged: "Tables Merged", items_removed: "Items Removed", order_deleted: "Deleted", menu_item_added: "Menu Item Added" }[a] || a);
+  const labelOf = (a) => ({ void_order: "Void", restore_order: "Restore", undo_paid: "Undo Paid", due_settled: "Due Settled", table_moved: "Table Moved", due_created: "Due Created", cancel_order: "Cancel", paid: "Paid", due_edited: "Due Edited", tables_merged: "Tables Merged", items_removed: "Items Removed", order_deleted: "Deleted", menu_item_added: "Menu Item Added" }[a] || a);
   return (
     <div>
       <h2 style={{ margin: "0 0 16px", fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Audit Log</h2>
