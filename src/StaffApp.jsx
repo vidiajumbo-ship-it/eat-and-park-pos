@@ -11,26 +11,30 @@ import {
 // COLORS
 // ===========================================================================
 const LIGHT = {
-  bg: "#F9FAFB", card: "#fff", cardAlt: "#F3F4F6", ink: "#111827",
-  gray: "#6B7280", light: "#F9FAFB", line: "#E5E7EB",
+  bg: "#FAF7EF", card: "#FFFFFF", cardAlt: "#F4EEDD", ink: "#1C1608",
+  gray: "#7A7058", light: "#FAF7EF", line: "#E9E0C9",
   red: "#DC2626", redLight: "#FEF2F2",
   green: "#16A34A", greenLight: "#F0FDF4",
   amber: "#F59E0B", amberLight: "#FFFBEB",
   blue: "#2563EB", blueLight: "#EFF6FF",
+  gold: "#B8860B", goldDark: "#7A5806", goldLight: "#FBF3D9", goldText: "#8A6200",
 };
 const DARK = {
-  bg: "#0F172A", card: "#1E293B", cardAlt: "#334155", ink: "#F1F5F9",
-  gray: "#94A3B8", light: "#1E293B", line: "#334155",
+  bg: "#14110A", card: "#1F1A10", cardAlt: "#2C2516", ink: "#F7F0DA",
+  gray: "#B0A585", light: "#1F1A10", line: "#3D3319",
   red: "#EF4444", redLight: "#450A0A",
   green: "#22C55E", greenLight: "#052E16",
   amber: "#FBBF24", amberLight: "#451A03",
   blue: "#3B82F6", blueLight: "#1E3A8A",
+  gold: "#D4A017", goldDark: "#8F6A0A", goldLight: "#3A2C08", goldText: "#F0C85A",
 };
 
 // ===========================================================================
 // GLOBAL CSS (animations, press states, shimmer)
 // ===========================================================================
 const GLOBAL_CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&display=swap');
+h2 { font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; letter-spacing: 0.2px; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -47,7 +51,7 @@ button { -webkit-tap-highlight-color: transparent; transition: transform 0.08s e
 button:active:not(:disabled) { transform: scale(0.96); }
 button:disabled { opacity: 0.55; }
 input, textarea { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
-input:focus, textarea:focus { border-color: #DC2626 !important; box-shadow: 0 0 0 3px rgba(220,38,38,0.12); }
+input:focus, textarea:focus { border-color: #B8860B !important; box-shadow: 0 0 0 3px rgba(184,134,11,0.18); }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -298,7 +302,7 @@ function Spinner({ size = 16, color = "#fff" }) {
 function SplashScreen({ C }) {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: "system-ui, sans-serif", flexDirection: "column", gap: 20 }}>
-      <div style={{ width: 100, height: 100, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 52, boxShadow: `0 20px 60px ${C.red}55`, animation: "successBounce 0.6s ease-out" }}>🍽️</div>
+      <div style={{ width: 100, height: 100, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 52, boxShadow: `0 20px 60px ${C.gold}55`, animation: "successBounce 0.6s ease-out" }}>🍽️</div>
       <div style={{ fontWeight: 900, fontSize: 22, color: C.ink, letterSpacing: "-0.02em" }}>Eat & Park</div>
       <div style={{ fontWeight: 600, fontSize: 12, color: C.gray, textTransform: "uppercase", letterSpacing: 2 }}>Staff POS</div>
       <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
@@ -485,7 +489,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${C.bg} 0%, ${C.cardAlt} 100%)`, fontFamily: "system-ui, sans-serif", padding: 16 }}>
         <form onSubmit={handleLogin} style={{ background: C.card, borderRadius: 20, padding: isMobile ? 24 : 36, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", border: `1px solid ${C.line}`, animation: "scaleIn 0.35s ease-out" }}>
           <div style={{ textAlign: "center", marginBottom: 28 }}>
-            <div style={{ width: 80, height: 80, margin: "0 auto 12px", background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, boxShadow: `0 8px 24px ${C.red}40` }}>🍽️</div>
+            <div style={{ width: 80, height: 80, margin: "0 auto 12px", background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, boxShadow: `0 8px 24px ${C.gold}40` }}>🍽️</div>
             <div style={{ fontSize: 26, fontWeight: 800, color: C.ink, letterSpacing: "-0.02em" }}>Eat & Park</div>
             <div style={{ fontSize: 13, color: C.gray, marginTop: 4, fontWeight: 600 }}>Staff POS - Sign In</div>
           </div>
@@ -498,7 +502,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="********" style={{ width: "100%", padding: "13px 16px", border: `1.5px solid ${C.line}`, borderRadius: 10, fontSize: 14, boxSizing: "border-box", outline: "none", background: C.card, color: C.ink }} required />
           </div>
           {loginError && <div style={{ background: C.redLight, color: C.red, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, marginBottom: 18 }}>Warning: {loginError}</div>}
-          <button type="submit" style={{ width: "100%", padding: "15px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", boxShadow: `0 8px 20px ${C.red}40` }}>Sign In</button>
+          <button type="submit" style={{ width: "100%", padding: "15px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", boxShadow: `0 8px 20px ${C.gold}40` }}>Sign In</button>
           <div style={{ textAlign: "center", marginTop: 22, fontSize: 12, color: C.gray }}>
             <a href="/" style={{ color: C.blue, textDecoration: "none", fontWeight: 700 }}>Back to Customer App</a>
           </div>
@@ -517,7 +521,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
       <Confetti show={confetti} />
 
       {/* TOP BAR */}
-      <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", padding: isMobile ? "10px 10px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 16px rgba(220,38,38,0.25)", position: "sticky", top: 0, zIndex: 50, gap: 8 }}>
+      <div style={{ background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", padding: isMobile ? "10px 10px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 16px rgba(184,134,11,0.30)", position: "sticky", top: 0, zIndex: 50, gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, minWidth: 0, flex: 1 }}>
           <button onClick={() => { haptic(); setSidebarOpen(true); }} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: isMobile ? 34 : 38, height: isMobile ? 34 : 38, borderRadius: 8, fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>☰</button>
           {!isMobile && <div style={{ width: 42, height: 42, background: "rgba(255,255,255,0.2)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>}
@@ -551,7 +555,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
           { id: "inventory", label: "🧾 Saman" },
           { id: "audit", label: "📝 Audit" },
         ].map(tab => (
-          <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSelectedTable(null); setOrdersRange(null); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: activeTab === tab.id ? C.red : C.gray, fontWeight: 700, fontSize: isMobile ? 12 : 13, cursor: "pointer", borderBottom: activeTab === tab.id ? `3px solid ${C.red}` : "3px solid transparent", whiteSpace: "nowrap", flexShrink: 0 }}>{tab.label}</button>
+          <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSelectedTable(null); setOrdersRange(null); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: activeTab === tab.id ? C.gold : C.gray, fontWeight: 700, fontSize: isMobile ? 12 : 13, cursor: "pointer", borderBottom: activeTab === tab.id ? `3px solid ${C.gold}` : "3px solid transparent", whiteSpace: "nowrap", flexShrink: 0 }}>{tab.label}</button>
         ))}
       </div>
 
@@ -599,18 +603,18 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
           <div onClick={e => e.stopPropagation()} style={{ width: isMobile ? "82%" : 280, maxWidth: isMobile ? 320 : undefined, background: C.card, height: "100%", padding: 20, display: "flex", flexDirection: "column", gap: 6, boxShadow: "4px 0 24px rgba(0,0,0,0.15)", overflowY: "auto", animation: "slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 44, height: 44, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>
+                <div style={{ width: 44, height: 44, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>
                 <div><div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Eat & Park</div><div style={{ fontSize: 11, color: C.gray }}>Staff Panel</div></div>
               </div>
               <button onClick={() => setSidebarOpen(false)} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.gray }}>X</button>
             </div>
-            <div style={{ background: `linear-gradient(135deg, ${C.red}10 0%, ${C.red}05 100%)`, border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
+            <div style={{ background: `linear-gradient(135deg, ${C.gold}22 0%, ${C.gold}08 100%)`, border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.5 }}>Logged in as</div>
               <div style={{ fontWeight: 800, fontSize: 15, color: C.ink, marginTop: 4 }}>{staffData?.name || "Staff"}</div>
               <div style={{ fontSize: 12, color: C.gray, marginTop: 2 }}>{staffData?.role || "waiter"}</div>
             </div>
             {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "history", label: "History", icon: "🕘" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }, { id: "audit", label: "Audit Log", icon: "📝" }].map(tab => (
-              <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.redLight : "transparent", color: activeTab === tab.id ? C.red : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
+              <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.goldLight : "transparent", color: activeTab === tab.id ? C.gold : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
                 <span style={{ fontSize: 18 }}>{tab.icon}</span><span>{tab.label}</span>
               </button>
             ))}
@@ -669,7 +673,7 @@ function ParcelView({ C, isMobile, orders, onNew, onBill, onAdd }) {
           <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Parcel ({list.length})</h2>
           <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 2 }}>Baaki payment: {inr(total)}</div>
         </div>
-        <button onClick={onNew} style={{ padding: "11px 18px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>+ New Parcel</button>
+        <button onClick={onNew} style={{ padding: "11px 18px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>+ New Parcel</button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
         {list.map(o => {
@@ -697,7 +701,7 @@ function ParcelView({ C, isMobile, orders, onNew, onBill, onAdd }) {
               </div>
               <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 8, marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: C.gray, fontWeight: 600 }}>Total</span>
-                <span style={{ fontSize: 18, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</span>
+                <span style={{ fontSize: 18, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                 <button onClick={() => onBill(o)} style={{ padding: 9, border: "none", borderRadius: 8, background: C.red, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Bill / Paid</button>
@@ -914,7 +918,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
         )}
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {["all", "active", ...STATUS_FLOW, "paid", "cancelled"].map(f => (
-            <button key={f} onClick={() => { haptic(); setFilter(f); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: "1px solid " + (filter === f ? C.red : C.line), background: filter === f ? C.red : C.card, color: filter === f ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", textTransform: "capitalize", fontFamily: "inherit" }}>{f}</button>
+            <button key={f} onClick={() => { haptic(); setFilter(f); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: "1px solid " + (filter === f ? C.gold : C.line), background: filter === f ? C.gold : C.card, color: filter === f ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", textTransform: "capitalize", fontFamily: "inherit" }}>{f}</button>
           ))}
         </div>
       </div>
@@ -931,7 +935,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
               <span style={{ fontSize: 11, color: C.gray, whiteSpace: "nowrap" }}>#{o.id?.slice(1,5).toUpperCase()} - {timeAgo(o.createdAt)}</span>
               <span style={{ background: stBg, color: stColor, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800, whiteSpace: "nowrap" }}>{st.label}</span>
               {o.paid && <span style={{ background: C.greenLight, color: C.green, padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>PAID</span>}
-              <span style={{ marginLeft: "auto", fontWeight: 900, color: C.red, fontFamily: "monospace", fontSize: 13, whiteSpace: "nowrap" }}>{inr(o.finalTotal || 0)}</span>
+              <span style={{ marginLeft: "auto", fontWeight: 900, color: C.goldText, fontFamily: "monospace", fontSize: 13, whiteSpace: "nowrap" }}>{inr(o.finalTotal || 0)}</span>
               <span style={{ color: C.gray, fontSize: 10 }}>▼</span>
             </button>
           );
@@ -957,7 +961,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
               </div>
               <div style={{ borderTop: "1px solid " + C.line, paddingTop: 10, marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontSize: 12, color: C.gray, fontWeight: 600 }}>Total</span>
-                <span style={{ fontSize: isMobile ? 16 : 18, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</span>
+                <span style={{ fontSize: isMobile ? 16 : 18, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</span>
               </div>
               {o.paid && <div style={{ background: C.greenLight, color: C.green, padding: "6px 10px", borderRadius: 6, fontSize: 11, fontWeight: 800, marginBottom: 10, textAlign: "center" }}>PAID {o.payment ? "(" + o.payment.toUpperCase() + ")" : ""}</div>}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
@@ -1077,7 +1081,7 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
         {[{ id: "today", label: "Today" }, { id: "yesterday", label: "Yesterday" }, { id: "7days", label: "7 Days" }, { id: "30days", label: "30 Days" }, { id: "month", label: "Month" }].map(r => (
-          <button key={r.id} onClick={() => { haptic(); setRange(r.id); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: `1px solid ${range === r.id ? C.red : C.line}`, background: range === r.id ? C.red : C.card, color: range === r.id ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", fontFamily: "inherit" }}>{r.label}</button>
+          <button key={r.id} onClick={() => { haptic(); setRange(r.id); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: `1px solid ${range === r.id ? C.gold : C.line}`, background: range === r.id ? C.gold : C.card, color: range === r.id ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", fontFamily: "inherit" }}>{r.label}</button>
         ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fit, minmax(180px, 1fr))", gap: isMobile ? 10 : 14, marginBottom: 24 }}>
@@ -1125,7 +1129,7 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
             return (
               <div key={h} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                 <div style={{ width: "100%", height: 100, display: "flex", alignItems: "flex-end" }}>
-                  <div title={`${h}:00 - ${count}`} style={{ width: "100%", height: `${height}%`, minHeight: count > 0 ? 4 : 0, background: `linear-gradient(180deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 3, transition: "all 0.4s" }} />
+                  <div title={`${h}:00 - ${count}`} style={{ width: "100%", height: `${height}%`, minHeight: count > 0 ? 4 : 0, background: `linear-gradient(180deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 3, transition: "all 0.4s" }} />
                 </div>
                 {h % 4 === 0 && <div style={{ fontSize: 9, color: C.gray, fontWeight: 700 }}>{h}</div>}
               </div>
@@ -1160,7 +1164,7 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</div>
+                  <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(o.finalTotal || 0)}</div>
                 </div>
               </button>
             );
@@ -1345,7 +1349,7 @@ function TableMergeModal({ C, isMobile, primaryOrder, allOrders, onClose }) {
       <div style={{ fontSize: 12, color: C.gray, marginBottom: 16 }}>Is order (Table {primaryOrder.table}) me dusra table merge karo</div>
       {otherOrders.length === 0 && <div style={{ padding: 20, textAlign: "center", color: C.gray }}>Koi aur running order nahi</div>}
       {otherOrders.map(o => (
-        <button key={o.id} onClick={() => setSelectedId(o.id)} style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: 12, marginBottom: 8, border: `2px solid ${selectedId === o.id ? C.red : C.line}`, borderRadius: 8, background: selectedId === o.id ? C.redLight : "transparent", cursor: "pointer", fontFamily: "inherit" }}>
+        <button key={o.id} onClick={() => setSelectedId(o.id)} style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: 12, marginBottom: 8, border: `2px solid ${selectedId === o.id ? C.gold : C.line}`, borderRadius: 8, background: selectedId === o.id ? C.redLight : "transparent", cursor: "pointer", fontFamily: "inherit" }}>
           <span style={{ fontWeight: 700, color: C.ink }}>Table {o.table}</span>
           <span style={{ color: C.gray }}>{inr(o.finalTotal || 0)}</span>
         </button>
@@ -1380,7 +1384,7 @@ function TableMoveModal({ C, isMobile, order, allOrders, onClose }) {
       {free.length === 0 && <div style={{ padding: 20, textAlign: "center", color: C.gray }}>Koi table khali nahi</div>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
         {free.map(n => (
-          <button key={n} onClick={() => setTo(n)} style={{ padding: "14px 0", borderRadius: 10, border: `2px solid ${to === n ? C.red : C.line}`, background: to === n ? C.redLight : "transparent", color: to === n ? C.red : C.ink, fontWeight: 900, fontSize: 16, cursor: "pointer", fontFamily: "monospace" }}>{n}</button>
+          <button key={n} onClick={() => setTo(n)} style={{ padding: "14px 0", borderRadius: 10, border: `2px solid ${to === n ? C.gold : C.line}`, background: to === n ? C.redLight : "transparent", color: to === n ? C.gold : C.ink, fontWeight: 900, fontSize: 16, cursor: "pointer", fontFamily: "monospace" }}>{n}</button>
         ))}
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
@@ -1694,7 +1698,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
 
   return (
     <div style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 100, display: "flex", flexDirection: "column", animation: "fadeIn 0.2s" }}>
-      <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", padding: isMobile ? "10px 12px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+      <div style={{ background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", padding: isMobile ? "10px 12px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: isMobile ? "8px 12px" : "9px 16px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: isMobile ? 12 : 13, flexShrink: 0 }}>Back</button>
         <div style={{ fontWeight: 800, fontSize: isMobile ? 13 : 16, textAlign: "center", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {existingOrder ? (addMoreMode ? `Add - ${table === "parcel" ? "Parcel" : "T" + table}` : `Bill - ${table === "parcel" ? "Parcel" : "T" + table} - ${existingItems.length} items`) : (table === "parcel" ? "New - Parcel" : `New - Table ${table}`)}
@@ -1714,7 +1718,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
           <input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{ padding: "10px 14px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink }} />
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
             {categories.map(c => (
-              <button key={c} onClick={() => { haptic(); setCategory(c); }} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${category === c ? C.red : C.line}`, background: category === c ? C.red : C.card, color: category === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
+              <button key={c} onClick={() => { haptic(); setCategory(c); }} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${category === c ? C.gold : C.line}`, background: category === c ? C.gold : C.card, color: category === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
             ))}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill, minmax(170px, 1fr))", gap: 8, overflowY: "auto", flex: 1 }}>
@@ -1723,7 +1727,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               return (
                 <button key={m.id} onClick={() => setQty(m.id, q + 1)} style={{ textAlign: "left", padding: isMobile ? 10 : 12, borderRadius: 10, border: `1.5px solid ${q > 0 ? C.green : C.line}`, background: C.card, cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isMobile ? 60 : 68, color: C.ink }}>
                   <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: C.ink, marginBottom: 4, lineHeight: 1.2 }}>{m.name}</div>
-                  <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(m.price)}</div>
+                  <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(m.price)}</div>
                   {q > 0 && <span style={{ position: "absolute", top: 6, right: 6, background: C.green, color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 10, fontWeight: 800, animation: "successBounce 0.3s" }}>{q}</span>}
                 </button>
               );
@@ -1786,13 +1790,13 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
             {!addMoreMode && (
               <div style={{ display: showAdj ? "flex" : "none", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>GST</span>
-                {[0,5,12,18].map(g => <button key={g} onClick={() => setGstRate(g)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${gstRate === g ? C.red : C.line}`, background: gstRate === g ? C.redLight : C.card, color: gstRate === g ? C.red : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{g === 0 ? "No" : `${g}%`}</button>)}
+                {[0,5,12,18].map(g => <button key={g} onClick={() => setGstRate(g)} style={{ padding: "3px 8px", borderRadius: 4, border: `1px solid ${gstRate === g ? C.gold : C.line}`, background: gstRate === g ? C.redLight : C.card, color: gstRate === g ? C.gold : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{g === 0 ? "No" : `${g}%`}</button>)}
               </div>
             )}
             {!addMoreMode && (
               <div style={{ display: showAdj ? "flex" : "none", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>PAY</span>
-                {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["due", "Due"]].map(([id, label]) => <button key={id} onClick={() => setPayMode(id)} style={{ padding: "3px 9px", borderRadius: 4, border: `1px solid ${payMode === id ? C.red : C.line}`, background: payMode === id ? C.red : C.card, color: payMode === id ? "#fff" : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>)}
+                {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["due", "Due"]].map(([id, label]) => <button key={id} onClick={() => setPayMode(id)} style={{ padding: "3px 9px", borderRadius: 4, border: `1px solid ${payMode === id ? C.gold : C.line}`, background: payMode === id ? C.gold : C.card, color: payMode === id ? "#fff" : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>)}
               </div>
             )}
             <div style={{ background: C.card, borderRadius: 6, padding: 8, marginBottom: 6 }}>
@@ -1804,7 +1808,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               {!addMoreMode && gstRate > 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11, color: C.red }}><span>GST {gstRate}%</span><span style={{ fontFamily: "monospace" }}>+{inr(gstAmt)}</span></div>}
               {!addMoreMode && discount === 0 && gstRate === 0 && <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11 }}><span style={{ color: C.gray }}>Subtotal</span><span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>{inr(grossSub)}</span></div>}
             </div>
-            <div style={{ background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: `0 4px 12px ${C.red}40` }}>
+            <div style={{ background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: `0 4px 12px ${C.gold}40` }}>
               <span style={{ color: "#fff", fontSize: 12, fontWeight: 800, letterSpacing: 0.5 }}>TOTAL</span>
               <span style={{ color: "#fff", fontSize: 20, fontWeight: 900, fontFamily: "monospace" }}>{inr(addMoreMode ? grossSub : totalAmount)}</span>
             </div>
@@ -1830,7 +1834,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               <button onClick={handlePlaceOrder} disabled={cartItems.length === 0 || placing} style={{ width: "100%", padding: 10, marginTop: 8, border: "none", borderRadius: 10, background: cartItems.length === 0 ? C.line : `linear-gradient(135deg, ${C.green} 0%, #15803D 100%)`, color: cartItems.length === 0 ? C.gray : "#fff", fontWeight: 800, fontSize: 14, cursor: cartItems.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{placing ? <><Spinner /> Adding...</> : "Add Items to Running KOT"}</button>
             )}
             {!existingOrder && (
-              <button onClick={handlePlaceOrder} disabled={cartItems.length === 0 || placing} style={{ width: "100%", padding: 10, marginTop: 8, border: "none", borderRadius: 10, background: cartItems.length === 0 ? C.line : `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: cartItems.length === 0 ? C.gray : "#fff", fontWeight: 800, fontSize: 14, cursor: cartItems.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: cartItems.length === 0 ? "none" : `0 6px 16px ${C.red}40`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{placing ? <><Spinner /> Placing...</> : "Send KOT"}</button>
+              <button onClick={handlePlaceOrder} disabled={cartItems.length === 0 || placing} style={{ width: "100%", padding: 10, marginTop: 8, border: "none", borderRadius: 10, background: cartItems.length === 0 ? C.line : `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: cartItems.length === 0 ? C.gray : "#fff", fontWeight: 800, fontSize: 14, cursor: cartItems.length === 0 ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: cartItems.length === 0 ? "none" : `0 6px 16px ${C.gold}40`, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{placing ? <><Spinner /> Placing...</> : "Send KOT"}</button>
             )}
           </div>
         </div>
@@ -1852,7 +1856,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, marginBottom: 6 }}>CATEGORY</div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8, maxHeight: 120, overflowY: "auto" }}>
           {Array.from(new Set(menu.map((m) => m.category).filter(Boolean))).map((c) => (
-            <button key={c} onClick={() => setNewCat(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (newCat === c ? C.red : C.line), background: newCat === c ? C.red : C.card, color: newCat === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{c}</button>
+            <button key={c} onClick={() => setNewCat(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (newCat === c ? C.gold : C.line), background: newCat === c ? C.gold : C.card, color: newCat === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{c}</button>
           ))}
         </div>
         <input value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="Ya nayi category likho" style={{ width: "100%", boxSizing: "border-box", padding: 11, border: "1px solid " + C.line, borderRadius: 8, fontSize: 14, background: C.card, color: C.ink, marginBottom: 16, outline: "none" }} />
@@ -1867,9 +1871,9 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: C.card, borderTop: `1px solid ${C.line}`, padding: 12, boxShadow: "0 -4px 16px rgba(0,0,0,0.1)", zIndex: 101, display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 10, color: C.gray, fontWeight: 800, textTransform: "uppercase" }}>{cartItems.length} items</div>
-            <div style={{ fontSize: 20, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(totalAmount)}</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(totalAmount)}</div>
           </div>
-          <button onClick={existingOrder ? handleSaveBill : handlePlaceOrder} disabled={placing} style={{ padding: "14px 24px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.red} 0%, #B91C1C 100%)`, color: "#fff", fontWeight: 900, fontSize: 14, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: `0 6px 16px ${C.red}55`, display: "flex", alignItems: "center", gap: 8 }}>{placing ? <Spinner /> : existingOrder ? "Save Bill" : "Place Order"}</button>
+          <button onClick={existingOrder ? handleSaveBill : handlePlaceOrder} disabled={placing} style={{ padding: "14px 24px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", fontWeight: 900, fontSize: 14, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: `0 6px 16px ${C.gold}55`, display: "flex", alignItems: "center", gap: 8 }}>{placing ? <Spinner /> : existingOrder ? "Save Bill" : "Place Order"}</button>
         </div>
       )}
     </div>
@@ -1987,7 +1991,7 @@ function DueLedger({ C, isMobile, orders }) {
     <div style={{ background: C.card, border: `1px solid ${C.red}`, borderRadius: 14, padding: isMobile ? 14 : 20, marginBottom: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8 }}>
         <div style={{ fontSize: isMobile ? 13 : 15, fontWeight: 800, color: C.ink }}>Due Ledger</div>
-        <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 900, color: C.red, fontFamily: "monospace" }}>{inr(total)}</div>
+        <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(total)}</div>
       </div>
       {dues.sort((a, b) => b.createdAt - a.createdAt).map(o => (
         <div key={o.id} style={{ background: C.cardAlt, borderRadius: 10, padding: 12, marginBottom: 8 }}>
@@ -1996,7 +2000,7 @@ function DueLedger({ C, isMobile, orders }) {
               <div style={{ fontWeight: 800, fontSize: isMobile ? 13 : 14, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.dueName || "Unknown"} {o.duePhone ? `- ${o.duePhone}` : ""}</div>
               <div style={{ fontSize: 11, color: C.gray, marginTop: 2 }}>{o.orderType === "parcel" ? "Parcel" : "Table " + o.table} - {new Date(o.dueAt || o.createdAt).toLocaleDateString("en-IN")}</div>
             </div>
-            <div style={{ fontWeight: 900, color: C.red, fontFamily: "monospace", fontSize: isMobile ? 14 : 15, flexShrink: 0 }}>{inr(o.finalTotal || 0)}</div>
+            <div style={{ fontWeight: 900, color: C.goldText, fontFamily: "monospace", fontSize: isMobile ? 14 : 15, flexShrink: 0 }}>{inr(o.finalTotal || 0)}</div>
           </div>
           <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
             <button onClick={() => settle(o, "cash")} style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Cash</button>
@@ -2372,7 +2376,7 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
 
       <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         {[["entry", "📝 Daily Entry"], ["order", "🛒 Order List" + (lowItems.length ? " (" + lowItems.length + ")" : "")]].map(([id, label]) => (
-          <button key={id} onClick={() => { haptic(); setView(id); }} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: "1.5px solid " + (view === id ? C.red : C.line), background: view === id ? C.red : C.card, color: view === id ? "#fff" : C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
+          <button key={id} onClick={() => { haptic(); setView(id); }} style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: "1.5px solid " + (view === id ? C.gold : C.line), background: view === id ? C.gold : C.card, color: view === id ? "#fff" : C.gray, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
         ))}
       </div>
 
@@ -2381,7 +2385,7 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Item search..." style={{ width: "100%", boxSizing: "border-box", padding: "10px 14px", border: "1px solid " + C.line, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink, marginBottom: 8 }} />
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 4 }}>
             {cats.map((c) => (
-              <button key={c} onClick={() => setCat(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (cat === c ? C.red : C.line), background: cat === c ? C.red : C.card, color: cat === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
+              <button key={c} onClick={() => setCat(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (cat === c ? C.gold : C.line), background: cat === c ? C.gold : C.card, color: cat === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
             ))}
           </div>
           {loadingDay && <div style={{ textAlign: "center", padding: 20, color: C.gray, fontSize: 13 }}><Spinner color={C.red} /> Load ho raha hai...</div>}
@@ -2426,8 +2430,8 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
       {view === "order" && (
         <div>
           <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-            <button onClick={() => setShowAll(false)} style={{ padding: "7px 14px", borderRadius: 20, border: "1px solid " + (!showAll ? C.red : C.line), background: !showAll ? C.red : C.card, color: !showAll ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Sirf kam stock</button>
-            <button onClick={() => setShowAll(true)} style={{ padding: "7px 14px", borderRadius: 20, border: "1px solid " + (showAll ? C.red : C.line), background: showAll ? C.red : C.card, color: showAll ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Poori 15 din ki list</button>
+            <button onClick={() => setShowAll(false)} style={{ padding: "7px 14px", borderRadius: 20, border: "1px solid " + (!showAll ? C.gold : C.line), background: !showAll ? C.gold : C.card, color: !showAll ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Sirf kam stock</button>
+            <button onClick={() => setShowAll(true)} style={{ padding: "7px 14px", borderRadius: 20, border: "1px solid " + (showAll ? C.gold : C.line), background: showAll ? C.gold : C.card, color: showAll ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Poori 15 din ki list</button>
           </div>
           {orderList.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.gray }}><div style={{ fontSize: 40, marginBottom: 8 }}>👍</div><div style={{ fontSize: 13, fontWeight: 700 }}>Abhi kuch mangane ki zarurat nahi</div></div>}
           {Array.from(new Set(orderList.map((x) => x.cat))).map((c) => (
@@ -2441,7 +2445,7 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
                       <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{it.name}</div>
                       <div style={{ fontSize: 11, color: C.gray }}>Abhi: {cur === null ? "-" : invFmt(cur)} {it.unit}</div>
                     </div>
-                    <div style={{ fontWeight: 900, fontSize: 15, color: C.red, fontFamily: "monospace", flexShrink: 0 }}>{it.ord} {it.unit}</div>
+                    <div style={{ fontWeight: 900, fontSize: 15, color: C.goldText, fontFamily: "monospace", flexShrink: 0 }}>{it.ord} {it.unit}</div>
                   </div>
                 );
               })}
@@ -2459,7 +2463,7 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
       {dirty && view === "entry" && (
         <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, background: C.card, borderTop: "1px solid " + C.line, padding: 12, boxShadow: "0 -4px 16px rgba(0,0,0,0.1)", zIndex: 60, display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ flex: 1, fontSize: 12, fontWeight: 800, color: C.amber }}>Unsaved changes</div>
-          <button onClick={save} disabled={saving} style={{ padding: "13px 28px", border: "none", borderRadius: 10, background: "linear-gradient(135deg, " + C.red + " 0%, #B91C1C 100%)", color: "#fff", fontWeight: 900, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8 }}>{saving ? <Spinner /> : "Save Stock"}</button>
+          <button onClick={save} disabled={saving} style={{ padding: "13px 28px", border: "none", borderRadius: 10, background: "linear-gradient(135deg, " + C.gold + " 0%, " + C.goldDark + " 100%)", color: "#fff", fontWeight: 900, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8 }}>{saving ? <Spinner /> : "Save Stock"}</button>
         </div>
       )}
     </div>
@@ -2530,7 +2534,7 @@ function HistoryView({ C, isMobile, isOwner }) {
   };
 
   const chip = (id, label) => (
-    <button key={id} onClick={() => { haptic(); setFilter(id); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: "1px solid " + (filter === id ? C.red : C.line), background: filter === id ? C.red : C.card, color: filter === id ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
+    <button key={id} onClick={() => { haptic(); setFilter(id); }} style={{ padding: isMobile ? "6px 10px" : "7px 14px", borderRadius: 20, border: "1px solid " + (filter === id ? C.gold : C.line), background: filter === id ? C.gold : C.card, color: filter === id ? "#fff" : C.gray, fontWeight: 700, fontSize: isMobile ? 11 : 12, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
   );
   const dateInput = { padding: "8px 10px", border: "1px solid " + C.line, borderRadius: 8, fontSize: 13, background: C.card, color: C.ink, fontWeight: 700, outline: "none" };
 
@@ -2579,7 +2583,7 @@ function HistoryView({ C, isMobile, isOwner }) {
                   </div>
                   <div style={{ fontSize: 11, color: C.gray }}>#{(o.id || "").slice(1, 5).toUpperCase()} - {when} - {(o.items || []).length} items</div>
                 </div>
-                <div style={{ fontWeight: 900, color: C.red, fontFamily: "monospace", fontSize: isMobile ? 14 : 16, flexShrink: 0 }}>{inr(o.finalTotal || 0)}</div>
+                <div style={{ fontWeight: 900, color: C.goldText, fontFamily: "monospace", fontSize: isMobile ? 14 : 16, flexShrink: 0 }}>{inr(o.finalTotal || 0)}</div>
                 <span style={{ color: C.gray, fontSize: 10 }}>{open ? "▲" : "▼"}</span>
               </button>
               {open && (
