@@ -339,21 +339,21 @@ const SUGGEST_RULES = [
 ];
 
 function buildSuggestion(menu, persons) {
-  const used = new Set();
+  const p = Number(persons) || 1;
   const out = [];
-  SUGGEST_RULES.forEach((rule) => {
-    const pool = menu
-      .filter((m) => rule.re.test(m.category || "") && !used.has(m.id) && m.available !== false)
-      .sort((a, b) => (b.isBestseller ? 1 : 0) - (a.isBestseller ? 1 : 0))
-      .slice(0, rule.pick);
+  const addItems = (regex, calcQty, limit = 1) => {
+    const pool = menu.filter(m => m.available !== false && regex.test(m.category || ""));
     if (!pool.length) return;
-    const totalQty = Math.max(1, Math.ceil(persons * rule.perPerson));
-    const each = Math.max(1, Math.ceil(totalQty / pool.length));
-    pool.forEach((m) => {
-      used.add(m.id);
-      out.push({ id: m.id, name: m.name, price: Number(m.price) || 0, qty: each });
+    const picked = pool.sort(() => 0.5 - Math.random()).slice(0, limit);
+    picked.forEach(m => {
+      out.push({ id: m.id, name: m.name, price: Number(m.price) || 0, qty: calcQty(p) });
     });
-  });
+  };
+  addItems(/starter|snack|tandoor|momos|roll/i, (p) => Math.ceil(p / 3), 1);
+  addItems(/main|curry|sabzi|gravy|paneer|chicken|mutton/i, (p) => Math.ceil(p / 4), 2);
+  addItems(/bread|roti|naan/i, (p) => p * 2, 1);
+  addItems(/rice|biryani|pulao/i, (p) => Math.ceil(p / 3), 1);
+  addItems(/drink|shake|juice|cold|mojito/i, (p) => p, 1);
   return out;
 }
 
