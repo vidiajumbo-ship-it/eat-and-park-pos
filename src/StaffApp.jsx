@@ -56,6 +56,11 @@ input:focus, textarea:focus { border-color: #B8860B !important; box-shadow: 0 0 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
+.ep-noscroll { scrollbar-width: none; -ms-overflow-style: none; }
+.ep-noscroll::-webkit-scrollbar { display: none; }
+@media (hover: hover) { .ep-card:hover { box-shadow: 0 8px 20px rgba(184,134,11,0.22) !important; border-color: #B8860B !important; transform: translateY(-1px); } }
+button:focus-visible, select:focus-visible { outline: 2px solid #B8860B; outline-offset: 2px; }
+::selection { background: rgba(184,134,11,0.28); }
 `;
 
 // ===========================================================================
@@ -1935,11 +1940,11 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   return (
     <div style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 100, display: "flex", flexDirection: "column", animation: "fadeIn 0.2s" }}>
       <div style={{ background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", padding: isMobile ? "10px 12px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: isMobile ? "8px 12px" : "9px 16px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: isMobile ? 12 : 13, flexShrink: 0 }}>Back</button>
+        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: isMobile ? "8px 12px" : "9px 16px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: isMobile ? 12 : 13, flexShrink: 0 }}>← Back</button>
         <div style={{ fontWeight: 800, fontSize: isMobile ? 13 : 16, textAlign: "center", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {existingOrder ? (addMoreMode ? `Add - ${table === "parcel" ? "Parcel" : "T" + table}` : `Bill - ${table === "parcel" ? "Parcel" : "T" + table} - ${existingItems.length} items`) : (table === "parcel" ? "New - Parcel" : `New - Table ${table}`)}
         </div>
-        <div style={{ width: isMobile ? 40 : 60, flexShrink: 0 }} />
+        <div style={{ background: "rgba(255,255,255,0.18)", borderRadius: 20, padding: "6px 12px", fontWeight: 900, fontSize: isMobile ? 12 : 14, fontFamily: "monospace", flexShrink: 0, minWidth: isMobile ? 40 : 60, textAlign: "center" }}>{cartItems.length > 0 ? inr(addMoreMode ? grossSub : totalAmount) : "—"}</div>
       </div>
 
       {runningOrders.length > 0 && !existingOrder && (
@@ -1962,20 +1967,20 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
             </div>
           )}
           <div style={{ position: "relative", flexShrink: 0 }}><input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "10px 38px 10px 14px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink }} />{search && <button aria-label="Search clear" onClick={() => setSearch("")} style={{ position: "absolute", top: 6, right: 6, width: 28, height: 28, border: "none", borderRadius: 14, background: C.cardAlt, color: C.gray, fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0 }}>✕</button>}</div>
-          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
+          <div className="ep-noscroll" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, flexShrink: 0 }}>
             {categories.map(c => (
-              <button key={c} onClick={() => { haptic(); setCategory(c); }} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${category === c ? C.gold : C.line}`, background: category === c ? C.gold : C.card, color: category === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
+              <button key={c} onClick={() => { haptic(); setCategory(c); }} style={{ padding: "8px 16px", borderRadius: 999, boxShadow: category === c ? "0 3px 10px rgba(184,134,11,0.30)" : "none", border: `1px solid ${category === c ? C.gold : C.line}`, background: category === c ? C.gold : C.card, color: category === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
             ))}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill, minmax(170px, 1fr))", gap: 8, overflowY: "auto", flex: 1 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill, minmax(170px, 1fr))", gap: 10, overflowY: "auto", flex: 1, alignContent: "start", paddingBottom: 4, paddingRight: 2 }}>
             {filtered.map(m => {
               const q = cart[m.id] || 0;
               return (
-                <button key={m.id} onClick={() => setQty(m.id, q + 1)} style={{ textAlign: "left", padding: isMobile ? 10 : 12, borderRadius: 10, border: `1.5px solid ${q > 0 ? C.green : C.line}`, background: C.card, cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isMobile ? 60 : 68, color: C.ink }}>
-                  <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: C.ink, marginBottom: 4, lineHeight: 1.2 }}>{m.name}</div>
+                <button key={m.id} onClick={() => setQty(m.id, q + 1)} className="ep-card" style={{ textAlign: "left", padding: isMobile ? 10 : 12, borderRadius: 12, border: `1.5px solid ${q > 0 ? C.green : C.line}`, background: q > 0 ? C.greenLight : C.card, boxShadow: q > 0 ? "0 2px 10px rgba(22,163,74,0.15)" : "0 1px 3px rgba(0,0,0,0.05)", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isMobile ? 70 : 78, color: C.ink, display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 4 }}>
+                  <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: C.ink, marginBottom: 4, lineHeight: 1.25, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", paddingRight: 24 }}>{m.name}</div>
                   {isOwner && <span role="button" title="Favourite pin" onClick={(e) => { e.stopPropagation(); togglePin(m.id); }} style={{ position: "absolute", bottom: 4, right: 6, fontSize: 16, lineHeight: 1, padding: 4, cursor: "pointer", opacity: pinnedIds.includes(m.id) ? 1 : 0.35 }}>{pinnedIds.includes(m.id) ? "⭐" : "☆"}</span>}
                   <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(m.price)}</div>
-                  {q > 0 && <span style={{ position: "absolute", top: 6, right: 6, background: C.green, color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 10, fontWeight: 800, animation: "successBounce 0.3s" }}>{q}</span>}
+                  {q > 0 && <span style={{ position: "absolute", top: 6, right: 6, background: C.green, color: "#fff", borderRadius: 12, padding: "2px 9px", fontSize: 11, fontWeight: 800, boxShadow: "0 2px 6px rgba(22,163,74,0.35)", animation: "successBounce 0.3s" }}>{q}</span>}
                 </button>
               );
             })}
@@ -1983,10 +1988,10 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
           </div>
         </div>
 
-        <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0, width: isMobile ? "100%" : 380, minHeight: isMobile ? 400 : undefined }}>
-          <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.line}`, fontWeight: 800, fontSize: isMobile ? 13 : 15, color: C.ink }}>{(existingOrder ? "Bill" : "New Order") + " - " + (table === "parcel" ? "Parcel" : "Table " + table) + " (" + cartItems.length + ")"}{isOwner && <button onClick={() => setAddMenuOpen(true)} style={{ float: "right", margin: "-3px 0", padding: "5px 12px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ Menu</button>}{!existingOrder && cartItems.length > 0 && <button onClick={() => { if (window.confirm("Poora cart khaali karein?")) { setCart({}); try { localStorage.removeItem("staff_draft_" + table); } catch (e) {} } }} style={{ float: "right", margin: "-3px 8px -3px 0", padding: "5px 12px", border: "1.5px solid " + C.red, borderRadius: 6, background: "transparent", color: C.red, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Clear</button>}</div>
+        <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, boxShadow: "0 6px 24px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0, width: isMobile ? "100%" : 400, minHeight: isMobile ? 400 : undefined }}>
+          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.line}`, background: C.cardAlt, fontWeight: 800, fontSize: isMobile ? 13 : 15, color: C.ink, letterSpacing: 0.2 }}>{(existingOrder ? "Bill" : "New Order") + " - " + (table === "parcel" ? "Parcel" : "Table " + table) + " (" + cartItems.length + ")"}{isOwner && <button onClick={() => setAddMenuOpen(true)} style={{ float: "right", margin: "-3px 0", padding: "5px 12px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ Menu</button>}{!existingOrder && cartItems.length > 0 && <button onClick={() => { if (window.confirm("Poora cart khaali karein?")) { setCart({}); try { localStorage.removeItem("staff_draft_" + table); } catch (e) {} } }} style={{ float: "right", margin: "-3px 8px -3px 0", padding: "5px 12px", border: "1.5px solid " + C.red, borderRadius: 6, background: "transparent", color: C.red, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Clear</button>}</div>
           <div style={{ flex: isMobile ? "none" : 1, overflowY: isMobile ? "visible" : "auto", minHeight: isMobile ? 0 : 140 }}>
-            {cartItems.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.gray, fontSize: 13 }}>Menu se item tap karo</div>}
+            {cartItems.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: C.gray, fontSize: 13, fontWeight: 700 }}><div style={{ fontSize: 40, marginBottom: 8, opacity: 0.5 }}>🧾</div>Menu se item tap karo</div>}
             {cartItems.length > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: C.cardAlt, borderBottom: "1px solid " + C.line, fontSize: 10, fontWeight: 800, color: C.gray, letterSpacing: 0.5, textTransform: "uppercase" }}>
                 <div style={{ flex: 1 }}>Item</div>
@@ -2012,7 +2017,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
                   <div style={{ display: "flex", alignItems: "center", width: 84, justifyContent: "center", border: "1px solid " + C.line, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
                     <button onClick={() => setQty(id, q - 1)} style={{ width: 26, height: 26, border: "none", background: C.cardAlt, color: C.ink, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>-</button>
                     <span style={{ flex: 1, textAlign: "center", fontWeight: 900, fontSize: 13, color: C.ink }}>{q}</span>
-                    <button onClick={() => setQty(id, q + 1)} style={{ width: 26, height: 26, border: "none", background: C.cardAlt, color: C.ink, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
+                    <button onClick={() => setQty(id, q + 1)} style={{ width: 26, height: 26, border: "none", background: C.goldLight, color: C.goldText, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
                   </div>
                   <div style={{ width: 64, textAlign: "right", fontWeight: 800, fontSize: 13, color: C.ink, fontFamily: "monospace", flexShrink: 0 }}>{inr((rates[id] ?? m.price) * q)}</div>
                   <button onClick={() => setQty(id, 0)} style={{ width: 16, background: "transparent", border: "none", color: C.gray, fontSize: 13, cursor: "pointer", padding: 0, flexShrink: 0 }}>x</button>
