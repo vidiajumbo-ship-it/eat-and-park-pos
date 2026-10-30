@@ -1611,18 +1611,26 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   };
   const lockRef = useRef(false);
 
+  // existingOrder ka signature - items/kots/total badalne par cart re-seed ho
+  const orderSig = existingOrder
+    ? existingOrder.id + "|" + (existingOrder.items || []).length + "|" + (existingOrder.kots || []).length + "|" + (existingOrder.finalTotal || 0)
+    : "none";
+  const lastSeededSigRef = useRef(null);
   useEffect(() => {
-    if (existingOrder) {
-      setDiscount(existingOrder.billDiscountPct || 0);
-      setGstRate(existingOrder.gstRate || 0);
-      if (!addMoreMode) {
-        setPayMode(existingOrder.payment || "cash");
-        const initialCart = {};
-        (existingOrder.items || []).forEach(it => { initialCart[it.itemId] = (initialCart[it.itemId] || 0) + it.qty; });
-        setCart(initialCart);
-      }
+    if (!existingOrder) { lastSeededSigRef.current = null; return; }
+    setDiscount(existingOrder.billDiscountPct || 0);
+    setGstRate(existingOrder.gstRate || 0);
+    if (addMoreMode) {
+      setCart({});
+      return;
     }
-  }, [existingOrder?.id, addMoreMode]);
+    setPayMode(existingOrder.payment || "cash");
+    if (lastSeededSigRef.current === orderSig) return;
+    lastSeededSigRef.current = orderSig;
+    const initialCart = {};
+    (existingOrder.items || []).forEach(it => { initialCart[it.itemId] = (initialCart[it.itemId] || 0) + it.qty; });
+    setCart(initialCart);
+  }, [existingOrder?.id, orderSig, addMoreMode]);
 
   // Autosave cart to localStorage
   useEffect(() => {
@@ -1663,14 +1671,13 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
 
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
   const resolveItem = (id) => { const m = menu.find(x => x.id === id); const ex = existingItems.find(e => e.itemId === id); if (ex && !addMoreMode) return ex; return m || ex || null; };
+  // NOTE: cart me sirf CURRENT edit ki qty hoti hai (addMoreMode me sirf naye items).
+  // Isliye subtotal = sum(cart qty x price). Purani qty yahan add NAHI karni.
   const cartSubtotal = cartItems.reduce((s, [id, q]) => { 
     const m = resolveItem(id); 
-    const ex = existingItems.find(e => e.itemId === id);
-    // Agar item pehle se order me hai (addMoreMode), toh purani qty + nayi qty ka price le
-    const effectiveQty = addMoreMode && ex ? (ex.qty + q) : q; 
-    return s + (rates[id] ?? m?.price ?? 0) * effectiveQty; 
+    return s + (rates[id] ?? m?.price ?? 0) * q; 
   }, 0);
-  const grossSub = cartSubtotal; // Ab yeh khud hi sahi calculate ho raha hai
+  const grossSub = cartSubtotal;
   const discAmt = Math.round(grossSub * discount / 100);
   const gstAmt = Math.round((grossSub - discAmt) * gstRate / 100);
   const totalAmount = Math.max(0, grossSub - discAmt) + gstAmt;
@@ -1691,21 +1698,35 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     const existingMap = {};
     existing.forEach(it => { existingMap[it.itemId] = (existingMap[it.itemId] || 0) + it.qty; });
     const nextKotNo = Math.max(1, ...(existingOrder.kots || []).map(k => k.kotNumber || 1)) + 1;
-    const finalItems = [];
+    const finalItemsMap = {};
+    existing.forEach(it => {
+      if (!finalItemsMap[it.itemId]) finalItemsMap[it.itemId] = { itemId: it.itemId, name: it.name, portion: it.portion || "", price: it.price, qty: 0, kotNumber: it.kotNumber || 1 };
+      finalItemsMap[it.itemId].qty += it.qty;
+    });
+    const newKotItems = [];
     Object.entries(cart).forEach(([id, qty]) => {
-      if (qty <= 0) return;
+      const q = Number(qty) || 0;
+      if (q <= 0) return;
       const m = menu.find(x => x.id === id);
       const ex = existing.find(e => e.itemId === id);
-      if (ex) finalItems.push({ itemId: id, name: ex.name, portion: ex.portion || "", price: rates[id] ?? ex.price, qty, kotNumber: ex.kotNumber || 1 });
-      else if (m) finalItems.push({ itemId: id, name: m.name, portion: m.portion || "", price: rates[id] ?? m.price, qty, kotNumber: nextKotNo });
+      const price = rates[id] ?? ex?.price ?? m?.price ?? 0;
+      const name = ex?.name ?? m?.name ?? "Item";
+      const portion = ex?.portion ?? m?.portion ?? "";
+      if (finalItemsMap[id]) {
+        finalItemsMap[id].qty += q;
+        if (rates[id] !== undefined) finalItemsMap[id].price = rates[id];
+      } else {
+        finalItemsMap[id] = { itemId: id, name, portion, price, qty: q, kotNumber: nextKotNo };
+      }
+      newKotItems.push({ itemId: id, name, portion, price, qty: q, kotNumber: nextKotNo });
     });
+    const finalItems = Object.values(finalItemsMap).filter(it => it.qty > 0);
     if (finalItems.length === 0) throw new Error("Bill me kam se kam 1 item hona chahiye");
     const sub = finalItems.reduce((s, it) => s + it.price * it.qty, 0);
     const d = Math.round((sub * discount) / 100);
     const g = Math.round(((sub - d) * gstRate) / 100);
     const finalTotal = Math.max(0, sub - d) + g;
-    const newKotItems = finalItems.map(it => ({ ...it, qty: it.qty - (existingMap[it.itemId] || 0), kotNumber: nextKotNo })).filter(it => it.qty > 0);
-    const removedItems = existing.filter(it => !cart[it.itemId] || cart[it.itemId] <= 0);
+    const removedItems = existing.filter(it => !(it.itemId in cart) || cart[it.itemId] <= 0);
     if (removedItems.length) logAudit("items_removed", { orderId: existingOrder.id, table: existingOrder.table || "", items: removedItems.map(i => i.qty + "x " + i.name).join(", ") });
     const extra = {};
     if (newKotItems.length || removedItems.length) {
@@ -1748,19 +1769,27 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
           if (live.paid) throw new Error("Order paid ho chuka hai - items add nahi ho sakte");
           if (live.status === "cancelled") throw new Error("Order cancelled hai");
           const liveKots = live.kots && live.kots.length ? live.kots : baseKots;
-          tx.update(oref, { kots: [...liveKots, runKot], items: (() => {
-              const merged = [...(live.items || [])];
-              newItems.forEach(newItem => {
-                const existing = merged.find(i => i.itemId === newItem.itemId);
-                if (existing) existing.qty += newItem.qty;
-                else merged.push(newItem);
-              });
-              return merged;
-            })(), status: "new", finalTotal: (Number(live.finalTotal) || 0) + addedTotal, subtotal: (Number(live.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
+          const mergedItems = [...(live.items || [])].map(it => ({ ...it }));
+          newItems.forEach(newItem => {
+            const existing = mergedItems.find(i => i.itemId === newItem.itemId);
+            if (existing) existing.qty += newItem.qty;
+            else mergedItems.push(newItem);
+          });
+          tx.update(oref, {
+            kots: [...liveKots, runKot],
+            items: mergedItems,
+            status: "new",
+            finalTotal: (Number(live.finalTotal) || 0) + addedTotal,
+            subtotal: (Number(live.subtotal) || 0) + addedTotal,
+            paid: false,
+            paymentStatus: "pending",
+            lastKotAt: Date.now(),
+          });
         });
         printKOT({ ...base, items: newItems, kots: [runKot] });
         haptic(30);
         toast(`KOT #${nextNo} added & printing`, "success");
+        setCart({});
         onBack();
       } catch (e) {
         if (e.message === "REFRESH_NEEDED" || e.message.includes("badal diya")) {
