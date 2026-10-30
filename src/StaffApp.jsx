@@ -1,6 +1,7 @@
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, useRef, useContext, createContext, useCallback } from "react";
 import { db, auth } from "./firebase";
+import { assertEditable, resolveVendorId } from "./lib/guards";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, getDoc, updateDoc, addDoc,
@@ -1628,7 +1629,12 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       extra.kots = [...baseKots, editKot];
       extra.status = "new"; extra.lastKotAt = Date.now();
     }
-    await updateDoc(doc(db, "orders", existingOrder.id), { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, billEditedAt: Date.now(), ...extra });
+    await runTransaction(db, async (tx) => {
+      const oref = doc(db, "orders", existingOrder.id);
+      const osnap = await tx.get(oref);
+      assertEditable(osnap.exists() ? osnap.data() : null, existingOrder);
+      tx.update(oref, { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, billEditedAt: Date.now(), ...extra });
+    });
     if (newKotItems.length) printKOT({ ...existingOrder, items: newKotItems, kots: [] });
     return { finalItems, sub, discAmt: d, gstAmt: g, finalTotal };
   };
@@ -1649,7 +1655,16 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         const newItems = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: rates[id] ?? m.price, qty, kotNumber: nextNo }; });
         const addedTotal = newItems.reduce((s, it) => s + it.price * it.qty, 0);
         const runKot = { id: uid("kot"), kotNumber: nextNo, items: newItems, createdAt: Date.now(), status: "new", isRunning: true };
-        await updateDoc(doc(db, "orders", base.id), { kots: [...baseKots, runKot], items: [...(base.items || []), ...newItems], status: "new", finalTotal: (Number(base.finalTotal) || 0) + addedTotal, subtotal: (Number(base.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
+        await runTransaction(db, async (tx) => {
+          const oref = doc(db, "orders", base.id);
+          const osnap = await tx.get(oref);
+          if (!osnap.exists()) throw new Error("Order ab maujood nahi hai");
+          const live = osnap.data();
+          if (live.paid) throw new Error("Order paid ho chuka hai - items add nahi ho sakte");
+          if (live.status === "cancelled") throw new Error("Order cancelled hai");
+          const liveKots = live.kots && live.kots.length ? live.kots : baseKots;
+          tx.update(oref, { kots: [...liveKots, runKot], items: [...(live.items || []), ...newItems], status: "new", finalTotal: (Number(live.finalTotal) || 0) + addedTotal, subtotal: (Number(live.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
+        });
         printKOT({ ...base, items: newItems, kots: [runKot] });
         haptic(30);
         toast(`KOT #${nextNo} added & printing`, "success");
@@ -1676,6 +1691,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   };
 
   const handleSaveBill = async () => {
+    if (existingOrder && existingOrder.paid) { toast("Order paid ho chuka hai - edit nahi ho sakta", "warning"); return; }
     if (!existingOrder || addMoreMode || placing) return;
     setPlacing(true);
     try { await applyCartChanges(); toast("Bill saved", "success"); onBack(); }
@@ -1683,6 +1699,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   };
 
   const handlePaidPrint = async () => {
+    if (existingOrder && !addMoreMode && !placing) { if (lockRef.current) return; lockRef.current = true; }
     if (!existingOrder || addMoreMode || placing) return;
     setPlacing(true);
     try {
@@ -1724,7 +1741,16 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       const newItems = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: rates[id] ?? m.price, qty, kotNumber: nextNo }; });
       const addedTotal = newItems.reduce((s, it) => s + it.price * it.qty, 0);
       const runKot = { id: uid("kot"), kotNumber: nextNo, items: newItems, createdAt: Date.now(), status: "new", isRunning: true };
-      await updateDoc(doc(db, "orders", orderId), { kots: [...baseKots, runKot], items: [...(baseOrder.items || []), ...newItems], status: "new", finalTotal: (Number(baseOrder.finalTotal) || 0) + addedTotal, subtotal: (Number(baseOrder.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
+      await runTransaction(db, async (tx) => { // live-total txn (running)
+        const oref = doc(db, "orders", orderId);
+        const osnap = await tx.get(oref);
+        if (!osnap.exists()) throw new Error("Order ab maujood nahi hai");
+        const live = osnap.data();
+        if (live.paid) throw new Error("Order paid ho chuka hai - items add nahi ho sakte");
+        if (live.status === "cancelled") throw new Error("Order cancelled hai");
+        const liveKots = live.kots && live.kots.length ? live.kots : baseKots;
+        tx.update(oref, { kots: [...liveKots, runKot], items: [...(live.items || []), ...newItems], status: "new", finalTotal: (Number(live.finalTotal) || 0) + addedTotal, subtotal: (Number(live.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
+      });
       printKOT({ ...baseOrder, items: newItems, kots: [runKot] });
       toast(`KOT #${nextNo} added`, "success");
       onBack();
@@ -1858,7 +1884,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               <div style={{ marginTop: 8 }}>
                 {existingOrder.paid && <div style={{ padding: 8, borderRadius: 6, background: C.greenLight, color: C.green, fontWeight: 900, fontSize: 12, textAlign: "center", border: "1px solid " + C.green, marginBottom: 6 }}>PAID</div>}
                 <div style={{ display: "flex", gap: 6 }}>
-                  <button onClick={handleSaveBill} disabled={placing} style={{ flex: 1, padding: "9px 6px", border: "none", borderRadius: 6, background: C.blue, color: "#fff", fontWeight: 700, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Save</button>
+                  <button onClick={handleSaveBill} disabled={placing || !!existingOrder.paid} style={{ flex: 1, padding: "9px 6px", border: "none", borderRadius: 6, background: C.blue, color: "#fff", fontWeight: 700, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Save</button>
                   <button onClick={handlePrintBill} disabled={placing} style={{ flex: 1, padding: "9px 6px", border: "1px solid " + C.ink, borderRadius: 6, background: "transparent", color: C.ink, fontWeight: 700, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Print</button>
                   {!existingOrder.paid && onSwitchAdd && (
                     <button onClick={onSwitchAdd} disabled={placing} style={{ flex: 1, padding: "9px 6px", border: "1px solid " + C.green, borderRadius: 6, background: "transparent", color: C.green, fontWeight: 700, fontSize: 12, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit" }}>+ Add</button>
@@ -1915,7 +1941,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
             <div style={{ fontSize: 10, color: C.gray, fontWeight: 800, textTransform: "uppercase" }}>{cartItems.length} items</div>
             <div style={{ fontSize: 20, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(totalAmount)}</div>
           </div>
-          <button onClick={existingOrder ? handleSaveBill : handlePlaceOrder} disabled={placing} style={{ padding: "14px 24px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", fontWeight: 900, fontSize: 14, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: `0 6px 16px ${C.gold}55`, display: "flex", alignItems: "center", gap: 8 }}>{placing ? <Spinner /> : existingOrder ? "Save Bill" : "Place Order"}</button>
+          <button onClick={existingOrder ? handleSaveBill : handlePlaceOrder} disabled={placing || !!(existingOrder && existingOrder.paid)} style={{ padding: "14px 24px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", fontWeight: 900, fontSize: 14, cursor: placing ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: `0 6px 16px ${C.gold}55`, display: "flex", alignItems: "center", gap: 8 }}>{placing ? <Spinner /> : existingOrder ? "Save Bill" : "Place Order"}</button>
         </div>
       )}
     </div>
@@ -2217,6 +2243,9 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
   const [date, setDate] = useState(invDateKey());
   const [rows, setRows] = useState({});
   const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const loadedDateRef = useRef(null);
+  dirtyRef.current = dirty;
   const [saving, setSaving] = useState(false);
   const [loadingDay, setLoadingDay] = useState(true);
   const [q, setQ] = useState("");
@@ -2238,6 +2267,8 @@ function InventoryPanel({ C, isMobile, isOwner, waiterName }) {
   // Load the selected day (opening auto = last saved closing)
   useEffect(() => {
     if (!ready) return;
+    if (dirtyRef.current && loadedDateRef.current === date) return; // unsaved typing: do not reload
+    loadedDateRef.current = date;
     let cancelled = false;
     setLoadingDay(true);
     (async () => {
@@ -3139,7 +3170,7 @@ function ReportsView({ C, isMobile, isOwner, waiterName }) {
     try {
       const pSnap = await getDocs(query(collection(db, "vendorPayments"), where("date", "==", todayKey), where("mode", "==", "cash")));
       cashVendorPay = pSnap.docs.reduce((t, d) => t + (Number(d.data().amount) || 0), 0);
-    } catch (e) {}
+    } catch (e) { toast("Vendor payments load nahi hue, Day Close roka gaya: " + e.message, "error"); return; }
     const opening = Number(op) || 0;
     const counted = Number(cc) || 0;
     const expected = opening + s.pay.cash - cashExp - cashVendorPay;
@@ -3374,7 +3405,7 @@ function VendorView({ C, isMobile, isOwner, waiterName, onDuesChange }) {
     setLoading(true);
     try {
       const dues = await loadVendorDues();
-      setVendors(dues);
+      setVendors(dues.filter((x) => x.active !== false));
       const ps = await getDocs(query(collection(db, "vendorPayments"), orderBy("createdAt", "desc"), limit(50)));
       setPayments(ps.docs.map((d) => ({ id: d.id, ...d.data() })));
       if (onDuesChange) onDuesChange(dues.reduce((s, v) => s + Math.max(0, v.due), 0));
@@ -3424,7 +3455,8 @@ function VendorView({ C, isMobile, isOwner, waiterName, onDuesChange }) {
     if (!isOwner) return;
     if (!window.confirm(v.name + " ko delete karein? (payments/purchases history rahegi)")) return;
     try {
-      await deleteDoc(doc(db, "vendors", v.id));
+      if (Math.abs(Number(v.due) || 0) > 0) { toast("Pehle due clear karo (baaki " + inr(v.due) + ")", "warning"); return; }
+      await updateDoc(doc(db, "vendors", v.id), { active: false, deletedAt: Date.now() });
       toast("Vendor delete ho gaya", "success");
       refresh();
     } catch (e) { toast(e.message, "error"); }
@@ -3619,6 +3651,7 @@ function ImportView({ C, isMobile, isOwner, waiterName, onDone }) {
     setParsed((prev) => prev.map((p) => {
       if (p._idx !== idx) return p;
       const upd = { ...p, [field]: value };
+      if (field === "vendorName") { const mv = existingVendors.find((v) => v.name.trim().toLowerCase() === String(value).trim().toLowerCase()); upd._existingVendorId = mv ? mv.id : ""; }
       upd._valid = !!upd.vendorName && Number(upd.amount) > 0;
       return upd;
     }));
@@ -3646,10 +3679,12 @@ function ImportView({ C, isMobile, isOwner, waiterName, onDone }) {
     const imported = { expenses: 0, vendors: 0, errors: [] };
     try {
       const nameToId = {};
-      existingVendors.forEach((v) => { nameToId[v.name.toLowerCase()] = v.id; });
+      const freshVendors = await getDocs(collection(db, "vendors"));
+      freshVendors.docs.forEach((d) => { nameToId[String(d.data().name || "").trim().toLowerCase()] = d.id; });
 
       const newVendorNames = new Set();
-      parsed.filter((p) => !p._skip && p._valid && !p._existingVendorId).forEach((p) => newVendorNames.add(p.vendorName));
+      const seenNew = new Set();
+      parsed.filter((p) => !p._skip && p._valid).forEach((p) => { const k = p.vendorName.trim().toLowerCase(); if (!nameToId[k] && !seenNew.has(k)) { seenNew.add(k); newVendorNames.add(p.vendorName.trim()); } });
       for (const vName of newVendorNames) {
         try {
           const ref = await addDoc(collection(db, "vendors"), {
@@ -3667,7 +3702,7 @@ function ImportView({ C, isMobile, isOwner, waiterName, onDone }) {
         const chunk = active.slice(i, i + 20);
         const batch = writeBatch(db);
         chunk.forEach((p) => {
-          const vId = p._existingVendorId || nameToId[p.vendorName.toLowerCase()] || null;
+          const vId = resolveVendorId(p.vendorName, nameToId);
           const ref = doc(collection(db, "expenses"));
           batch.set(ref, {
             date: p.date,

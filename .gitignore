@@ -34,3 +34,4 @@ fix_app.py
 .vercel
 .env*
 serviceAccountKey*.json
+firestore-debug.log
