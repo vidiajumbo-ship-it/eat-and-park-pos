@@ -1539,6 +1539,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 150);
   const [category, setCategory] = useState("All");
+  const [showFav, setShowFav] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [runningOrders, setRunningOrders] = useState([]);
   const [discount, setDiscount] = useState(0);
@@ -1664,7 +1665,8 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const favItems = useMemo(() => {
     const cnt = {};
     orders.forEach((o) => { if (o.status === "cancelled") return; (o.items || []).forEach((it) => { cnt[it.itemId] = (cnt[it.itemId] || 0) + (Number(it.qty) || 0); }); });
-    return menu.filter((m) => m.available && cnt[m.id]).sort((a, b) => cnt[b.id] - cnt[a.id]).slice(0, 8);
+    const seenFav = new Set();
+    return menu.filter((m) => m.available && cnt[m.id]).sort((a, b) => cnt[b.id] - cnt[a.id]).filter((m) => { const k = String(m.name || "").trim().toLowerCase(); if (seenFav.has(k)) return false; seenFav.add(k); return true; }).slice(0, 12);
   }, [orders, menu]);
   const categories = useMemo(() => ["All", ...Array.from(new Set(menu.map(m => m.category)))], [menu]);
   const filtered = useMemo(() => menu.filter(m => m.available && (category === "All" || m.category === category) && (!debouncedSearch.trim() || m.name.toLowerCase().includes(debouncedSearch.toLowerCase()))), [menu, category, debouncedSearch]);
@@ -1936,7 +1938,10 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", gap: 12, overflow: isMobile ? "auto" : "hidden", padding: isMobile ? 8 : 12, paddingBottom: isMobile ? 80 : 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, overflow: "hidden", height: isMobile ? "44vh" : undefined, flex: isMobile ? undefined : 1, flexShrink: 0, minWidth: 0 }}>
           {favItems.length > 0 && !search.trim() && (
-            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, flexShrink: 0 }}>
+            <button onClick={() => { haptic(); setShowFav((v) => !v); }} style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999, border: "1px solid " + C.gold, background: showFav ? C.gold : C.card, color: showFav ? "#fff" : C.goldText, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>⭐ Favourites ({favItems.length}) {showFav ? "▲" : "▼"}</button>
+          )}
+          {showFav && favItems.length > 0 && !search.trim() && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: 8, maxHeight: 150, overflowY: "auto", background: C.goldLight, border: "1px solid " + C.line, borderRadius: 12, flexShrink: 0 }}>
               {favItems.map((m) => (
                 <button key={"fav" + m.id} onClick={() => setQty(m.id, (cart[m.id] || 0) + 1)} style={{ padding: "7px 12px", borderRadius: 20, border: "1px solid " + (C.gold || C.red), background: cart[m.id] ? (C.gold || C.red) : C.card, color: cart[m.id] ? "#fff" : C.ink, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>⭐ {m.name}{cart[m.id] ? " ×" + cart[m.id] : ""}</button>
               ))}
