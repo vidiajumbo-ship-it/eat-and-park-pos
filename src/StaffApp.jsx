@@ -451,7 +451,7 @@ function EstimatePanel({ C, menu, isMobile, onClose, onMoveToCart }) {
             <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid " + C.line, borderRadius: 10 }}>
               {filtered.map((m) => (
                 <button key={m.id} onClick={() => addItem(m)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "10px 12px", border: "none", borderBottom: "1px solid " + C.line, background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: C.ink }}>
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>{m.name}{m.portion ? <span style={{ color: C.gray, fontWeight: 500 }}> ({m.portion})</span> : null}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>{m.name}</span>
                   <span style={{ fontSize: 13, fontWeight: 800, color: C.goldText, fontFamily: "monospace" }}>{inr(m.price)} ＋</span>
                 </button>
               ))}
