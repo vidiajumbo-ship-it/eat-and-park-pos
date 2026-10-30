@@ -596,24 +596,6 @@ function EstimatePanel({ C, menu, isMobile, onClose, onMoveToCart }) {
             </div>
           </div>
         )}
-              onSuggest={(newItems) => {
-                setMode("manual");
-                if (!newItems || newItems.length === 0) return;
-                
-                setItems((prev) => {
-                  const merged = [...prev];
-                  newItems.forEach((ni) => {
-                    const ex = merged.find((p) => p.id === ni.id);
-                    if (ex) ex.qty += ni.qty;
-                    else merged.push(ni);
-                  });
-                  return merged;
-                });
-                toast("✅ AI ne items add kar diye!", "success");
-              }}
-            />
-          </div>
-        
 
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Selected Items ({items.length})</div>
