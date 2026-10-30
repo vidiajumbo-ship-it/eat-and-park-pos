@@ -366,7 +366,16 @@ const SMART_AI_STEPS = [
   { key: "drink", q: "Drinks & Dessert?", options: ["Shakes / Cold Drinks", "Dessert (Sweet)", "Dono", "Skip karo"] },
 ];
 
-function InteractiveSuggest({ C, menu, persons, onSuggest }) {
+
+const SMART_AI_STEPS = [
+  { key: "type", q: "Khaane ka type kya rakhein?", options: ["Veg", "Non-Veg", "Mix (Veg + Non-Veg)"] },
+  { key: "starter", q: "Starter (Snacks) me kya loge?", options: ["Veg Starter", "Non-Veg Starter", "Starter Skip karo"] },
+  { key: "main", q: "Main Course me kya loge?", options: ["Paneer (Veg)", "Chicken / Mutton (Non-Veg)", "Dal (Simple Veg)", "Main Course Skip karo"] },
+  { key: "bread", q: "Bread / Roti me kya loge?", options: ["Tandoori Roti", "Naan / Butter Naan", "Bread Skip karo"] },
+  { key: "drink", q: "Drinks & Dessert?", options: ["Shakes / Cold Drinks", "Dessert (Sweet)", "Dono", "Skip karo"] },
+];
+
+function InteractiveSuggest({ C, menu, persons, onSuggest, onCancel }) {
   const [step, setStep] = React.useState(0);
   const [answers, setAnswers] = React.useState({});
 
@@ -420,10 +429,15 @@ function InteractiveSuggest({ C, menu, persons, onSuggest }) {
           </button>
         ))}
       </div>
-      {step > 0 && <button onClick={() => setStep(step - 1)} style={{ marginTop: 12, padding: "8px 16px", background: "transparent", border: "none", color: C.gray, fontWeight: 700, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>← Pichla step</button>}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
+        <button onClick={() => step > 0 ? setStep(step - 1) : onCancel()} style={{ padding: "8px 0", background: "transparent", border: "none", color: C.gray, fontWeight: 700, fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>
+          ← {step > 0 ? "Pichla step" : "Cancel"}
+        </button>
+      </div>
     </div>
   );
 }
+
 function EstimatePanel({ C, menu, isMobile, onClose, onMoveToCart }) {
   const [persons, setPersons] = React.useState(2);
   const [mode, setMode] = React.useState("manual");
@@ -493,7 +507,7 @@ function EstimatePanel({ C, menu, isMobile, onClose, onMoveToCart }) {
         </div>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <button style={btn(mode === "manual")} onClick={() => setMode("manual")}>✍️ Manual</button>
+          <button style={btn(mode === "manual")} onClick={() => { if (mode === "auto" && items.length > 0) { if(window.confirm("AI band ho jayega, par aapke items safe rahenge. Aage badhein?")) setMode("manual"); } else setMode("manual"); }}>✍️ Manual</button>
           <button style={btn(mode === "auto")} onClick={() => { setMode("auto"); runAuto(); }}>🤖 Smart AI Suggest</button>
         </div>
 
@@ -518,10 +532,30 @@ function EstimatePanel({ C, menu, isMobile, onClose, onMoveToCart }) {
         )}
 
         {mode === "auto" && (
-          <div style={{ marginBottom: 12, display: "flex", gap: 8 }}>
-            <button onClick={runAuto} style={{ ...btn(false), padding: "10px 16px" }}>🔄 Dobara suggest karo ({persons} persons)</button>
+          <div style={{ marginBottom: 12 }}>
+            <InteractiveSuggest
+              C={C}
+              menu={menu}
+              persons={Number(persons) || 1}
+              onCancel={() => setMode("manual")}
+              onSuggest={(newItems) => {
+                setMode("manual");
+                if (!newItems || newItems.length === 0) return;
+                
+                setItems((prev) => {
+                  const merged = [...prev];
+                  newItems.forEach((ni) => {
+                    const ex = merged.find((p) => p.id === ni.id);
+                    if (ex) ex.qty += ni.qty;
+                    else merged.push(ni);
+                  });
+                  return merged;
+                });
+                toast("✅ AI ne items add kar diye!", "success");
+              }}
+            />
           </div>
-        )}
+        
 
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Selected Items ({items.length})</div>
