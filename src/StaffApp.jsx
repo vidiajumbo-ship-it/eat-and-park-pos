@@ -1540,6 +1540,20 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const debouncedSearch = useDebounce(search, 150);
   const [category, setCategory] = useState("All");
   const [showFav, setShowFav] = useState(false);
+  const [pinnedIds, setPinnedIds] = useState([]);
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "settings", "favourites"), (s) => setPinnedIds(s.exists() && Array.isArray(s.data().ids) ? s.data().ids : []), () => {});
+    return () => unsub();
+  }, []);
+  const togglePin = async (id) => {
+    if (!isOwner) { toast("Favourite sirf owner pin kar sakta hai", "warning"); return; }
+    const prev = pinnedIds;
+    const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+    haptic(8);
+    setPinnedIds(next);
+    try { await setDoc(doc(db, "settings", "favourites"), { ids: next, updatedAt: Date.now() }); }
+    catch (e) { setPinnedIds(prev); toast(e.message, "error"); }
+  };
   const [placing, setPlacing] = useState(false);
   const [runningOrders, setRunningOrders] = useState([]);
   const [discount, setDiscount] = useState(0);
@@ -1666,8 +1680,8 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     const cnt = {};
     orders.forEach((o) => { if (o.status === "cancelled") return; (o.items || []).forEach((it) => { cnt[it.itemId] = (cnt[it.itemId] || 0) + (Number(it.qty) || 0); }); });
     const seenFav = new Set();
-    return menu.filter((m) => m.available && cnt[m.id]).sort((a, b) => cnt[b.id] - cnt[a.id]).filter((m) => { const k = String(m.name || "").trim().toLowerCase(); if (seenFav.has(k)) return false; seenFav.add(k); return true; }).slice(0, 12);
-  }, [orders, menu]);
+    return menu.filter((m) => m.available && (cnt[m.id] || pinnedIds.includes(m.id))).sort((a, b) => { const pa = pinnedIds.indexOf(a.id), pb = pinnedIds.indexOf(b.id); if (pa >= 0 || pb >= 0) return pa < 0 ? 1 : pb < 0 ? -1 : pa - pb; return cnt[b.id] - cnt[a.id]; }).filter((m) => { const k = String(m.name || "").trim().toLowerCase(); if (seenFav.has(k)) return false; seenFav.add(k); return true; }).slice(0, 12);
+  }, [orders, menu, pinnedIds]);
   const categories = useMemo(() => ["All", ...Array.from(new Set(menu.map(m => m.category)))], [menu]);
   const filtered = useMemo(() => menu.filter(m => m.available && (category === "All" || m.category === category) && (!debouncedSearch.trim() || m.name.toLowerCase().includes(debouncedSearch.toLowerCase()))), [menu, category, debouncedSearch]);
 
@@ -1959,6 +1973,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               return (
                 <button key={m.id} onClick={() => setQty(m.id, q + 1)} style={{ textAlign: "left", padding: isMobile ? 10 : 12, borderRadius: 10, border: `1.5px solid ${q > 0 ? C.green : C.line}`, background: C.card, cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isMobile ? 60 : 68, color: C.ink }}>
                   <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: C.ink, marginBottom: 4, lineHeight: 1.2 }}>{m.name}</div>
+                  {isOwner && <span role="button" title="Favourite pin" onClick={(e) => { e.stopPropagation(); togglePin(m.id); }} style={{ position: "absolute", bottom: 4, right: 6, fontSize: 16, lineHeight: 1, padding: 4, cursor: "pointer", opacity: pinnedIds.includes(m.id) ? 1 : 0.35 }}>{pinnedIds.includes(m.id) ? "⭐" : "☆"}</span>}
                   <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(m.price)}</div>
                   {q > 0 && <span style={{ position: "absolute", top: 6, right: 6, background: C.green, color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 10, fontWeight: 800, animation: "successBounce 0.3s" }}>{q}</span>}
                 </button>
