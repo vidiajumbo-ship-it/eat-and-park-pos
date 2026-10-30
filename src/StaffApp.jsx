@@ -1742,13 +1742,28 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
           if (live.paid) throw new Error("Order paid ho chuka hai - items add nahi ho sakte");
           if (live.status === "cancelled") throw new Error("Order cancelled hai");
           const liveKots = live.kots && live.kots.length ? live.kots : baseKots;
-          tx.update(oref, { kots: [...liveKots, runKot], items: [...(live.items || []), ...newItems], status: "new", finalTotal: (Number(live.finalTotal) || 0) + addedTotal, subtotal: (Number(live.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
+          tx.update(oref, { kots: [...liveKots, runKot], items: (() => {
+              const merged = [...(live.items || [])];
+              newItems.forEach(newItem => {
+                const existing = merged.find(i => i.itemId === newItem.itemId);
+                if (existing) existing.qty += newItem.qty;
+                else merged.push(newItem);
+              });
+              return merged;
+            })(), status: "new", finalTotal: (Number(live.finalTotal) || 0) + addedTotal, subtotal: (Number(live.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
         });
         printKOT({ ...base, items: newItems, kots: [runKot] });
         haptic(30);
         toast(`KOT #${nextNo} added & printing`, "success");
         onBack();
-      } catch (e) { toast(e.message, "error"); } finally { lockRef.current = false; setPlacing(false); }
+      } catch (e) {
+        if (e.message === "REFRESH_NEEDED" || e.message.includes("badal diya")) {
+          toast("Order update ho gaya tha, please wapas table par click karein.", "warning");
+          onBack();
+        } else {
+          toast(e.message, "error");
+        }
+      } finally { lockRef.current = false; setPlacing(false); }
       return;
     }
     setPlacing(true);
@@ -1766,7 +1781,14 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       haptic(30);
       toast("Order placed! KOT printing", "success");
       onBack();
-    } catch (e) { toast(e.message, "error"); } finally { lockRef.current = false; setPlacing(false); }
+    } catch (e) {
+        if (e.message === "REFRESH_NEEDED" || e.message.includes("badal diya")) {
+          toast("Order update ho gaya tha, please wapas table par click karein.", "warning");
+          onBack();
+        } else {
+          toast(e.message, "error");
+        }
+      } finally { lockRef.current = false; setPlacing(false); }
   };
 
   const handleSaveBill = async () => {
@@ -1806,7 +1828,14 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       logAudit("paid", { orderId: existingOrder.id, total: applied.finalTotal, mode: payMode }); toast("Payment received! Bill printing", "success");
       if (onPaidSuccess) onPaidSuccess();
       onBack();
-    } catch (e) { toast(e.message, "error"); } finally { lockRef.current = false; setPlacing(false); }
+    } catch (e) {
+        if (e.message === "REFRESH_NEEDED" || e.message.includes("badal diya")) {
+          toast("Order update ho gaya tha, please wapas table par click karein.", "warning");
+          onBack();
+        } else {
+          toast(e.message, "error");
+        }
+      } finally { lockRef.current = false; setPlacing(false); }
   };
 
   const addRunningItems = async (orderId) => {
@@ -1828,12 +1857,27 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         if (live.paid) throw new Error("Order paid ho chuka hai - items add nahi ho sakte");
         if (live.status === "cancelled") throw new Error("Order cancelled hai");
         const liveKots = live.kots && live.kots.length ? live.kots : baseKots;
-        tx.update(oref, { kots: [...liveKots, runKot], items: [...(live.items || []), ...newItems], status: "new", finalTotal: (Number(live.finalTotal) || 0) + addedTotal, subtotal: (Number(live.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
+        tx.update(oref, { kots: [...liveKots, runKot], items: (() => {
+              const merged = [...(live.items || [])];
+              newItems.forEach(newItem => {
+                const existing = merged.find(i => i.itemId === newItem.itemId);
+                if (existing) existing.qty += newItem.qty;
+                else merged.push(newItem);
+              });
+              return merged;
+            })(), status: "new", finalTotal: (Number(live.finalTotal) || 0) + addedTotal, subtotal: (Number(live.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
       });
       printKOT({ ...baseOrder, items: newItems, kots: [runKot] });
       toast(`KOT #${nextNo} added`, "success");
       onBack();
-    } catch (e) { toast(e.message, "error"); } finally { lockRef.current = false; setPlacing(false); }
+    } catch (e) {
+        if (e.message === "REFRESH_NEEDED" || e.message.includes("badal diya")) {
+          toast("Order update ho gaya tha, please wapas table par click karein.", "warning");
+          onBack();
+        } else {
+          toast(e.message, "error");
+        }
+      } finally { lockRef.current = false; setPlacing(false); }
   };
 
   return (
