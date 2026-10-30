@@ -1663,8 +1663,14 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
 
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
   const resolveItem = (id) => { const m = menu.find(x => x.id === id); const ex = existingItems.find(e => e.itemId === id); if (ex && !addMoreMode) return ex; return m || ex || null; };
-  const cartSubtotal = cartItems.reduce((s, [id, q]) => { const m = resolveItem(id); return s + (rates[id] ?? m?.price ?? 0) * q; }, 0);
-  const grossSub = addMoreMode ? existingSubtotal + cartSubtotal : cartSubtotal;
+  const cartSubtotal = cartItems.reduce((s, [id, q]) => { 
+    const m = resolveItem(id); 
+    const ex = existingItems.find(e => e.itemId === id);
+    // Agar item pehle se order me hai (addMoreMode), toh purani qty + nayi qty ka price le
+    const effectiveQty = addMoreMode && ex ? (ex.qty + q) : q; 
+    return s + (rates[id] ?? m?.price ?? 0) * effectiveQty; 
+  }, 0);
+  const grossSub = cartSubtotal; // Ab yeh khud hi sahi calculate ho raha hai
   const discAmt = Math.round(grossSub * discount / 100);
   const gstAmt = Math.round((grossSub - discAmt) * gstRate / 100);
   const totalAmount = Math.max(0, grossSub - discAmt) + gstAmt;
