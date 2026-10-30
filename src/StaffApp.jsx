@@ -1593,7 +1593,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     setPlacing(true);
     try {
       const applied = await applyCartChanges();
-      printBill({ ...existingOrder, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: false });
+      printBill({ ...existingOrder, items: applied.finalItems, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: false });
       toast("Bill saved & printing", "success");
       onBack();
     } catch (e) { toast(e.message, "error"); } finally { setPlacing(false); }
@@ -1695,45 +1695,46 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const applyCartChanges = async () => {
     if (!existingOrder) throw new Error("No existing order to update");
     const existing = existingOrder.items || [];
-    const existingMap = {};
-    existing.forEach(it => { existingMap[it.itemId] = (existingMap[it.itemId] || 0) + it.qty; });
-    const nextKotNo = Math.max(1, ...(existingOrder.kots || []).map(k => k.kotNumber || 1)) + 1;
-    const finalItemsMap = {};
+    const oldQty = {}, oldFirst = {};
     existing.forEach(it => {
-      if (!finalItemsMap[it.itemId]) finalItemsMap[it.itemId] = { itemId: it.itemId, name: it.name, portion: it.portion || "", price: it.price, qty: 0, kotNumber: it.kotNumber || 1 };
-      finalItemsMap[it.itemId].qty += it.qty;
+      oldQty[it.itemId] = (oldQty[it.itemId] || 0) + it.qty;
+      if (!oldFirst[it.itemId]) oldFirst[it.itemId] = it;
     });
+    const nextKotNo = Math.max(1, ...(existingOrder.kots || []).map(k => k.kotNumber || 1)) + 1;
+
+    const finalItems = [];
     const newKotItems = [];
     Object.entries(cart).forEach(([id, qty]) => {
       const q = Number(qty) || 0;
       if (q <= 0) return;
       const m = menu.find(x => x.id === id);
-      const ex = existing.find(e => e.itemId === id);
+      const ex = oldFirst[id];
       const price = rates[id] ?? ex?.price ?? m?.price ?? 0;
       const name = ex?.name ?? m?.name ?? "Item";
       const portion = ex?.portion ?? m?.portion ?? "";
-      if (finalItemsMap[id]) {
-        finalItemsMap[id].qty += q;
-        if (rates[id] !== undefined) finalItemsMap[id].price = rates[id];
-      } else {
-        finalItemsMap[id] = { itemId: id, name, portion, price, qty: q, kotNumber: nextKotNo };
-      }
-      newKotItems.push({ itemId: id, name, portion, price, qty: q, kotNumber: nextKotNo });
+      const prev = oldQty[id] || 0;
+      finalItems.push({ itemId: id, name, portion, price, qty: q, kotNumber: ex?.kotNumber || nextKotNo });
+      if (q > prev) newKotItems.push({ itemId: id, name, portion, price, qty: q - prev, kotNumber: nextKotNo });
     });
-    const finalItems = Object.values(finalItemsMap).filter(it => it.qty > 0);
     if (finalItems.length === 0) throw new Error("Bill me kam se kam 1 item hona chahiye");
+
+    const removedItems = Object.keys(oldQty)
+      .filter(id => (Number(cart[id]) || 0) < oldQty[id])
+      .map(id => ({ ...oldFirst[id], qty: oldQty[id] - (Number(cart[id]) || 0) }));
+
     const sub = finalItems.reduce((s, it) => s + it.price * it.qty, 0);
     const d = Math.round((sub * discount) / 100);
     const g = Math.round(((sub - d) * gstRate) / 100);
     const finalTotal = Math.max(0, sub - d) + g;
-    const removedItems = existing.filter(it => !(it.itemId in cart) || cart[it.itemId] <= 0);
+
     if (removedItems.length) logAudit("items_removed", { orderId: existingOrder.id, table: existingOrder.table || "", items: removedItems.map(i => i.qty + "x " + i.name).join(", ") });
+
     const extra = {};
     if (newKotItems.length || removedItems.length) {
       const baseKots = existingOrder.kots?.length ? existingOrder.kots : [{ id: uid("kot"), kotNumber: 1, items: existing, createdAt: existingOrder.createdAt, status: existingOrder.status }];
       const editKot = { id: uid("kot"), kotNumber: nextKotNo, items: newKotItems, removedItems, createdAt: Date.now(), status: "new", isRunning: true, isEdit: true };
       extra.kots = [...baseKots, editKot];
-      extra.status = "new"; extra.lastKotAt = Date.now();
+      if (newKotItems.length) { extra.status = "new"; extra.lastKotAt = Date.now(); }
     }
     await runTransaction(db, async (tx) => {
       const oref = doc(db, "orders", existingOrder.id);
@@ -1849,7 +1850,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         const applied = await applyCartChanges();
         await updateDoc(doc(db, "orders", existingOrder.id), { payment: "due", paid: false, paymentStatus: "due", status: "served", dueName: dn || "Unknown", duePhone: dp, dueAt: Date.now() });
         logAudit("due_created", { orderId: existingOrder.id, total: applied.finalTotal, name: dn || "" });
-        printBill({ ...existingOrder, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: "due", paid: false });
+        printBill({ ...existingOrder, items: applied.finalItems, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: "due", paid: false });
         toast("Due me save ho gaya", "success");
         onBack();
         return;
@@ -1858,7 +1859,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       const paidPatch = { paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: payMode };
       if (existingOrder.orderType === "parcel") paidPatch.status = "served";
       await updateDoc(doc(db, "orders", existingOrder.id), paidPatch);
-      printBill({ ...existingOrder, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: true });
+      printBill({ ...existingOrder, items: applied.finalItems, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: true });
       haptic(80);
       logAudit("paid", { orderId: existingOrder.id, total: applied.finalTotal, mode: payMode }); toast("Payment received! Bill printing", "success");
       if (onPaidSuccess) onPaidSuccess();
