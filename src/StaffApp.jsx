@@ -61,7 +61,7 @@ input:focus, textarea:focus { border-color: #B8860B !important; box-shadow: 0 0 
 // ===========================================================================
 // UTILS
 // ===========================================================================
-const uid = (p) => p + Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 6);
+const uid = (p) => p + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
 const inr = (n) => { const v = Number(n); return "₹" + (isFinite(v) ? v : 0).toLocaleString("en-IN"); };
 const timeAgo = (ts) => {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -74,12 +74,15 @@ const timeAgo = (ts) => {
 };
 const TABLE_COUNT = 20;
 // Chalu parcel: paid / due / cancelled nahi, aur 18 ghante ke andar
+const PAID_STATUSES = ["paid", "paid_unverified"];
 const isOpenParcel = (o) =>
-  o.orderType === "parcel" && o.status !== "cancelled" && !o.paid && o.paymentStatus !== "due" &&
+  o.orderType === "parcel" && o.status !== "cancelled" && !o.paid &&
+  o.paymentStatus !== "due" && !PAID_STATUSES.includes(o.paymentStatus) &&
   Date.now() - (o.createdAt || 0) < 18 * 3600 * 1000;
 // Table tab tak occupied jab tak paid / due / cancelled na ho (served hone par table free nahi dikhna chahiye)
 const isOpenDineIn = (o) =>
-  o.orderType === "dine_in" && o.status !== "cancelled" && !o.paid && o.paymentStatus !== "due" &&
+  o.orderType === "dine_in" && o.status !== "cancelled" && !o.paid &&
+  o.paymentStatus !== "due" && !PAID_STATUSES.includes(o.paymentStatus) &&
   Date.now() - (o.createdAt || 0) < 18 * 3600 * 1000;
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -351,6 +354,39 @@ function StaffAppInner() {
   const [muted, setMuted] = useState(() => localStorage.getItem("staff_mute") === "1");
   const prevNewIdsRef = useRef(null);
   const [lowCount, setLowCount] = useState(0);
+  // 🔔 Waiter calls listener (unified patch)
+  const [calls, setCalls] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const prevCallsRef = useRef(0);
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(
+      query(collection(db, "calls"), where("status", "==", "active")),
+      (snap) => {
+        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setCalls(list);
+        if (list.length > prevCallsRef.current) {
+          try { new Audio("https://assets.mixkit.co/active-storage/sfx/951/951-preview.mp3").play().catch(() => {}); } catch (e) {}
+        }
+        prevCallsRef.current = list.length;
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, [user]);
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(
+      collection(db, "bookings"),
+      (snap) => setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      () => {}
+    );
+    return () => unsub();
+  }, [user]);
+  const resolveCall = async (id) => {
+    try { await updateDoc(doc(db, "calls", id), { status: "resolved", resolvedAt: Date.now() }); }
+    catch (e) { setCalls(prev => prev.filter(c => c.id !== id)); }
+  };
   useEffect(() => {
     if (!user) return;
     let invItems = [], invStock = {};
@@ -401,8 +437,13 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
     if (!user) return;
     const startToday = new Date(); startToday.setHours(0,0,0,0);
     const unsubMenu = onSnapshot(doc(db, "settings", "menu"), (snap) => {
-      if (snap.exists() && Array.isArray(snap.data().items)) setMenu(snap.data().items);
-    }, (err) => { console.error("menu listener:", err); });
+  if (snap.exists() && Array.isArray(snap.data().items) && snap.data().items.length > 0) {
+    setMenu(snap.data().items);
+  } else {
+    console.warn("⚠️ Menu khali hai. Customer app se pehli baar khulne pe seed hoga.");
+    setMenu([]);
+  }
+}, (err) => { console.error("menu listener:", err); });
     const startRange = new Date(); startRange.setDate(startRange.getDate() - 30); startRange.setHours(0,0,0,0);
     const unsubOrders = onSnapshot(query(collection(db, "orders"), where("createdAt", ">=", startRange.getTime())), (snap) => {
       const newOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -565,6 +606,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
           { id: "inventory", label: "🧾 Saman" + (lowCount ? " (" + lowCount + ")" : "") },
           { id: "audit", label: "📝 Audit" },
           { id: "expenses", label: "💸 Kharcha" },
+            { id: "bookings", label: "📅 Bookings" },
           { id: "reports", label: "📈 Reports" },
           { id: "import", label: "📥 Import" },
         ].map(tab => (
@@ -574,7 +616,20 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
 
       {/* CONTENT */}
       <div style={{ flex: 1, overflow: "auto", padding: isMobile ? 10 : 16 }}>
-        {activeTab === "tables" && (
+        
+{calls.length > 0 && (
+  <div style={{ background: C.amberLight, borderBottom: `2px solid ${C.amber}`, padding: "10px 16px", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+    <span style={{ fontWeight: 800, fontSize: 13, color: C.amber }}>🔔 Waiter Called ({calls.length}):</span>
+    {calls.map(c => (
+      <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 6, background: C.card, borderRadius: 20, padding: "4px 6px 4px 12px", border: `1px solid ${C.line}` }}>
+        <span style={{ fontWeight: 800, fontSize: 12, color: C.ink }}>Table {c.table}</span>
+        <button onClick={() => resolveCall(c.id)} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 14, padding: "4px 10px", fontWeight: 800, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>✓ Done</button>
+      </div>
+    ))}
+  </div>
+)}
+
+{activeTab === "tables" && (
           <TablesView C={C} isMobile={isMobile} orders={orders}
             onTableClick={(t) => { haptic(); setSelectedTable(t); setCart({}); setBillOrder(null); setAddMoreMode(false); }}
             onEditBill={(order) => { haptic(); setBillOrder(order); setSelectedTable(order.table); setCart({}); setAddMoreMode(false); }}
@@ -586,7 +641,31 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
             search={searchTable} setSearch={setSearchTable}
             todayRevenue={todayRevenue} activeOrders={activeOrders.length} />
         )}
-        {activeTab === "orders" && (
+        
+{activeTab === "bookings" && (
+  <div>
+    <h2 style={{ margin: "0 0 16px", fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Bookings ({bookings?.length || 0})</h2>
+    {(!bookings || bookings.length === 0) && <div style={{ textAlign: "center", padding: 40, color: C.gray }}><div style={{ fontSize: 40, marginBottom: 8 }}>📅</div><div style={{ fontSize: 13, fontWeight: 700 }}>Koi booking nahi</div></div>}
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {(bookings || []).sort((a,b) => b.createdAt - a.createdAt).map(b => (
+        <div key={b.id} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, gap: 8, flexWrap: "wrap" }}>
+            <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{b.type === "party" ? "🎉 Party" : "🍽️ Table"}</div>
+            <span style={{ background: C.amberLight, color: C.amber, padding: "2px 10px", borderRadius: 10, fontSize: 11, fontWeight: 800 }}>{(b.status || "pending").toUpperCase()}</span>
+          </div>
+          <div style={{ fontSize: 12, color: C.ink, fontWeight: 700 }}>{b.name} · {b.phone}</div>
+          <div style={{ fontSize: 11, color: C.gray, marginTop: 4 }}>{b.date} at {b.time} · {b.guests} guests</div>
+          <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+            <a href={`https://wa.me/91${b.phone}`} target="_blank" rel="noopener noreferrer" style={{ background: "#25D366", color: "#fff", padding: "7px 14px", borderRadius: 8, textDecoration: "none", fontWeight: 800, fontSize: 12 }}>✅ Confirm</a>
+            <button onClick={async () => { if (window.confirm("Delete booking?")) { try { await deleteDoc(doc(db, "bookings", b.id)); toast("Deleted", "success"); } catch (e) { toast(e.message, "error"); } } }} style={{ background: "transparent", color: C.red, border: `1.5px solid ${C.red}`, padding: "7px 14px", borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
+{activeTab === "orders" && (
           <OrdersView C={C} isMobile={isMobile} orders={orders} menu={menu} waiterName={waiterName} isOwner={isOwner} onAddMore={(order) => { setBillOrder(order); setSelectedTable(order.table || "parcel"); setCart({}); setAddMoreMode(true); }} onEditBill={(order) => { setBillOrder(order); setSelectedTable(order.table || "parcel"); setCart({}); setAddMoreMode(false); }} filter={ordersFilter} setFilter={setOrdersFilter} rangeStart={ordersRange?.start} rangeEnd={ordersRange?.end} setOrders={setOrders} onPaidSuccess={() => { setConfetti(true); setTimeout(() => setConfetti(false), 1800); }} />
         )}
         {activeTab === "parcel" && (
@@ -1632,7 +1711,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     await runTransaction(db, async (tx) => {
       const oref = doc(db, "orders", existingOrder.id);
       const osnap = await tx.get(oref);
-      assertEditable(osnap.exists() ? osnap.data() : null, existingOrder);
+      assertEditable(osnap.exists() ? osnap.data() : null);
       tx.update(oref, { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, billEditedAt: Date.now(), ...extra });
     });
     if (newKotItems.length) printKOT({ ...existingOrder, items: newKotItems, kots: [] });
@@ -1952,7 +2031,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
 // AUDIT LOG
 // ===========================================================================
 const logAudit = async (action, details = {}) => {
-  try { await addDoc(collection(db, "auditLog"), { action, ...details, by: auth.currentUser?.uid || "", at: Date.now() }); } catch (e) {}
+  try { await addDoc(collection(db, "auditLogs"), { action, ...details, by: auth.currentUser?.uid || "", at: Date.now() }); } catch (e) {}
 };
 
 // ===========================================================================
@@ -2747,7 +2826,7 @@ function AuditLogView({ C, isMobile }) {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const q = query(collection(db, "auditLog"), orderBy("at", "desc"), limit(200));
+    const q = query(collection(db, "auditLogs"), orderBy("at", "desc"), limit(200));
     const unsub = onSnapshot(q, s => {
       setLogs(s.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
@@ -3721,7 +3800,7 @@ function ImportView({ C, isMobile, isOwner, waiterName, onDone }) {
       }
 
       try {
-        await addDoc(collection(db, "auditLog"), {
+        await addDoc(collection(db, "auditLogs"), {
           action: "bulk_import",
           amount: stats.totalAmount,
           count: imported.expenses,

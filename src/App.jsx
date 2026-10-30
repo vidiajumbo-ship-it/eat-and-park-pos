@@ -185,7 +185,7 @@ function getLoyaltyTier(points) {
 // 3. UTILITY FUNCTIONS
 // ==
 
-function uid(prefix) { return prefix + Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 8); }
+function uid(prefix) { return prefix + Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6); }
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -2672,7 +2672,7 @@ if (savedCart) {
       items, waiter: waiterName || "Staff", takenBy: "waiter",
       kots: [{ id: uid("kot"), kotNumber: 1, items: items.map(it => ({ ...it, kotNumber: 1 })), createdAt: Date.now(), status: "new", isRunning: false }],
       notes: orderNotes, payment: "cash", paymentStatus: "pending",
-      status: "new", paid: false, createdAt: Date.now(),
+      status: "new", paid: (paymentInfo.status === "paid" || paymentInfo.status === "paid_unverified"), createdAt: Date.now(),
       coinsClaimed: true, earnedCoins: 0, rewardUsedCoins: 0,
       deliveryFee: 0, loyaltyDiscount: 0, discount: 0,
       subtotal: total, finalTotal: total
@@ -5564,7 +5564,7 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 28, borderBottom: `2px solid ${COLORS.line}`, overflowX: "auto" }}>
-        {["overview", "menu", "tables", "presets", "gallery", "settings", "offers", "loyalty", "inventory", "orders", "bookings", "promotions"].map((t) => (<button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button>))}
+        {["overview", "menu", "tables", "presets", "gallery", "settings", "offers", "loyalty", "orders", "bookings", "promotions"].map((t) => (<button key={t} onClick={() => setTab(t)} style={{ background: "none", border: "none", padding: "14px 20px", fontWeight: 800, fontSize: 15, textTransform: "capitalize", color: tab === t ? COLORS.copper : COLORS.textLight, borderBottom: tab === t ? `3px solid ${COLORS.copper}` : "3px solid transparent", cursor: "pointer", whiteSpace: "nowrap" }}>{t}</button>))}
       </div>
       
 
@@ -6025,31 +6025,7 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
         </>
       )}
 
-      {tab === "inventory" && (
-        <>
-          <InventoryAlertBanner inventory={inventory} />
-          <div style={{ background: COLORS.paper, padding: 24, borderRadius: 16, marginBottom: 24 }}>
-            <div style={{ fontSize: 20, marginBottom: 16, fontWeight: 700 }}>Add Material</div>
-            <div style={{ display: 'flex', gap: 12 }}>
-              <input type="text" placeholder="Name" value={newInv.name} onChange={e => setNewInv({ ...newInv, name: e.target.value })} style={{ ...inputStyle, flex: 2 }} />
-              <input type="number" placeholder="Qty" value={newInv.stock} onChange={e => setNewInv({ ...newInv, stock: e.target.value })} style={{ ...inputStyle, flex: 1 }} />
-              <select value={newInv.unit} onChange={e => setNewInv({ ...newInv, unit: e.target.value })} style={{ ...inputStyle, flex: 1 }}><option value="kg">KG</option><option value="liters">L</option><option value="pcs">Pcs</option></select>
-              <button onClick={() => { if (newInv.name && newInv.stock) { addInventory({ ...newInv, id: uid('inv'), stock: Number(newInv.stock) }); setNewInv({ name: "", stock: "", unit: "kg" }) } }} style={primaryBtn}>Add</button>
-            </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-            {inventory.map(inv => (
-              <div key={inv.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, padding: 20, borderRadius: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div><div style={{ fontWeight: 800, fontSize: 17 }}>{inv.name}</div><div style={{ color: inv.stock < 2 ? COLORS.error : COLORS.textLight, fontWeight: 700 }}>{Number(inv.stock).toFixed(2)} {inv.unit}</div></div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => updateStock(inv.id, Math.max(0, inv.stock - 1))} style={{ width: 36, height: 36, borderRadius: 10, border: `1.5px solid ${COLORS.line}`, background: COLORS.paper, cursor: 'pointer', fontWeight: 800, fontSize: 18 }}>-</button>
-                  <button onClick={() => updateStock(inv.id, inv.stock + 1)} style={{ width: 36, height: 36, borderRadius: 10, border: 'none', background: COLORS.sageLight, color: COLORS.sageDark, cursor: 'pointer', fontWeight: 800, fontSize: 18 }}>+</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+      
 
       {tab === "orders" && (
         <div style={{ overflowX: "auto", borderRadius: 16, border: `1px solid ${COLORS.line}` }}>
