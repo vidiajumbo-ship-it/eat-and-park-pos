@@ -359,39 +359,20 @@ function buildSuggestion(menu, persons) {
 
 
 
+
 function InteractiveSuggest({ C, menu, persons, onSuggest, onCancel }) {
   const [step, setStep] = React.useState(0);
   const [selections, setSelections] = React.useState({});
 
-  const isVeg = (m) => m.veg;
-  
-  // Har step ke liye categories aur unke items filter karo
   const steps = [
-    {
-      title: "1. Starter (Snacks)",
-      filter: (m) => /starter|snack|tandoor|momos|roll/i.test(m.category || ""),
-    },
-    {
-      title: "2. Main Course",
-      filter: (m) => /main|curry|sabzi|gravy|paneer|chicken|mutton/i.test(m.category || ""),
-    },
-    {
-      title: "3. Bread (Roti/Naan)",
-      filter: (m) => /bread|roti|naan/i.test(m.category || ""),
-    },
-    {
-      title: "4. Rice / Biryani",
-      filter: (m) => /rice|biryani|pulao/i.test(m.category || ""),
-    },
-    {
-      title: "5. Drinks",
-      filter: (m) => /drink|shake|juice|cold|mojito/i.test(m.category || ""),
-    }
+    { title: "1. Starter (Snacks)", filter: (m) => /starter|snack|tandoor|momos|roll/i.test(m.category || ""), calcQty: (p) => Math.ceil(p / 3) },
+    { title: "2. Main Course", filter: (m) => /main|curry|sabzi|gravy|paneer|chicken|mutton/i.test(m.category || ""), calcQty: (p) => Math.ceil(p / 4) },
+    { title: "3. Bread (Roti/Naan)", filter: (m) => /bread|roti|naan/i.test(m.category || ""), calcQty: (p) => p * 2 },
+    { title: "4. Rice / Biryani", filter: (m) => /rice|biryani|pulao/i.test(m.category || ""), calcQty: (p) => Math.ceil(p / 3) },
+    { title: "5. Drinks / Shakes", filter: (m) => /drink|shake|juice|cold|mojito/i.test(m.category || ""), calcQty: (p) => p }
   ];
 
   const currentStepData = steps[step];
-  
-  // Current step ke items (veg/non-veg dono)
   const stepItems = menu.filter(m => m.available && currentStepData.filter(m));
 
   const handleSelectItem = (item) => {
@@ -403,36 +384,14 @@ function InteractiveSuggest({ C, menu, persons, onSuggest, onCancel }) {
     });
   };
 
-  const changeQty = (item, delta) => {
-    setSelections(prev => {
-      const next = { ...prev };
-      if (next[item.id]) {
-        const newQty = next[item.id].qty + delta;
-        if (newQty <= 0) delete next[item.id];
-        else next[item.id].qty = newQty;
-      }
-      return next;
-    });
-  };
-
   const handleNext = () => {
     if (step < steps.length - 1) {
       setStep(step + 1);
     } else {
-      // Calculation based on persons
       const finalItems = Object.values(selections).map(sel => {
-        let qty = sel.qty;
-        // Smart quantity logic based on category
-        const cat = sel.item.category || "";
-        if (/bread|roti|naan/i.test(cat)) qty = persons * 2;
-        else if (/rice|biryani/i.test(cat)) qty = Math.ceil(persons / 2);
-        else if (/starter|snack/i.test(cat)) qty = persons; 
-        else if (/drink|shake/i.test(cat)) qty = persons;
-        else qty = Math.ceil(persons * 0.7); // Main course
-        
-        return { id: sel.item.id, name: sel.item.name, price: sel.item.price, qty: Math.max(1, qty) };
+        const autoQty = currentStepData.calcQty(persons);
+        return { id: sel.item.id, name: sel.item.name, price: sel.item.price, qty: Math.max(1, autoQty) };
       });
-      
       onSuggest(finalItems);
     }
   };
@@ -441,43 +400,31 @@ function InteractiveSuggest({ C, menu, persons, onSuggest, onCancel }) {
     <div style={{ marginTop: 12, padding: 16, background: C.cardAlt, borderRadius: 12, border: "1px solid " + C.line }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ fontSize: 14, fontWeight: 800, color: C.ink }}>{currentStepData.title}</div>
-        <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>Step {step + 1}/{steps.length} (For {persons} persons)</div>
+        <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>{step + 1}/{steps.length} (For {persons} pax)</div>
       </div>
-
       <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 12 }}>
-        {stepItems.length === 0 && <div style={{ fontSize: 13, color: C.gray, textAlign: 'center', padding: 10 }}>Is category me kuch nahi mila</div>}
         {stepItems.map(m => {
           const isSelected = !!selections[m.id];
-          const qty = selections[m.id]?.qty || 0;
           return (
             <div key={m.id} onClick={() => !isSelected && handleSelectItem(m)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 8, borderBottom: "1px solid " + C.line, background: isSelected ? C.goldLight : 'transparent', borderRadius: 8, cursor: 'pointer', marginBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: m.veg ? 'green' : 'red' }}></span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{m.name}</span>
               </div>
-              
-              {isSelected ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.card, borderRadius: 6, padding: '2px 6px', border: "1px solid " + C.line }}>
-                  <button onClick={(e) => { e.stopPropagation(); changeQty(m, -1); }} style={{ border: 'none', background: 'transparent', fontSize: 16, cursor: 'pointer', color: C.gray }}>−</button>
-                  <span style={{ fontSize: 13, fontWeight: 800 }}>{qty}</span>
-                  <button onClick={(e) => { e.stopPropagation(); changeQty(m, 1); }} style={{ border: 'none', background: 'transparent', fontSize: 16, cursor: 'pointer', color: C.ink }}>+</button>
-                </div>
-              ) : (
-                <span style={{ fontSize: 13, fontWeight: 800, color: C.goldText }}>{inr(m.price)} +</span>
-              )}
+              {isSelected ? <span style={{ fontSize: 12, color: C.goldText, fontWeight: 800 }}>Selected ✓</span> : <span style={{ fontSize: 13, fontWeight: 800, color: C.goldText }}>{inr(m.price)} +</span>}
             </div>
           );
         })}
       </div>
-
       <div style={{ display: 'flex', gap: 8 }}>
         {step > 0 && <button onClick={() => setStep(step - 1)} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid " + C.line, background: C.card, fontWeight: 700, cursor: 'pointer', color: C.ink }}>← Pichla</button>}
         {step < steps.length - 1 ? (
-          <button onClick={handleNext} style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: C.gold, color: "#fff", fontWeight: 800, cursor: 'pointer' }}>Aage badho →</button>
+          <button onClick={handleNext} style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: C.gold, color: "#fff", fontWeight: 800, cursor: 'pointer' }}>Aage →</button>
         ) : (
-          <button onClick={handleNext} style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: C.green, color: "#fff", fontWeight: 800, cursor: 'pointer' }}>✅ Items Lagao</button>
+          <button onClick={handleNext} style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: C.green, color: "#fff", fontWeight: 800, cursor: 'pointer' }}>✅ Items Add Karo</button>
         )}
       </div>
+      <button onClick={onCancel} style={{ width: '100%', marginTop: 10, padding: 8, border: 'none', background: 'transparent', color: C.gray, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Cancel</button>
     </div>
   );
 }
@@ -576,68 +523,27 @@ function EstimatePanel({ C, menu, isMobile, onClose, onMoveToCart }) {
         )}
 
         {mode === "auto" && (
-          <div style={{ marginBottom: 12, padding: 16, background: C.cardAlt, borderRadius: 12, border: "1px solid " + C.line }}>
-            <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginBottom: 10 }}>
-              🤖 Smart AI Suggest (Persons: {persons})
-            </div>
-            
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button onClick={() => {
-                const starters = menu.filter(m => m.available && (m.category.includes("Starter") || m.category.includes("Snack") || m.category.includes("Momos")));
-                const paneer = menu.filter(m => m.available && m.category.includes("Paneer"));
-                const dal = menu.filter(m => m.available && m.category.includes("Dal"));
-                const roti = menu.filter(m => m.available && m.category.includes("Roti"));
-                const naan = menu.filter(m => m.available && m.category.includes("Naan"));
-                
-                let newItems = [];
-                if (starters.length) newItems.push({ id: starters[0].id, name: starters[0].name, price: starters[0].price, qty: Math.ceil(persons / 3) });
-                if (paneer.length) newItems.push({ id: paneer[0].id, name: paneer[0].name, price: paneer[0].price, qty: Math.ceil(persons / 4) });
-                if (dal.length) newItems.push({ id: dal[0].id, name: dal[0].name, price: dal[0].price, qty: Math.ceil(persons / 4) });
-                if (roti.length) newItems.push({ id: roti[0].id, name: roti[0].name, price: roti[0].price, qty: persons * 2 });
-                if (naan.length) newItems.push({ id: naan[0].id, name: naan[0].name, price: naan[0].price, qty: persons });
-                
-                if (!newItems.length) { toast("Menu me items nahi mile", "warning"); return; }
-                setItems(prev => {
+          <div style={{ marginBottom: 12 }}>
+            <InteractiveSuggest
+              C={C}
+              menu={menu}
+              persons={Number(persons) || 1}
+              onCancel={() => setMode("manual")} 
+              onSuggest={(newItems) => {
+                setMode("manual");
+                if (!newItems || newItems.length === 0) return;
+                setItems((prev) => {
                   const merged = [...prev];
-                  newItems.forEach(ni => {
-                    const ex = merged.find(p => p.id === ni.id);
+                  newItems.forEach((ni) => {
+                    const ex = merged.find((p) => p.id === ni.id);
                     if (ex) ex.qty += ni.qty;
                     else merged.push(ni);
                   });
                   return merged;
                 });
-                setMode("manual");
-                toast("✅ AI ne items add kar diye!", "success");
-              }} style={{ padding: "10px 16px", borderRadius: 8, background: C.card, border: "1px solid " + C.line, color: C.ink, fontWeight: 700, cursor: "pointer" }}>
-                🟢 Veg Combo
-              </button>
-
-              <button onClick={() => {
-                const nonVegStarters = menu.filter(m => m.available && (m.category.includes("Chicken") || m.category.includes("Mutton") || m.category.includes("Fish")));
-                const chicken = menu.filter(m => m.available && m.category.includes("Chicken"));
-                const naan = menu.filter(m => m.available && m.category.includes("Naan"));
-                
-                let newItems = [];
-                if (nonVegStarters.length) newItems.push({ id: nonVegStarters[0].id, name: nonVegStarters[0].name, price: nonVegStarters[0].price, qty: Math.ceil(persons / 3) });
-                if (chicken.length) newItems.push({ id: chicken[0].id, name: chicken[0].name, price: chicken[0].price, qty: Math.ceil(persons / 4) });
-                if (naan.length) newItems.push({ id: naan[0].id, name: naan[0].name, price: naan[0].price, qty: persons });
-                
-                if (!newItems.length) { toast("Menu me Non-Veg items nahi mile", "warning"); return; }
-                setItems(prev => {
-                  const merged = [...prev];
-                  newItems.forEach(ni => {
-                    const ex = merged.find(p => p.id === ni.id);
-                    if (ex) ex.qty += ni.qty;
-                    else merged.push(ni);
-                  });
-                  return merged;
-                });
-                setMode("manual");
-                toast("✅ AI ne items add kar diye!", "success");
-              }} style={{ padding: "10px 16px", borderRadius: 8, background: C.card, border: "1px solid " + C.line, color: C.ink, fontWeight: 700, cursor: "pointer" }}>
-                🔴 Non-Veg Combo
-              </button>
-            </div>
+                toast("✅ Sahi quantity ke sath items add ho gaye!", "success");
+              }}
+            />
           </div>
         )}
 
