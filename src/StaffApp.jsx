@@ -325,136 +325,43 @@ function SplashScreen({ C }) {
 
 
 // ===========================================================================
-// 📋 ESTIMATE PANEL — persons + items (manual ya auto) + one-click cart
+// 📋 ESTIMATE PANEL v2 — persistent items, manual qty, popular picks
 // ===========================================================================
-
-const SUGGEST_RULES = [
-  { re: /starter|snack|tandoor|appetizer|momos|roll/i, perPerson: 0.5, pick: 2 },
-  { re: /main|curry|sabzi|gravy|paneer|chicken|mutton|fish|egg/i, perPerson: 0.7, pick: 3 },
-  { re: /bread|roti|naan|paratha/i, perPerson: 2, pick: 2 },
-  { re: /rice|biryani|pulao/i, perPerson: 0.5, pick: 1 },
-  { re: /dessert|sweet|ice/i, perPerson: 0.5, pick: 1 },
-  { re: /drink|beverage|juice|shake|cold|coffee/i, perPerson: 1, pick: 2 },
-  { re: /thali/i, perPerson: 1, pick: 1 },
-];
-
-function buildSuggestion(menu, persons) {
-  const p = Number(persons) || 1;
-  const out = [];
-  const addItems = (regex, calcQty, limit = 1) => {
-    const pool = menu.filter(m => m.available !== false && regex.test(m.category || ""));
-    if (!pool.length) return;
-    const picked = pool.sort(() => 0.5 - Math.random()).slice(0, limit);
-    picked.forEach(m => {
-      out.push({ id: m.id, name: m.name, price: Number(m.price) || 0, qty: calcQty(p) });
-    });
-  };
-  addItems(/starter|snack|tandoor|momos|roll/i, (p) => Math.ceil(p / 3), 1);
-  addItems(/main|curry|sabzi|gravy|paneer|chicken|mutton/i, (p) => Math.ceil(p / 4), 2);
-  addItems(/bread|roti|naan/i, (p) => p * 2, 1);
-  addItems(/rice|biryani|pulao/i, (p) => Math.ceil(p / 3), 1);
-  addItems(/drink|shake|juice|cold|mojito/i, (p) => p, 1);
-  return out;
-}
-
-
-
-
-function InteractiveSuggest({ C, menu, persons, onSuggest, onCancel }) {
-  const [step, setStep] = React.useState(0);
-  const [selections, setSelections] = React.useState({});
-
-  const steps = [
-    { title: "1. Starter (Snacks)", filter: (m) => /starter|snack|tandoor|momos|roll/i.test(m.category || ""), calcQty: (p) => Math.ceil(p / 3) },
-    { title: "2. Main Course", filter: (m) => /main|curry|sabzi|gravy|paneer|chicken|mutton/i.test(m.category || ""), calcQty: (p) => Math.ceil(p / 4) },
-    { title: "3. Bread (Roti/Naan)", filter: (m) => /bread|roti|naan/i.test(m.category || ""), calcQty: (p) => p * 2 },
-    { title: "4. Rice / Biryani", filter: (m) => /rice|biryani|pulao/i.test(m.category || ""), calcQty: (p) => Math.ceil(p / 3) },
-    { title: "5. Drinks / Shakes", filter: (m) => /drink|shake|juice|cold|mojito/i.test(m.category || ""), calcQty: (p) => p }
-  ];
-
-  const currentStepData = steps[step];
-  const stepItems = menu.filter(m => m.available && currentStepData.filter(m));
-
-  const handleSelectItem = (item) => {
-    setSelections(prev => {
-      const next = { ...prev };
-      if (next[item.id]) delete next[item.id];
-      else next[item.id] = { item, qty: 1 };
-      return next;
-    });
-  };
-
-  const handleNext = () => {
-    if (step < steps.length - 1) {
-      setStep(step + 1);
-    } else {
-      const finalItems = Object.values(selections).map(sel => {
-        const autoQty = currentStepData.calcQty(persons);
-        return { id: sel.item.id, name: sel.item.name, price: sel.item.price, qty: Math.max(1, autoQty) };
-      });
-      onSuggest(finalItems);
-    }
-  };
-
+function EstStepper({ C, q, onChange, size = 32 }) {
+  const b = { width: size, height: size, border: "none", fontSize: 17, fontWeight: 900, cursor: "pointer", padding: 0, fontFamily: "inherit" };
   return (
-    <div style={{ marginTop: 12, padding: 16, background: C.cardAlt, borderRadius: 12, border: "1px solid " + C.line }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: C.ink }}>{currentStepData.title}</div>
-        <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>{step + 1}/{steps.length} (For {persons} pax)</div>
-      </div>
-      <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 12 }}>
-        {stepItems.map(m => {
-          const isSelected = !!selections[m.id];
-          return (
-            <div key={m.id} onClick={() => !isSelected && handleSelectItem(m)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 8, borderBottom: "1px solid " + C.line, background: isSelected ? C.goldLight : 'transparent', borderRadius: 8, cursor: 'pointer', marginBottom: 4 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 10, height: 10, borderRadius: '50%', background: m.veg ? 'green' : 'red' }}></span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{m.name}</span>
-              </div>
-              {isSelected ? <span style={{ fontSize: 12, color: C.goldText, fontWeight: 800 }}>Selected ✓</span> : <span style={{ fontSize: 13, fontWeight: 800, color: C.goldText }}>{inr(m.price)} +</span>}
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        {step > 0 && <button onClick={() => setStep(step - 1)} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid " + C.line, background: C.card, fontWeight: 700, cursor: 'pointer', color: C.ink }}>← Pichla</button>}
-        {step < steps.length - 1 ? (
-          <button onClick={handleNext} style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: C.gold, color: "#fff", fontWeight: 800, cursor: 'pointer' }}>Aage →</button>
-        ) : (
-          <button onClick={handleNext} style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: C.green, color: "#fff", fontWeight: 800, cursor: 'pointer' }}>✅ Items Add Karo</button>
-        )}
-      </div>
-      <button onClick={onCancel} style={{ width: '100%', marginTop: 10, padding: 8, border: 'none', background: 'transparent', color: C.gray, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+    <div style={{ display: "flex", alignItems: "center", border: "1.5px solid " + C.gold, borderRadius: 10, overflow: "hidden", flexShrink: 0, background: C.card }}>
+      <button onClick={() => onChange(q - 1)} style={{ ...b, background: C.cardAlt, color: C.ink }}>−</button>
+      <span style={{ minWidth: 30, textAlign: "center", fontWeight: 900, fontSize: 14, color: C.ink, fontFamily: "monospace" }}>{q}</span>
+      <button onClick={() => onChange(q + 1)} style={{ ...b, background: C.gold, color: "#fff" }}>+</button>
     </div>
   );
 }
 
-function EstimatePanel({ C, menu, isMobile, onClose, onMoveToCart }) {
-  const [persons, setPersons] = React.useState(2);
-  const [mode, setMode] = React.useState("manual");
-  const [items, setItems] = React.useState([]);
+function EstimatePanel({ C, menu, orders, isMobile, items, setItems, persons, setPersons, onClose, onMoveToCart }) {
+  const haptic = useHaptic();
   const [search, setSearch] = React.useState("");
+  const dSearch = useDebounce(search, 150);
   const [catFilter, setCatFilter] = React.useState("All");
-  const toast = useToast();
+  const [showSel, setShowSel] = React.useState(false);
 
   const total = items.reduce((s, i) => s + i.price * i.qty, 0);
+  const count = items.reduce((s, i) => s + i.qty, 0);
+  const pax = Math.max(1, Number(persons) || 1);
+  const qtyOf = (id) => { const it = items.find((p) => p.id === id); return it ? it.qty : 0; };
 
-  const addItem = (m) =>
+  const setQty = (m, q) => {
+    haptic(6);
     setItems((prev) => {
-      const ex = prev.find((p) => p.id === m.id);
-      if (ex) return prev.map((p) => (p.id === m.id ? { ...p, qty: p.qty + 1 } : p));
-      return [...prev, { id: m.id, name: m.name, price: Number(m.price) || 0, qty: 1 }];
+      if (q <= 0) return prev.filter((p) => p.id !== m.id);
+      if (prev.some((p) => p.id === m.id)) return prev.map((p) => (p.id === m.id ? { ...p, qty: q } : p));
+      return [...prev, { id: m.id, name: m.name, price: Number(m.price) || 0, qty: q }];
     });
-
-  const changeQty = (id, d) =>
-    setItems((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, qty: p.qty + d } : p)).filter((p) => p.qty > 0)
-    );
-
-  const runAuto = () => {
-    const s = buildSuggestion(menu, Number(persons) || 1);
-    if (!s.length) { toast("Auto suggest ke liye menu me category match nahi mili", "warning"); return; }
-    setItems(s);
+  };
+  const removeId = (id) => setItems((prev) => prev.filter((p) => p.id !== id));
+  const clearAll = () => {
+    if (!items.length) return;
+    if (window.confirm("Estimate ke saare items hata dein?")) { setItems([]); setShowSel(false); }
   };
 
   const categories = React.useMemo(
@@ -462,125 +369,122 @@ function EstimatePanel({ C, menu, isMobile, onClose, onMoveToCart }) {
     [menu]
   );
 
-  const filtered = React.useMemo(
-    () => menu.filter((m) =>
+  const popular = React.useMemo(() => {
+    const cnt = {};
+    (orders || []).forEach((o) => {
+      if (o.status === "cancelled") return;
+      (o.items || []).forEach((it) => { cnt[it.itemId] = (cnt[it.itemId] || 0) + (Number(it.qty) || 0); });
+    });
+    const seen = new Set();
+    return menu
+      .filter((m) => m.available !== false && cnt[m.id])
+      .sort((a, b) => cnt[b.id] - cnt[a.id])
+      .filter((m) => { const k = String(m.name || "").trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+      .slice(0, 8);
+  }, [orders, menu]);
+
+  const filtered = React.useMemo(() => {
+    const s = dSearch.trim().toLowerCase();
+    return menu.filter((m) =>
       m.available !== false &&
       (catFilter === "All" || m.category === catFilter) &&
-      (!search.trim() || String(m.name || "").toLowerCase().includes(search.toLowerCase()))
-    ).slice(0, 60),
-    [menu, search, catFilter]
-  );
+      (!s || String(m.name || "").toLowerCase().includes(s))
+    ).slice(0, 250);
+  }, [menu, dSearch, catFilter]);
 
-  const btn = (active) => ({
-    padding: isMobile ? "9px 14px" : "8px 16px",
-    borderRadius: 10,
-    border: "1.5px solid " + (active ? C.gold : C.line),
-    background: active ? C.gold : C.card,
-    color: active ? "#fff" : C.ink,
-    fontWeight: 800,
-    fontSize: 13,
-    cursor: "pointer",
-    fontFamily: "inherit",
+  const chip = (active) => ({
+    padding: "7px 14px", borderRadius: 20, border: "1px solid " + (active ? C.gold : C.line),
+    background: active ? C.gold : C.card, color: active ? "#fff" : C.gray,
+    fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontFamily: "inherit",
   });
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", backdropFilter: "blur(4px)", zIndex: 9999, display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center", padding: isMobile ? 0 : 16 }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, color: C.ink, borderRadius: isMobile ? "20px 20px 0 0" : 16, padding: 18, width: "100%", maxWidth: isMobile ? "100%" : 600, maxHeight: isMobile ? "92vh" : "88vh", overflowY: "auto", animation: isMobile ? "slideUp .25s ease-out" : "scaleIn .18s ease-out", boxShadow: "0 -8px 40px rgba(0,0,0,.25)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ fontSize: 20, fontWeight: 900 }}>📋 Estimate</div>
-          <button onClick={onClose} style={{ background: "rgba(0,0,0,.05)", border: "none", borderRadius: "50%", width: 34, height: 34, fontSize: 16, cursor: "pointer", color: C.ink }}>✕</button>
-        </div>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, color: C.ink, borderRadius: isMobile ? "20px 20px 0 0" : 16, width: "100%", maxWidth: isMobile ? "100%" : 620, height: isMobile ? "94vh" : "88vh", display: "flex", flexDirection: "column", overflow: "hidden", animation: isMobile ? "slideUp .25s ease-out" : "scaleIn .18s ease-out", boxShadow: "0 -8px 40px rgba(0,0,0,.25)" }}>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, background: C.cardAlt, borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
-          <span style={{ fontWeight: 800, fontSize: 14 }}>👥 Persons:</span>
-          <input type="number" min="1" value={persons} onChange={(e) => setPersons(e.target.value)} style={{ width: 80, padding: "8px 10px", borderRadius: 8, border: "1.5px solid " + C.line, fontSize: 16, fontWeight: 900, textAlign: "center", background: C.card, color: C.ink, outline: "none" }} />
-          <span style={{ fontSize: 12, color: C.gray, fontWeight: 700 }}>ke hisaab se</span>
-        </div>
-
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <button style={btn(mode === "manual")} onClick={() => { if (mode === "auto" && items.length > 0) { if(window.confirm("AI band ho jayega, par aapke items safe rahenge. Aage badhein?")) setMode("manual"); } else setMode("manual"); }}>✍️ Manual</button>
-          <button style={btn(mode === "auto")} onClick={() => { setMode("auto"); runAuto(); }}>🤖 Smart AI Suggest</button>
-        </div>
-
-        {mode === "manual" && (
-          <div style={{ marginBottom: 12 }}>
-            <input placeholder="🔍 Item search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid " + C.line, fontSize: 14, boxSizing: "border-box", background: C.card, color: C.ink, outline: "none", marginBottom: 8 }} />
-            <div className="ep-noscroll" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 6 }}>
-              {categories.map((c) => (
-                <button key={c} onClick={() => setCatFilter(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (catFilter === c ? C.gold : C.line), background: catFilter === c ? C.gold : C.card, color: catFilter === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontFamily: "inherit" }}>{c}</button>
-              ))}
-            </div>
-            <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid " + C.line, borderRadius: 10 }}>
-              {filtered.map((m) => (
-                <button key={m.id} onClick={() => addItem(m)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "10px 12px", border: "none", borderBottom: "1px solid " + C.line, background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: C.ink }}>
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>{m.name}</span>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: C.goldText, fontFamily: "monospace" }}>{inr(m.price)} ＋</span>
-                </button>
-              ))}
-              {filtered.length === 0 && <div style={{ padding: 20, textAlign: "center", color: C.gray, fontSize: 13 }}>Koi item nahi mila</div>}
-            </div>
+        {/* HEADER */}
+        <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid " + C.line, flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 19, fontWeight: 900 }}>📋 Estimate</div>
+            <button onClick={onClose} style={{ background: C.cardAlt, border: "none", borderRadius: "50%", width: 34, height: 34, fontSize: 15, cursor: "pointer", color: C.ink }}>✕</button>
           </div>
-        )}
-
-        {mode === "auto" && (
-          <div style={{ marginBottom: 12 }}>
-            <InteractiveSuggest
-              C={C}
-              menu={menu}
-              persons={Number(persons) || 1}
-              onCancel={() => setMode("manual")} 
-              onSuggest={(newItems) => {
-                setMode("manual");
-                if (!newItems || newItems.length === 0) return;
-                setItems((prev) => {
-                  const merged = [...prev];
-                  newItems.forEach((ni) => {
-                    const ex = merged.find((p) => p.id === ni.id);
-                    if (ex) ex.qty += ni.qty;
-                    else merged.push(ni);
-                  });
-                  return merged;
-                });
-                toast("✅ Sahi quantity ke sath items add ho gaye!", "success");
-              }}
-            />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.cardAlt, borderRadius: 12, padding: "8px 12px" }}>
+            <span style={{ fontWeight: 800, fontSize: 13 }}>👥 Kitne log?</span>
+            <EstStepper C={C} q={pax} onChange={(v) => setPersons(Math.max(1, v))} size={34} />
           </div>
-        )}
+        </div>
 
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Selected Items ({items.length})</div>
-          {items.length === 0 && <div style={{ padding: 16, textAlign: "center", color: C.gray, fontSize: 13, background: C.cardAlt, borderRadius: 10 }}>Abhi koi item nahi — upar se add karo ya Auto Suggest dabao</div>}
-          {items.map((i) => (
-            <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid " + C.line, background: C.cardAlt, borderRadius: 8, marginBottom: 4 }}>
-              <span style={{ flex: 1, fontSize: 13, fontWeight: 700, minWidth: 0 }}>{i.name}</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid " + C.line, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
-                <button onClick={() => changeQty(i.id, -1)} style={{ width: 30, height: 30, border: "none", background: C.card, color: C.ink, fontSize: 16, fontWeight: 900, cursor: "pointer" }}>−</button>
-                <span style={{ fontWeight: 900, fontSize: 14, minWidth: 24, textAlign: "center" }}>{i.qty}</span>
-                <button onClick={() => changeQty(i.id, 1)} style={{ width: 30, height: 30, border: "none", background: C.goldLight, color: C.goldText, fontSize: 16, fontWeight: 900, cursor: "pointer" }}>＋</button>
+        {/* SCROLL AREA */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "12px 16px" }}>
+          <input placeholder="🔍 Item search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: "1.5px solid " + C.line, fontSize: 14, boxSizing: "border-box", background: C.card, color: C.ink, outline: "none", marginBottom: 10 }} />
+
+          {!search.trim() && catFilter === "All" && popular.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>🔥 Zyada bikne wale (tap = +1)</div>
+              <div className="ep-noscroll" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
+                {popular.map((m) => {
+                  const q = qtyOf(m.id);
+                  return (
+                    <button key={m.id} onClick={() => setQty(m, q + 1)} style={{ padding: "8px 12px", borderRadius: 20, border: "1.5px solid " + C.gold, background: q ? C.gold : C.goldLight, color: q ? "#fff" : C.goldText, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontFamily: "inherit" }}>{m.name}{q ? " ×" + q : ""}</button>
+                  );
+                })}
               </div>
-              <span style={{ width: 70, textAlign: "right", fontWeight: 900, fontSize: 13, fontFamily: "monospace", flexShrink: 0 }}>{inr(i.price * i.qty)}</span>
             </div>
-          ))}
+          )}
+
+          <div className="ep-noscroll" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8 }}>
+            {categories.map((c) => (
+              <button key={c} onClick={() => setCatFilter(c)} style={chip(catFilter === c)}>{c}</button>
+            ))}
+          </div>
+
+          <div style={{ border: "1px solid " + C.line, borderRadius: 12, overflow: "hidden" }}>
+            {filtered.map((m) => {
+              const q = qtyOf(m.id);
+              return (
+                <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderBottom: "1px solid " + C.line, background: q > 0 ? C.goldLight : "transparent" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, lineHeight: 1.25 }}>{m.name}</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: C.goldText, fontFamily: "monospace", marginTop: 2 }}>{inr(m.price)}</div>
+                  </div>
+                  {q > 0
+                    ? <EstStepper C={C} q={q} onChange={(v) => setQty(m, v)} />
+                    : <button onClick={() => setQty(m, 1)} style={{ padding: "8px 16px", borderRadius: 10, border: "1.5px solid " + C.gold, background: "transparent", color: C.goldText, fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>+ Add</button>}
+                </div>
+              );
+            })}
+            {filtered.length === 0 && <div style={{ padding: 24, textAlign: "center", color: C.gray, fontSize: 13 }}>Koi item nahi mila</div>}
+          </div>
         </div>
 
-        <div style={{ background: "linear-gradient(135deg, " + C.gold + " 0%, " + C.goldDark + " 100%)", borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, boxShadow: "0 4px 12px " + C.gold + "40" }}>
-          <div>
-            <div style={{ color: "#fff", fontSize: 10, fontWeight: 800, opacity: 0.85, letterSpacing: 0.5, textTransform: "uppercase" }}>Total ({items.length} items)</div>
-            <div style={{ color: "#fff", fontSize: 22, fontWeight: 900, fontFamily: "monospace" }}>{inr(total)}</div>
+        {/* FOOTER */}
+        <div style={{ borderTop: "2px solid " + C.line, background: C.card, padding: "10px 16px 14px", flexShrink: 0 }}>
+          {showSel && items.length > 0 && (
+            <div style={{ maxHeight: 170, overflowY: "auto", marginBottom: 8, border: "1px solid " + C.line, borderRadius: 10 }}>
+              {items.map((i) => (
+                <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderBottom: "1px dashed " + C.line }}>
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i.name}</span>
+                  <EstStepper C={C} q={i.qty} onChange={(v) => setQty(i, v)} size={26} />
+                  <span style={{ width: 60, textAlign: "right", fontSize: 12, fontWeight: 900, fontFamily: "monospace" }}>{inr(i.price * i.qty)}</span>
+                  <button onClick={() => removeId(i.id)} style={{ border: "none", background: "transparent", color: C.red, fontSize: 15, cursor: "pointer", padding: 2 }}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
+            <button onClick={() => setShowSel((v) => !v)} disabled={!items.length} style={{ border: "none", background: "transparent", color: C.goldText, fontWeight: 800, fontSize: 12, cursor: items.length ? "pointer" : "default", padding: 0, fontFamily: "inherit" }}>
+              {items.length} item ({count} qty) {items.length ? (showSel ? "▼" : "▲") : ""}
+            </button>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 20, fontWeight: 900, color: C.goldText, fontFamily: "monospace", lineHeight: 1.1 }}>{inr(total)}</div>
+              <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>Per person {inr(Math.round(total / pax))}</div>
+            </div>
           </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ color: "#fff", fontSize: 10, fontWeight: 800, opacity: 0.85, letterSpacing: 0.5, textTransform: "uppercase" }}>Per Person</div>
-            <div style={{ color: "#fff", fontSize: 16, fontWeight: 800, fontFamily: "monospace" }}>{inr(Math.round(total / (Number(persons) || 1)))}</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={clearAll} disabled={!items.length} style={{ padding: "13px 16px", border: "1.5px solid " + (items.length ? C.red : C.line), borderRadius: 12, background: "transparent", color: items.length ? C.red : C.gray, fontWeight: 800, fontSize: 13, cursor: items.length ? "pointer" : "not-allowed", fontFamily: "inherit" }}>Clear</button>
+            <button disabled={!items.length} onClick={() => onMoveToCart(items)} style={{ flex: 1, padding: 13, border: "none", borderRadius: 12, background: items.length ? "linear-gradient(135deg, " + C.green + " 0%, #15803D 100%)" : C.line, color: items.length ? "#fff" : C.gray, fontSize: 15, fontWeight: 900, cursor: items.length ? "pointer" : "not-allowed", fontFamily: "inherit" }}>✅ Cart me bhejo</button>
           </div>
         </div>
-
-        <button
-          disabled={!items.length}
-          onClick={() => onMoveToCart(items)}
-          style={{ marginTop: 12, width: "100%", padding: "15px", background: items.length ? "linear-gradient(135deg, " + C.green + " 0%, #15803D 100%)" : C.line, color: items.length ? "#fff" : C.gray, border: "none", borderRadius: 12, fontSize: 16, fontWeight: 900, cursor: items.length ? "pointer" : "not-allowed", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
-        >
-          ✅ Cart me bhejo ({items.length} items)
-        </button>
       </div>
     </div>
   );
@@ -620,6 +524,11 @@ function StaffAppInner() {
   const [ordersRange, setOrdersRange] = useState(null);
   const [confetti, setConfetti] = useState(false);
   const [showEstimate, setShowEstimate] = useState(false);
+  const [estItems, setEstItems] = useState(() => { try { return JSON.parse(localStorage.getItem("staff_estimate_items") || "[]"); } catch (e) { return []; } });
+  const [estPersons, setEstPersons] = useState(() => Number(localStorage.getItem("staff_estimate_persons")) || 2);
+  useEffect(() => {
+    try { localStorage.setItem("staff_estimate_items", JSON.stringify(estItems)); localStorage.setItem("staff_estimate_persons", String(estPersons)); } catch (e) {}
+  }, [estItems, estPersons]);
   const [estimatePending, setEstimatePending] = useState(false);
   const [muted, setMuted] = useState(() => localStorage.getItem("staff_mute") === "1");
   const prevNewIdsRef = useRef(null);
@@ -800,6 +709,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
       Object.keys(localStorage).filter(k => k.startsWith("staff_draft_")).forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
     } catch (e) {}
     setCart({}); setSelectedTable(null); setBillOrder(null); setAddMoreMode(false);
+    setEstItems([]); try { localStorage.removeItem("staff_estimate_items"); } catch (e) {}
     await signOut(auth); setUser(null); setStaffData(null);
   };
 
@@ -866,7 +776,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
 
       {/* TABS */}
       <div style={{ background: C.card, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "0 8px" : "0 16px", display: "flex", gap: 4, overflowX: "auto", alignItems: "center" }}>
-        <button onClick={() => { haptic(); setShowEstimate(true); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: C.green, fontWeight: 900, fontSize: isMobile ? 12 : 13, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, borderBottom: `3px solid ${C.green}` }}>📋 Estimate</button>
+        <button onClick={() => { haptic(); setShowEstimate(true); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: C.green, fontWeight: 900, fontSize: isMobile ? 12 : 13, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, borderBottom: `3px solid ${C.green}` }}>📋 Estimate{estItems.length ? ` (${estItems.length})` : ""}</button>
         {[
           { id: "tables", label: `🍽️ Tables` }, { id: "parcel", label: `🛍️ Parcel${parcelCount ? ` (${parcelCount})` : ""}` },
           { id: "orders", label: `📋 Orders${newCount ? ` (${newCount})` : ""}` }, { id: "kot", label: `🍳 Kitchen${newCount ? ` (${newCount})` : ""}` },
@@ -1010,14 +920,17 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
         <EstimatePanel
           C={C}
           menu={menu}
+          orders={orders}
           isMobile={isMobile}
+          items={estItems}
+          setItems={setEstItems}
+          persons={estPersons}
+          setPersons={setEstPersons}
           onClose={() => setShowEstimate(false)}
           onMoveToCart={(est) => {
             setCart((prev) => {
               const next = { ...prev };
-              est.forEach((e) => {
-                next[e.id] = (Number(next[e.id]) || 0) + e.qty;
-              });
+              est.forEach((e) => { next[e.id] = e.qty; });
               return next;
             });
             setShowEstimate(false);
