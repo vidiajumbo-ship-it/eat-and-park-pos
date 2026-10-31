@@ -620,6 +620,7 @@ function StaffAppInner() {
   const [ordersRange, setOrdersRange] = useState(null);
   const [confetti, setConfetti] = useState(false);
   const [showEstimate, setShowEstimate] = useState(false);
+  const [estimatePending, setEstimatePending] = useState(false);
   const [muted, setMuted] = useState(() => localStorage.getItem("staff_mute") === "1");
   const prevNewIdsRef = useRef(null);
   const [lowCount, setLowCount] = useState(0);
@@ -880,6 +881,13 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
       {/* CONTENT */}
       <div style={{ flex: 1, overflow: "auto", padding: isMobile ? 10 : 16 }}>
         
+{estimatePending && Object.keys(cart).length > 0 && !selectedTable && (activeTab === "tables" || activeTab === "parcel") && (
+  <div style={{ background: C.greenLight, border: "2px solid " + C.green, borderRadius: 12, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+    <div style={{ flex: 1, minWidth: 180, fontWeight: 800, fontSize: 13, color: C.ink }}>📋 Estimate ke {Object.keys(cart).length} items cart me hain. Ab khali table ya Parcel par tap karo.</div>
+    <button onClick={() => { setSelectedTable("parcel"); setBillOrder(null); setAddMoreMode(false); setEstimatePending(false); }} style={{ padding: "8px 14px", border: "none", borderRadius: 8, background: C.red, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>🛍️ Parcel</button>
+    <button onClick={() => { setCart({}); setEstimatePending(false); }} style={{ padding: "8px 14px", border: "1.5px solid " + C.gray, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Hatao</button>
+  </div>
+)}
 {calls.length > 0 && (
   <div style={{ background: C.amberLight, borderBottom: `2px solid ${C.amber}`, padding: "10px 16px", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
     <span style={{ fontWeight: 800, fontSize: 13, color: C.amber }}>🔔 Waiter Called ({calls.length}):</span>
@@ -894,7 +902,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
 
 {activeTab === "tables" && (
           <TablesView C={C} isMobile={isMobile} orders={orders}
-            onTableClick={(t) => { haptic(); setSelectedTable(t); setCart({}); setBillOrder(null); setAddMoreMode(false); }}
+            onTableClick={(t) => { haptic(); setSelectedTable(t); setCart((p) => (estimatePending ? p : {})); setEstimatePending(false); setBillOrder(null); setAddMoreMode(false); }}
             onEditBill={(order) => { haptic(); setBillOrder(order); setSelectedTable(order.table); setCart({}); setAddMoreMode(false); }}
             onAddMore={(order) => { haptic(); setBillOrder(order); setSelectedTable(order.table); setCart({}); setAddMoreMode(true); }}
             onMerge={(order) => setTableMerge(order)}
@@ -933,7 +941,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
         )}
         {activeTab === "parcel" && (
           <ParcelView C={C} isMobile={isMobile} orders={orders}
-            onNew={() => { haptic(); setSelectedTable("parcel"); setCart({}); setBillOrder(null); setAddMoreMode(false); }}
+            onNew={() => { haptic(); setSelectedTable("parcel"); setCart((p) => (estimatePending ? p : {})); setEstimatePending(false); setBillOrder(null); setAddMoreMode(false); }}
             onBill={(order) => { haptic(); setBillOrder(order); setSelectedTable("parcel"); setCart({}); setAddMoreMode(false); }}
             onAdd={(order) => { haptic(); setBillOrder(order); setSelectedTable("parcel"); setCart({}); setAddMoreMode(true); }} />
         )}
@@ -1013,7 +1021,8 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
               return next;
             });
             setShowEstimate(false);
-            toast(`✅ ${est.length} items cart me chale gaye`, "success");
+            toast(`✅ ${est.length} items cart me hain - ab table ya Parcel chuno`, "success");
+            setEstimatePending(true);
             if (!selectedTable) setActiveTab("tables");
           }}
         />
@@ -1026,7 +1035,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
 
       {selectedTable && (
         <BillingView C={C} isMobile={isMobile} table={selectedTable} menu={menu} orders={orders} cart={cart} setCart={setCart} waiterName={waiterName} existingOrder={billOrder} isOwner={isOwner} addMoreMode={addMoreMode}
-          onBack={() => { setSelectedTable(null); setCart({}); setBillOrder(null); setAddMoreMode(false); }}
+          onBack={() => { setSelectedTable(null); setCart({}); setEstimatePending(false); setBillOrder(null); setAddMoreMode(false); }}
           onSwitchAdd={() => { setCart({}); setAddMoreMode(true); }} onPaidSuccess={() => { haptic(60); setConfetti(true); setTimeout(() => setConfetti(false), 1800); }} />
       )}
     </div>
@@ -4405,3 +4414,5 @@ export default function StaffApp() {
   );
 }
 // EP-PATCH-v1
+
+// EP-EST-v1
