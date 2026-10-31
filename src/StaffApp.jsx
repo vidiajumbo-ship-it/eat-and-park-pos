@@ -325,64 +325,108 @@ function SplashScreen({ C }) {
 
 
 // ===========================================================================
-// 📋 ESTIMATE PANEL v3 — rule-based qty (pc / roti / rice / dal), persistent items
+// 📋 ESTIMATE PANEL v4 — full rule table (sabzi/starter/roti/rice/biryani/dal/snacks...), persistent items
 // ===========================================================================
 //LOGIC-START
-// 👉 Apne hisaab se yahan numbers badal sakte ho
+// 👉 Apne hisaab se numbers yahan badal sakte ho.
+// per = [Kam, Normal, Zyada] per log.
+// pieces:true => per = per log piece, plate = ek plate me default piece (naam me "(4pc)" ho to wahi)
+//               extra = 2+ item hon to per log total piece itna badhta hai ((item ginti - 1) x extra)
+// pieces nahi => per = per log plate/unit
 const EST_LEVELS = [
-  { id: "kam", label: "Kam", pc: 2, roti: 2, rice: 0.33, dal: 0.25, drink: 1 },
-  { id: "normal", label: "Normal", pc: 3, roti: 2, rice: 0.4, dal: 0.33, drink: 1 },
-  { id: "zyada", label: "Zyada", pc: 4, roti: 3, rice: 0.5, dal: 0.4, drink: 1 },
+  { id: "kam", label: "Kam", i: 0 },
+  { id: "normal", label: "Normal", i: 1 },
+  { id: "zyada", label: "Zyada", i: 2 },
 ];
-const EST_PC_DEFAULT = 8;        // ek plate me kitne piece (naam me "(4pc)" ho to wahi use hoga)
-const EST_PC_EXTRA_PER_DISH = 1; // 2+ sabzi hon to per log total piece itna badhta hai (dish ginti - 1) x ye
+const EST_RULES = {
+  pc:      { label: "sabzi/dry",     pieces: true, per: [2, 3, 4],       extra: 1,   plate: 8 },
+  starter: { label: "starter/kabab", pieces: true, per: [1.5, 2, 3],     extra: 0.5, plate: 6 },
+  momo:    { label: "momos/spring roll", pieces: true, per: [3, 4, 6],   extra: 2,   plate: 8 },
+  roti:    { label: "roti/naan",     per: [2, 2, 3],         unit: "roti" },
+  rice:    { label: "rice/pulao",    per: [0.33, 0.4, 0.5],  unit: "plate" },
+  biryani: { label: "biryani",       per: [0.5, 0.6, 0.75],  unit: "plate" },
+  dal:     { label: "dal",           per: [0.25, 0.33, 0.4], unit: "plate" },
+  noodle:  { label: "noodles/pasta", per: [0.4, 0.5, 0.7],   unit: "plate" },
+  fries:   { label: "fries",         per: [0.3, 0.5, 0.6],   unit: "plate" },
+  pizza:   { label: "pizza",         per: [0.35, 0.4, 0.5],  unit: "pizza" },
+  snack:   { label: "roll/burger",   per: [0.75, 1, 1.25],   unit: "pc" },
+  soup:    { label: "soup",          per: [0.75, 1, 1],      unit: "bowl" },
+  dessert: { label: "dessert",       per: [0.75, 1, 1.25],   unit: "pc" },
+  side:    { label: "raita/salad",   per: [0.25, 0.3, 0.4],  unit: "plate" },
+  papad:   { label: "papad",         per: [1, 1, 1.5],       unit: "pc" },
+  thali:   { label: "thali/combo",   per: [1, 1, 1],         unit: "plate" },
+  drink:   { label: "drink/shake",   per: [0.75, 1, 1],      unit: "pc" },
+  water:   { label: "water",         per: [0.2, 0.2, 0.2],   unit: "litre bottle" },
+};
 
 function estKind(m) {
   const n = String(m.name || "").toLowerCase();
   const t = n + " " + String(m.category || "").toLowerCase();
-  if (/roti|naan|paratha|kulcha|phulka|chapati/.test(n)) return "roti";
-  if (/biryani|rice|pulao|pulav/.test(n)) return "rice";
+  if (/thali|combo/.test(n)) return "thali";
+  if (/roti|naan|paratha|parotta|parantha|kulcha|phulka|chapati/.test(n)) return "roti";
+  if (/biryani|biriyani/.test(n)) return "biryani";
+  if (/\brice\b|pulao|pulav/.test(n)) return "rice";
   if (/\bdal\b|daal|dhal/.test(n)) return "dal";
-  if (/water|cold drink|coke|pepsi|sprite|soda|lassi|juice|mojito|shake|coffee|\btea\b|chai/.test(n)) return "drink";
-  if (/momo|roll|burger|pizza|sandwich|fries|maggi|pasta|noodle|chowmein|chaumin|soup|ice cream|dessert|sweet|gulab|rasgulla|rasmalai|salad|papad|raita/.test(t)) return "other";
-  if (/paneer|mushroom|chicken|mutton|fish|egg|manchurian|chilly|chilli|kadai|kadhai|masala|curry|tikka|kabab|kebab|soya|chaap|veg|gobi|aloo|sabzi|handi|korma|butter|tandoor|starter|main|gravy|dry|chinese/.test(t)) return "pc";
+  if (/\bwater\b|mineral|bisleri/.test(n)) return "water";
+  if (/pizza/.test(n)) return "pizza";
+  if (/momo|dumpling|dim ?sum|spring roll/.test(n)) return "momo";
+  if (/roll|burger|sandwich|wrap|maggi/.test(n)) return "snack";
+  if (/soup|shorba/.test(n)) return "soup";
+  if (/shake|lassi|juice|mojito|coffee|\btea\b|chai|cold drink|coke|pepsi|sprite|thums|soda|lemonade|mocktail|smoothie|buttermilk|chaas|sharbat/.test(n)) return "drink";
+  if (/ice ?cream|kulfi|falooda|brownie|halwa|jalebi|gulab|rasgulla|rasmalai|kheer|sundae|dessert|sweet(?! corn)|cake|pastry|rabri/.test(n)) return "dessert";
+  if (/noodle|chowmein|chow mein|chaumin|hakka|pasta|macaroni/.test(n)) return "noodle";
+  if (/fries|wedges|finger chips/.test(n)) return "fries";
+  if (/raita|salad|chutney|achar|pickle/.test(n)) return "side";
+  if (/papad/.test(n)) return "papad";
+  if (/tikka|kabab|kebab|seekh|tandoori|tangdi|reshmi|malai chaap|lollipop|\b65\b|crispy|nugget|wings|afghani|achari|hariyali|bbq|barbeque|pakora|pakoda|cutlet|tikki|\bfry\b/.test(n)
+      && !/masala|gravy|kadai|kadhai|handi|korma|curry|makhani|butter|lababdar|bhuna|rogan|do pyaza/.test(n)) return "starter";
+  if (/paneer|mushroom|chicken|mutton|fish|egg|manchurian|chilly|chilli|kadai|kadhai|masala|curry|soya|chaap|veg|gobi|aloo|sabzi|handi|korma|butter|dum|bhurji|kofta|palak|matar|tadka|lababdar|bhuna|rogan|starter|main|gravy|dry|chinese/.test(t)) return "pc";
   return "other";
 }
-function estPcPerPlate(name) {
+function estPcPerPlate(name, def) {
   const mm = String(name || "").match(/(\d+)\s*(pc|pcs|piece|pieces)\b/i);
-  return mm && Number(mm[1]) > 0 ? Number(mm[1]) : EST_PC_DEFAULT;
+  return mm && Number(mm[1]) > 0 ? Number(mm[1]) : def;
 }
 const estFmt = (n) => String(Math.round(n * 100) / 100);
 const estCeil = (x) => Math.max(1, Math.ceil(x - 0.05));
+function estTag(m) {
+  const r = EST_RULES[estKind(m)];
+  if (!r) return "manual qty";
+  return r.label + (r.pieces ? " · " + estPcPerPlate(m.name, r.plate) + " pc" : "");
+}
+function estLegend(lv) {
+  const g = (k) => estFmt(EST_RULES[k].per[lv.i]);
+  return "Per log: sabzi " + g("pc") + " pc · starter " + g("starter") + " pc · roti " + g("roti") + " · rice " + g("rice") + " · biryani " + g("biryani") + " · dal " + g("dal") + " plate";
+}
 
 // items: [{id,name,price,qty}], menuById: {id: menuItem}, pax: number, lv: EST_LEVELS entry
 // return: { [id]: { qty, note } }  (sirf wahi items jinka rule hai)
 function estCompute(items, menuById, pax, lv) {
-  const groups = { pc: [], roti: [], rice: [], dal: [], drink: [] };
+  const groups = {};
   items.forEach((i) => {
     const k = estKind(menuById[i.id] || i);
-    if (groups[k]) groups[k].push(i);
+    if (EST_RULES[k]) (groups[k] = groups[k] || []).push(i);
   });
   const out = {};
-  const nPc = groups.pc.length;
-  if (nPc) {
-    const pool = lv.pc + EST_PC_EXTRA_PER_DISH * (nPc - 1); // per log total piece (sab sabzi mila ke)
-    const share = pool / nPc;                                // per log, is dish ke piece
-    groups.pc.forEach((i) => {
-      const per = estPcPerPlate(i.name);
-      const pieces = share * pax;
-      const qty = estCeil(pieces / per);
-      out[i.id] = { qty, note: pax + " log x " + estFmt(share) + " pc = " + Math.round(pieces) + " pc / " + per + " pc plate = " + qty + " plate" };
-    });
-  }
-  [["roti", "roti", "roti"], ["rice", "rice", "plate"], ["dal", "dal", "plate"], ["drink", "drink", "pc"]].forEach(([g, key, unit]) => {
-    const arr = groups[g];
-    if (!arr.length) return;
-    const total = (pax * lv[key]) / arr.length;
-    arr.forEach((i) => {
-      const qty = estCeil(total);
-      out[i.id] = { qty, note: pax + " log x " + estFmt(lv[key]) + " " + unit + (arr.length > 1 ? " / " + arr.length + " item" : "") + " = " + qty };
-    });
+  Object.keys(groups).forEach((k) => {
+    const r = EST_RULES[k], arr = groups[k], n = arr.length;
+    if (r.pieces) {
+      const pool = r.per[lv.i] + r.extra * (n - 1); // per log total piece (is type ki sab dish mila ke)
+      const share = pool / n;                         // per log, is dish ke piece
+      arr.forEach((it) => {
+        const per = estPcPerPlate(it.name, r.plate);
+        const pieces = share * pax;
+        const qty = estCeil(pieces / per);
+        out[it.id] = { qty, note: pax + " log x " + estFmt(share) + " pc = " + Math.round(pieces) + " pc / " + per + " pc plate = " + qty + " plate" };
+      });
+    } else {
+      const each = r.per[lv.i];
+      const total = (pax * each) / n;
+      arr.forEach((it) => {
+        const qty = estCeil(total);
+        out[it.id] = { qty, note: pax + " log x " + estFmt(each) + " " + r.unit + (n > 1 ? " / " + n + " item" : "") + " = " + qty };
+      });
+    }
   });
   return out;
 }
@@ -507,7 +551,7 @@ function EstimatePanel({ C, menu, orders, isMobile, items, setItems, persons, se
             <button onClick={applyAuto} style={{ marginLeft: "auto", padding: "8px 14px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, " + C.gold + " 0%, " + C.goldDark + " 100%)", color: "#fff", fontWeight: 900, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>⚡ Auto qty</button>
           </div>
           <div style={{ fontSize: 10, color: C.gray, fontWeight: 700, marginTop: 6, lineHeight: 1.4 }}>
-            Per log: sabzi/dry {lv.pc} pc ({EST_PC_DEFAULT} pc plate) · roti {lv.roti} · rice {estFmt(lv.rice)} plate · dal {estFmt(lv.dal)} plate
+            {estLegend(lv)}
           </div>
         </div>
 
@@ -542,7 +586,7 @@ function EstimatePanel({ C, menu, orders, isMobile, items, setItems, persons, se
                 <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderBottom: "1px solid " + C.line, background: q > 0 ? C.goldLight : "transparent" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, lineHeight: 1.25 }}>{m.name}</div>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: C.goldText, fontFamily: "monospace", marginTop: 2 }}>{inr(m.price)}</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: C.goldText, fontFamily: "monospace", marginTop: 2 }}>{inr(m.price)}<span style={{ marginLeft: 8, fontSize: 10, color: C.gray, fontWeight: 700, fontFamily: "system-ui, sans-serif" }}>{estTag(m)}</span></div>
                   </div>
                   {q > 0
                     ? <EstStepper C={C} q={q} onChange={(v) => setQty(m, v)} />
