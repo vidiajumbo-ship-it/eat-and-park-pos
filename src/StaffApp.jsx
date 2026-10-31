@@ -79,7 +79,7 @@ const timeAgo = (ts) => {
 };
 const TABLE_COUNT = 20;
 // Chalu parcel: paid / due / cancelled nahi, aur 18 ghante ke andar
-const PAID_STATUSES = ["paid", "paid_unverified"];
+const PAID_STATUSES = ["paid"];
 const isOpenParcel = (o) =>
   o.orderType === "parcel" && o.status !== "cancelled" && !o.paid &&
   o.paymentStatus !== "due" && !PAID_STATUSES.includes(o.paymentStatus) &&
@@ -1570,9 +1570,9 @@ function printKOT(order) {
     try { w.addEventListener("afterprint", cleanup); } catch (e) {}
     setTimeout(cleanup, 90000);
     w.document.open();
-    w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:10px}h2,h3{text-align:center;margin:4px 0;font-weight:900}h2{font-size:26px}h3{font-size:18px}.c{text-align:center;font-size:12px;font-weight:700}.big{font-size:16px;font-weight:800}</style></head><body>
-<h2>KOT</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + order.table}</h3>
-<div class="c">${now}</div><div class="c">#${order.id.slice(1,9).toUpperCase()}</div>
+    w.document.write(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:10px}h2,h3{text-align:center;margin:4px 0;font-weight:900}h2{font-size:26px}h3{font-size:18px}.c{text-align:center;font-size:12px;font-weight:700}.big{font-size:16px;font-weight:800}</style></head><body>
+<h2>KOT</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + esc(order.table)}</h3>
+<div class="c">${now}</div><div class="c">#${esc(order.id.slice(1,9).toUpperCase())}</div>
 ${order.waiter ? `<div class="c">Waiter: ${esc(order.waiter)}</div>` : ""}
 <div style="border-top:2px solid #000;margin:10px 0"></div>
 <table style="width:100%"><tbody>${itemsHtml}</tbody></table>
@@ -1596,7 +1596,7 @@ function printHtml(title, bodyHtml, opts = {}) {
     try { w.addEventListener("afterprint", cleanup); } catch (e) {}
     setTimeout(cleanup, 90000);
     w.document.open();
-    w.document.write(`<!doctype html><html><head><title>${title}</title><style>${css}</style></head><body>${bodyHtml}</body></html>`);
+    w.document.write(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>${title}</title><style>${css}</style></head><body>${bodyHtml}</body></html>`);
     w.document.close();
     setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, opts.delay || 400);
   } catch (e) { alert("Print error: " + e.message); }
@@ -1610,12 +1610,12 @@ function printBill(order) {
     const sub = order.subtotal || (order.items || []).reduce((s, it) => s + it.price * it.qty, 0);
     const total = order.finalTotal || sub;
     const now = new Date().toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
-    const billNo = order.id.slice(1,9).toUpperCase();
+    const billNo = esc(order.id.slice(1,9).toUpperCase());
     const showQr = false; // QR disabled as requested
     const qrHtml = showQr ? `<div class="c" style="margin-top:8px">Scan &amp; Pay Rs ${total}<br/><img src="https://api.qrserver.com/v1/create-qr-code/?size=170x170&data=${encodeURIComponent(upiUri(total, billNo))}" width="170" height="170" /></div>` : "";
     const css = "@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}h2{text-align:center;font-size:24px;font-weight:900;margin:4px 0}.c{text-align:center;font-size:10px}.line{border-top:2px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:4px 2px}th{border-bottom:2px solid #000;text-align:left;font-size:12px}.grand td{font-size:18px;font-weight:900;border-top:3px solid #000;padding-top:8px}.badge{display:inline-block;padding:3px 10px;border:2px solid #000;border-radius:10px;font-size:12px;margin:2px}";
     const body = `<h2>${RESTAURANT.name}</h2><div class="c">${RESTAURANT.address}</div><div class="c">Ph: ${RESTAURANT.phones.join(" / ")}</div><div class="line"></div>
-<div style="display:flex;justify-content:space-between;font-size:11px"><div>Bill: ${billNo}</div><div>${order.orderType === "parcel" ? "PARCEL" : "T-" + order.table}</div></div>
+<div style="display:flex;justify-content:space-between;font-size:11px"><div>Bill: ${billNo}</div><div>${order.orderType === "parcel" ? "PARCEL" : "T-" + esc(order.table)}</div></div>
 <div class="c" style="margin-top:4px">${now}</div>
 ${order.waiter ? `<div class="c">Waiter: ${esc(order.waiter)}</div>` : ""}
 <div class="line"></div>
@@ -4404,3 +4404,4 @@ export default function StaffApp() {
     </ErrorBoundary>
   );
 }
+// EP-PATCH-v1

@@ -2,64 +2,123 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
 
-    function signedIn() {
-      return request.auth != null;
+    function signedIn() { return request.auth != null; }
+    function hasStaffDoc() {
+      return signedIn() && exists(/databases/$(db)/documents/staff/$(request.auth.uid));
     }
-    function isStaff() {
-      return signedIn()
-        && exists(/databases/$(db)/documents/staff/$(request.auth.uid))
-        && get(/databases/$(db)/documents/staff/$(request.auth.uid)).data.role in ['admin', 'staff', 'waiter'];
+    function staffRole() {
+      return get(/databases/$(db)/documents/staff/$(request.auth.uid)).data.role;
     }
-    function isAdmin() {
+    function isStaff() { return hasStaffDoc() && staffRole() in ['admin', 'owner', 'manager', 'staff', 'waiter']; }
+    function isAdmin() { return hasStaffDoc() && staffRole() in ['admin', 'owner', 'manager']; }
+    function ownsOrder(orderId) {
       return signedIn()
-        && exists(/databases/$(db)/documents/staff/$(request.auth.uid))
-        && get(/databases/$(db)/documents/staff/$(request.auth.uid)).data.role == 'admin';
+        && exists(/databases/$(db)/documents/orders/$(orderId))
+        && get(/databases/$(db)/documents/orders/$(orderId)).data.createdBy == request.auth.uid;
+    }
+    function validCustomerOrder() {
+      let d = request.resource.data;
+      return d.status == 'new'
+        && d.paid == false
+        && d.orderType in ['dine_in', 'parcel']
+        && d.table is int && d.table >= 0 && d.table <= 20
+        && d.items is list && d.items.size() > 0 && d.items.size() <= 40
+        && d.finalTotal is number && d.finalTotal >= 0 && d.finalTotal <= 100000
+        && (!('discount' in d) || (d.discount is number && d.discount >= 0 && d.discount <= 50))
+        && (!('paymentStatus' in d) || d.paymentStatus in ['pending', 'paid_unverified'])
+        && d.keys().size() <= 60;
     }
 
     match /staff/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow write: if false;
     }
+
     match /settings/{docId} {
-      allow read: if true;
-      allow write: if isStaff();
+      allow read: if (docId != 'privatePins' && docId != 'presets')
+                  || (docId == 'presets' && isStaff())
+                  || isAdmin();
+      allow write: if isAdmin()
+                  || (isStaff() && docId in ['menu', 'availability', 'favourites', 'expenseCats']);
     }
-    match /settings/privatePins {
-      allow read, write: if isAdmin();
-    }
+
     match /orders/{id} {
-      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow create: if signedIn()
+        && id.matches('^o[a-z0-9]{6,40}$')
+        && request.resource.data.createdBy == request.auth.uid
+        && (isStaff() || validCustomerOrder());
       allow read: if isStaff() || (signedIn() && resource.data.createdBy == request.auth.uid);
-      allow update: if isStaff();
+      allow update: if isStaff()
+        || (signedIn() && resource.data.createdBy == request.auth.uid
+            && resource.data.status == 'new' && resource.data.paid == false
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt'])
+            && request.resource.data.status == 'cancelled');
       allow delete: if isAdmin();
     }
+
     match /customers/{phone} {
-      allow read, write: if signedIn();
+      allow read: if isStaff();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isStaff() || (signedIn() && resource.data.uid == request.auth.uid);
     }
+
     match /loyaltyUsers/{phone} {
-      allow get: if signedIn();
+      allow get: if isStaff() || (signedIn() && request.auth.token.phone_number == '+91' + phone);
       allow list, write: if isStaff();
     }
+
     match /coinHistory/{id} {
-      allow read: if signedIn();
+      allow read: if isStaff();
       allow create: if isStaff();
       allow update, delete: if false;
     }
+
     match /calls/{id} {
-      allow create: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.status == 'active'
+        && request.resource.data.table is int
+        && request.resource.data.table >= 1 && request.resource.data.table <= 20
+        && request.resource.data.keys().size() <= 6;
       allow read, update: if isStaff();
       allow delete: if isAdmin();
     }
+
     match /bookings/{id} {
-      allow create: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().size() <= 12
+        && request.resource.data.name is string && request.resource.data.name.size() <= 80;
       allow read, update, delete: if isStaff();
     }
+
     match /chats/{orderId}/messages/{msgId} {
-      allow read, write: if signedIn();
+      allow read: if isStaff() || ownsOrder(orderId);
+      allow create: if (isStaff() || ownsOrder(orderId) || (signedIn() && orderId.matches('^general_.{1,15}$')))
+        && request.resource.data.text is string && request.resource.data.text.size() <= 500;
+      allow update, delete: if false;
     }
+
     match /inventory/{id} {
-      allow read, write: if isAdmin();
+      allow read: if isStaff();
+      allow write: if isAdmin() || (isStaff() && id != 'items');
     }
+
+    match /expenses/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+    match /vendors/{id} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+    match /vendorPayments/{id} { allow read, write: if isAdmin(); }
+    match /dayClose/{id}       { allow read, write: if isAdmin(); }
+    match /feedback/{id} {
+      allow create: if isStaff();
+      allow read: if isAdmin();
+    }
+
     match /auditLogs/{id} {
       allow read: if isAdmin();
       allow create: if isStaff();

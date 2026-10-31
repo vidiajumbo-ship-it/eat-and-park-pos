@@ -56,6 +56,11 @@ input:focus, textarea:focus { border-color: #B8860B !important; box-shadow: 0 0 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
+.ep-noscroll { scrollbar-width: none; -ms-overflow-style: none; }
+.ep-noscroll::-webkit-scrollbar { display: none; }
+@media (hover: hover) { .ep-card:hover { box-shadow: 0 8px 20px rgba(184,134,11,0.22) !important; border-color: #B8860B !important; transform: translateY(-1px); } }
+button:focus-visible, select:focus-visible { outline: 2px solid #B8860B; outline-offset: 2px; }
+::selection { background: rgba(184,134,11,0.28); }
 `;
 
 // ===========================================================================
@@ -318,6 +323,269 @@ function SplashScreen({ C }) {
   );
 }
 
+
+// ===========================================================================
+// 📋 ESTIMATE PANEL — persons + items (manual ya auto) + one-click cart
+// ===========================================================================
+
+const SUGGEST_RULES = [
+  { re: /starter|snack|tandoor|appetizer|momos|roll/i, perPerson: 0.5, pick: 2 },
+  { re: /main|curry|sabzi|gravy|paneer|chicken|mutton|fish|egg/i, perPerson: 0.7, pick: 3 },
+  { re: /bread|roti|naan|paratha/i, perPerson: 2, pick: 2 },
+  { re: /rice|biryani|pulao/i, perPerson: 0.5, pick: 1 },
+  { re: /dessert|sweet|ice/i, perPerson: 0.5, pick: 1 },
+  { re: /drink|beverage|juice|shake|cold|coffee/i, perPerson: 1, pick: 2 },
+  { re: /thali/i, perPerson: 1, pick: 1 },
+];
+
+function buildSuggestion(menu, persons) {
+  const p = Number(persons) || 1;
+  const out = [];
+  const addItems = (regex, calcQty, limit = 1) => {
+    const pool = menu.filter(m => m.available !== false && regex.test(m.category || ""));
+    if (!pool.length) return;
+    const picked = pool.sort(() => 0.5 - Math.random()).slice(0, limit);
+    picked.forEach(m => {
+      out.push({ id: m.id, name: m.name, price: Number(m.price) || 0, qty: calcQty(p) });
+    });
+  };
+  addItems(/starter|snack|tandoor|momos|roll/i, (p) => Math.ceil(p / 3), 1);
+  addItems(/main|curry|sabzi|gravy|paneer|chicken|mutton/i, (p) => Math.ceil(p / 4), 2);
+  addItems(/bread|roti|naan/i, (p) => p * 2, 1);
+  addItems(/rice|biryani|pulao/i, (p) => Math.ceil(p / 3), 1);
+  addItems(/drink|shake|juice|cold|mojito/i, (p) => p, 1);
+  return out;
+}
+
+
+
+
+function InteractiveSuggest({ C, menu, persons, onSuggest, onCancel }) {
+  const [step, setStep] = React.useState(0);
+  const [selections, setSelections] = React.useState({});
+
+  const steps = [
+    { title: "1. Starter (Snacks)", filter: (m) => /starter|snack|tandoor|momos|roll/i.test(m.category || ""), calcQty: (p) => Math.ceil(p / 3) },
+    { title: "2. Main Course", filter: (m) => /main|curry|sabzi|gravy|paneer|chicken|mutton/i.test(m.category || ""), calcQty: (p) => Math.ceil(p / 4) },
+    { title: "3. Bread (Roti/Naan)", filter: (m) => /bread|roti|naan/i.test(m.category || ""), calcQty: (p) => p * 2 },
+    { title: "4. Rice / Biryani", filter: (m) => /rice|biryani|pulao/i.test(m.category || ""), calcQty: (p) => Math.ceil(p / 3) },
+    { title: "5. Drinks / Shakes", filter: (m) => /drink|shake|juice|cold|mojito/i.test(m.category || ""), calcQty: (p) => p }
+  ];
+
+  const currentStepData = steps[step];
+  const stepItems = menu.filter(m => m.available && currentStepData.filter(m));
+
+  const handleSelectItem = (item) => {
+    setSelections(prev => {
+      const next = { ...prev };
+      if (next[item.id]) delete next[item.id];
+      else next[item.id] = { item, qty: 1 };
+      return next;
+    });
+  };
+
+  const handleNext = () => {
+    if (step < steps.length - 1) {
+      setStep(step + 1);
+    } else {
+      const finalItems = Object.values(selections).map(sel => {
+        const autoQty = currentStepData.calcQty(persons);
+        return { id: sel.item.id, name: sel.item.name, price: sel.item.price, qty: Math.max(1, autoQty) };
+      });
+      onSuggest(finalItems);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 12, padding: 16, background: C.cardAlt, borderRadius: 12, border: "1px solid " + C.line }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: C.ink }}>{currentStepData.title}</div>
+        <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>{step + 1}/{steps.length} (For {persons} pax)</div>
+      </div>
+      <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 12 }}>
+        {stepItems.map(m => {
+          const isSelected = !!selections[m.id];
+          return (
+            <div key={m.id} onClick={() => !isSelected && handleSelectItem(m)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 8, borderBottom: "1px solid " + C.line, background: isSelected ? C.goldLight : 'transparent', borderRadius: 8, cursor: 'pointer', marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: m.veg ? 'green' : 'red' }}></span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{m.name}</span>
+              </div>
+              {isSelected ? <span style={{ fontSize: 12, color: C.goldText, fontWeight: 800 }}>Selected ✓</span> : <span style={{ fontSize: 13, fontWeight: 800, color: C.goldText }}>{inr(m.price)} +</span>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {step > 0 && <button onClick={() => setStep(step - 1)} style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid " + C.line, background: C.card, fontWeight: 700, cursor: 'pointer', color: C.ink }}>← Pichla</button>}
+        {step < steps.length - 1 ? (
+          <button onClick={handleNext} style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: C.gold, color: "#fff", fontWeight: 800, cursor: 'pointer' }}>Aage →</button>
+        ) : (
+          <button onClick={handleNext} style={{ flex: 1, padding: 10, borderRadius: 8, border: "none", background: C.green, color: "#fff", fontWeight: 800, cursor: 'pointer' }}>✅ Items Add Karo</button>
+        )}
+      </div>
+      <button onClick={onCancel} style={{ width: '100%', marginTop: 10, padding: 8, border: 'none', background: 'transparent', color: C.gray, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Cancel</button>
+    </div>
+  );
+}
+
+function EstimatePanel({ C, menu, isMobile, onClose, onMoveToCart }) {
+  const [persons, setPersons] = React.useState(2);
+  const [mode, setMode] = React.useState("manual");
+  const [items, setItems] = React.useState([]);
+  const [search, setSearch] = React.useState("");
+  const [catFilter, setCatFilter] = React.useState("All");
+  const toast = useToast();
+
+  const total = items.reduce((s, i) => s + i.price * i.qty, 0);
+
+  const addItem = (m) =>
+    setItems((prev) => {
+      const ex = prev.find((p) => p.id === m.id);
+      if (ex) return prev.map((p) => (p.id === m.id ? { ...p, qty: p.qty + 1 } : p));
+      return [...prev, { id: m.id, name: m.name, price: Number(m.price) || 0, qty: 1 }];
+    });
+
+  const changeQty = (id, d) =>
+    setItems((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, qty: p.qty + d } : p)).filter((p) => p.qty > 0)
+    );
+
+  const runAuto = () => {
+    const s = buildSuggestion(menu, Number(persons) || 1);
+    if (!s.length) { toast("Auto suggest ke liye menu me category match nahi mili", "warning"); return; }
+    setItems(s);
+  };
+
+  const categories = React.useMemo(
+    () => ["All", ...Array.from(new Set(menu.map((m) => m.category).filter(Boolean)))],
+    [menu]
+  );
+
+  const filtered = React.useMemo(
+    () => menu.filter((m) =>
+      m.available !== false &&
+      (catFilter === "All" || m.category === catFilter) &&
+      (!search.trim() || String(m.name || "").toLowerCase().includes(search.toLowerCase()))
+    ).slice(0, 60),
+    [menu, search, catFilter]
+  );
+
+  const btn = (active) => ({
+    padding: isMobile ? "9px 14px" : "8px 16px",
+    borderRadius: 10,
+    border: "1.5px solid " + (active ? C.gold : C.line),
+    background: active ? C.gold : C.card,
+    color: active ? "#fff" : C.ink,
+    fontWeight: 800,
+    fontSize: 13,
+    cursor: "pointer",
+    fontFamily: "inherit",
+  });
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", backdropFilter: "blur(4px)", zIndex: 9999, display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center", padding: isMobile ? 0 : 16 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: C.card, color: C.ink, borderRadius: isMobile ? "20px 20px 0 0" : 16, padding: 18, width: "100%", maxWidth: isMobile ? "100%" : 600, maxHeight: isMobile ? "92vh" : "88vh", overflowY: "auto", animation: isMobile ? "slideUp .25s ease-out" : "scaleIn .18s ease-out", boxShadow: "0 -8px 40px rgba(0,0,0,.25)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div style={{ fontSize: 20, fontWeight: 900 }}>📋 Estimate</div>
+          <button onClick={onClose} style={{ background: "rgba(0,0,0,.05)", border: "none", borderRadius: "50%", width: 34, height: 34, fontSize: 16, cursor: "pointer", color: C.ink }}>✕</button>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: C.cardAlt, borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+          <span style={{ fontWeight: 800, fontSize: 14 }}>👥 Persons:</span>
+          <input type="number" min="1" value={persons} onChange={(e) => setPersons(e.target.value)} style={{ width: 80, padding: "8px 10px", borderRadius: 8, border: "1.5px solid " + C.line, fontSize: 16, fontWeight: 900, textAlign: "center", background: C.card, color: C.ink, outline: "none" }} />
+          <span style={{ fontSize: 12, color: C.gray, fontWeight: 700 }}>ke hisaab se</span>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <button style={btn(mode === "manual")} onClick={() => { if (mode === "auto" && items.length > 0) { if(window.confirm("AI band ho jayega, par aapke items safe rahenge. Aage badhein?")) setMode("manual"); } else setMode("manual"); }}>✍️ Manual</button>
+          <button style={btn(mode === "auto")} onClick={() => { setMode("auto"); runAuto(); }}>🤖 Smart AI Suggest</button>
+        </div>
+
+        {mode === "manual" && (
+          <div style={{ marginBottom: 12 }}>
+            <input placeholder="🔍 Item search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid " + C.line, fontSize: 14, boxSizing: "border-box", background: C.card, color: C.ink, outline: "none", marginBottom: 8 }} />
+            <div className="ep-noscroll" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, marginBottom: 6 }}>
+              {categories.map((c) => (
+                <button key={c} onClick={() => setCatFilter(c)} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid " + (catFilter === c ? C.gold : C.line), background: catFilter === c ? C.gold : C.card, color: catFilter === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontFamily: "inherit" }}>{c}</button>
+              ))}
+            </div>
+            <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid " + C.line, borderRadius: 10 }}>
+              {filtered.map((m) => (
+                <button key={m.id} onClick={() => addItem(m)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "10px 12px", border: "none", borderBottom: "1px solid " + C.line, background: "transparent", cursor: "pointer", fontFamily: "inherit", textAlign: "left", color: C.ink }}>
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>{m.name}</span>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: C.goldText, fontFamily: "monospace" }}>{inr(m.price)} ＋</span>
+                </button>
+              ))}
+              {filtered.length === 0 && <div style={{ padding: 20, textAlign: "center", color: C.gray, fontSize: 13 }}>Koi item nahi mila</div>}
+            </div>
+          </div>
+        )}
+
+        {mode === "auto" && (
+          <div style={{ marginBottom: 12 }}>
+            <InteractiveSuggest
+              C={C}
+              menu={menu}
+              persons={Number(persons) || 1}
+              onCancel={() => setMode("manual")} 
+              onSuggest={(newItems) => {
+                setMode("manual");
+                if (!newItems || newItems.length === 0) return;
+                setItems((prev) => {
+                  const merged = [...prev];
+                  newItems.forEach((ni) => {
+                    const ex = merged.find((p) => p.id === ni.id);
+                    if (ex) ex.qty += ni.qty;
+                    else merged.push(ni);
+                  });
+                  return merged;
+                });
+                toast("✅ Sahi quantity ke sath items add ho gaye!", "success");
+              }}
+            />
+          </div>
+        )}
+
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: C.gray, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Selected Items ({items.length})</div>
+          {items.length === 0 && <div style={{ padding: 16, textAlign: "center", color: C.gray, fontSize: 13, background: C.cardAlt, borderRadius: 10 }}>Abhi koi item nahi — upar se add karo ya Auto Suggest dabao</div>}
+          {items.map((i) => (
+            <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid " + C.line, background: C.cardAlt, borderRadius: 8, marginBottom: 4 }}>
+              <span style={{ flex: 1, fontSize: 13, fontWeight: 700, minWidth: 0 }}>{i.name}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, border: "1px solid " + C.line, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
+                <button onClick={() => changeQty(i.id, -1)} style={{ width: 30, height: 30, border: "none", background: C.card, color: C.ink, fontSize: 16, fontWeight: 900, cursor: "pointer" }}>−</button>
+                <span style={{ fontWeight: 900, fontSize: 14, minWidth: 24, textAlign: "center" }}>{i.qty}</span>
+                <button onClick={() => changeQty(i.id, 1)} style={{ width: 30, height: 30, border: "none", background: C.goldLight, color: C.goldText, fontSize: 16, fontWeight: 900, cursor: "pointer" }}>＋</button>
+              </div>
+              <span style={{ width: 70, textAlign: "right", fontWeight: 900, fontSize: 13, fontFamily: "monospace", flexShrink: 0 }}>{inr(i.price * i.qty)}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ background: "linear-gradient(135deg, " + C.gold + " 0%, " + C.goldDark + " 100%)", borderRadius: 12, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10, boxShadow: "0 4px 12px " + C.gold + "40" }}>
+          <div>
+            <div style={{ color: "#fff", fontSize: 10, fontWeight: 800, opacity: 0.85, letterSpacing: 0.5, textTransform: "uppercase" }}>Total ({items.length} items)</div>
+            <div style={{ color: "#fff", fontSize: 22, fontWeight: 900, fontFamily: "monospace" }}>{inr(total)}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ color: "#fff", fontSize: 10, fontWeight: 800, opacity: 0.85, letterSpacing: 0.5, textTransform: "uppercase" }}>Per Person</div>
+            <div style={{ color: "#fff", fontSize: 16, fontWeight: 800, fontFamily: "monospace" }}>{inr(Math.round(total / (Number(persons) || 1)))}</div>
+          </div>
+        </div>
+
+        <button
+          disabled={!items.length}
+          onClick={() => onMoveToCart(items)}
+          style={{ marginTop: 12, width: "100%", padding: "15px", background: items.length ? "linear-gradient(135deg, " + C.green + " 0%, #15803D 100%)" : C.line, color: items.length ? "#fff" : C.gray, border: "none", borderRadius: 12, fontSize: 16, fontWeight: 900, cursor: items.length ? "pointer" : "not-allowed", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+        >
+          ✅ Cart me bhejo ({items.length} items)
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ===========================================================================
 // MAIN APP
 // ===========================================================================
@@ -351,6 +619,7 @@ function StaffAppInner() {
   const [ordersFilter, setOrdersFilter] = useState("all");
   const [ordersRange, setOrdersRange] = useState(null);
   const [confetti, setConfetti] = useState(false);
+  const [showEstimate, setShowEstimate] = useState(false);
   const [muted, setMuted] = useState(() => localStorage.getItem("staff_mute") === "1");
   const prevNewIdsRef = useRef(null);
   const [lowCount, setLowCount] = useState(0);
@@ -595,25 +864,19 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
       </div>
 
       {/* TABS */}
-      <div style={{ background: C.card, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "0 8px" : "0 16px", display: "flex", gap: 4, overflowX: "auto" }}>
+      <div style={{ background: C.card, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "0 8px" : "0 16px", display: "flex", gap: 4, overflowX: "auto", alignItems: "center" }}>
+        <button onClick={() => { haptic(); setShowEstimate(true); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: C.green, fontWeight: 900, fontSize: isMobile ? 12 : 13, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, borderBottom: `3px solid ${C.green}` }}>📋 Estimate</button>
         {[
-          { id: "parcel", label: `🛍️ Parcel${parcelCount ? ` (${parcelCount})` : ""}` },
-          { id: "tables", label: `🍽️ Tables` },
-          { id: "orders", label: `📋 Orders${newCount ? ` (${newCount})` : ""}` },
-          { id: "kot", label: `🍳 Kitchen${newCount ? ` (${newCount})` : ""}` },
-          { id: "dashboard", label: "📊 Dashboard" },
-          { id: "history", label: "🕘 History" },
-          { id: "inventory", label: "🧾 Saman" + (lowCount ? " (" + lowCount + ")" : "") },
-          { id: "audit", label: "📝 Audit" },
-          { id: "expenses", label: "💸 Kharcha" },
-            { id: "bookings", label: "📅 Bookings" },
-          { id: "reports", label: "📈 Reports" },
-          { id: "import", label: "📥 Import" },
+          { id: "tables", label: `🍽️ Tables` }, { id: "parcel", label: `🛍️ Parcel${parcelCount ? ` (${parcelCount})` : ""}` },
+          { id: "orders", label: `📋 Orders${newCount ? ` (${newCount})` : ""}` }, { id: "kot", label: `🍳 Kitchen${newCount ? ` (${newCount})` : ""}` },
+          { id: "dashboard", label: "📊 Dashboard" }, { id: "history", label: "🕘 History" },
+          { id: "inventory", label: "🧾 Saman" + (lowCount ? " (" + lowCount + ")" : "") }, { id: "audit", label: "📝 Audit" },
+          { id: "expenses", label: "💸 Kharcha" }, { id: "bookings", label: "📅 Bookings" },
+          { id: "reports", label: "📈 Reports" }, { id: "import", label: "📥 Import" },
         ].map(tab => (
           <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSelectedTable(null); setOrdersRange(null); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: activeTab === tab.id ? C.gold : C.gray, fontWeight: 700, fontSize: isMobile ? 12 : 13, cursor: "pointer", borderBottom: activeTab === tab.id ? `3px solid ${C.gold}` : "3px solid transparent", whiteSpace: "nowrap", flexShrink: 0 }}>{tab.label}</button>
         ))}
       </div>
-
       {/* CONTENT */}
       <div style={{ flex: 1, overflow: "auto", padding: isMobile ? 10 : 16 }}>
         
@@ -735,6 +998,26 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
         </div>
       )}
 
+      {showEstimate && (
+        <EstimatePanel
+          C={C}
+          menu={menu}
+          isMobile={isMobile}
+          onClose={() => setShowEstimate(false)}
+          onMoveToCart={(est) => {
+            setCart((prev) => {
+              const next = { ...prev };
+              est.forEach((e) => {
+                next[e.id] = (Number(next[e.id]) || 0) + e.qty;
+              });
+              return next;
+            });
+            setShowEstimate(false);
+            toast(`✅ ${est.length} items cart me chale gaye`, "success");
+            if (!selectedTable) setActiveTab("tables");
+          }}
+        />
+      )}
       {feedbackOrder && <FeedbackModal C={C} isMobile={isMobile} order={feedbackOrder} onClose={() => setFeedbackOrder(null)} />}
       {tableMerge && <TableMergeModal C={C} isMobile={isMobile} primaryOrder={tableMerge} allOrders={orders} onClose={() => setTableMerge(null)} />}
       {splitBillOrder && <SplitBillModal C={C} isMobile={isMobile} order={splitBillOrder} onClose={() => setSplitBillOrder(null)} />}
@@ -1539,6 +1822,21 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 150);
   const [category, setCategory] = useState("All");
+  const [showFav, setShowFav] = useState(() => { try { return localStorage.getItem("staff_fav_open") === "1"; } catch (e) { return false; } });
+  const [pinnedIds, setPinnedIds] = useState([]);
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "settings", "favourites"), (s) => setPinnedIds(s.exists() && Array.isArray(s.data().ids) ? s.data().ids : []), () => {});
+    return () => unsub();
+  }, []);
+  const togglePin = async (id) => {
+    if (!isOwner) { toast("Favourite sirf owner pin kar sakta hai", "warning"); return; }
+    const prev = pinnedIds;
+    const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+    haptic(8);
+    setPinnedIds(next);
+    try { await setDoc(doc(db, "settings", "favourites"), { ids: next, updatedAt: Date.now() }); }
+    catch (e) { setPinnedIds(prev); toast(e.message, "error"); }
+  };
   const [placing, setPlacing] = useState(false);
   const [runningOrders, setRunningOrders] = useState([]);
   const [discount, setDiscount] = useState(0);
@@ -1664,10 +1962,11 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const favItems = useMemo(() => {
     const cnt = {};
     orders.forEach((o) => { if (o.status === "cancelled") return; (o.items || []).forEach((it) => { cnt[it.itemId] = (cnt[it.itemId] || 0) + (Number(it.qty) || 0); }); });
-    return menu.filter((m) => m.available && cnt[m.id]).sort((a, b) => cnt[b.id] - cnt[a.id]).slice(0, 8);
-  }, [orders, menu]);
+    const seenFav = new Set();
+    return menu.filter((m) => m.available && (cnt[m.id] || pinnedIds.includes(m.id))).sort((a, b) => { const pa = pinnedIds.indexOf(a.id), pb = pinnedIds.indexOf(b.id); if (pa >= 0 || pb >= 0) return pa < 0 ? 1 : pb < 0 ? -1 : pa - pb; return cnt[b.id] - cnt[a.id]; }).filter((m) => { const k = String(m.name || "").trim().toLowerCase(); if (seenFav.has(k)) return false; seenFav.add(k); return true; }).slice(0, 12 + pinnedIds.length);
+  }, [orders, menu, pinnedIds]);
   const categories = useMemo(() => ["All", ...Array.from(new Set(menu.map(m => m.category)))], [menu]);
-  const filtered = useMemo(() => menu.filter(m => m.available && (category === "All" || m.category === category) && (!debouncedSearch.trim() || m.name.toLowerCase().includes(debouncedSearch.toLowerCase()))), [menu, category, debouncedSearch]);
+  const filtered = useMemo(() => menu.filter(m => m.available && (category === "All" || m.category === category) && (!debouncedSearch.trim() || (m.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || String(m.category || "").toLowerCase().includes(debouncedSearch.toLowerCase())))), [menu, category, debouncedSearch]);
 
   const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
   const resolveItem = (id) => { const m = menu.find(x => x.id === id); const ex = existingItems.find(e => e.itemId === id); if (ex && !addMoreMode) return ex; return m || ex || null; };
@@ -1919,11 +2218,11 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   return (
     <div style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 100, display: "flex", flexDirection: "column", animation: "fadeIn 0.2s" }}>
       <div style={{ background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", padding: isMobile ? "10px 12px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: isMobile ? "8px 12px" : "9px 16px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: isMobile ? 12 : 13, flexShrink: 0 }}>Back</button>
+        <button onClick={onBack} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: isMobile ? "8px 12px" : "9px 16px", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: isMobile ? 12 : 13, flexShrink: 0 }}>← Back</button>
         <div style={{ fontWeight: 800, fontSize: isMobile ? 13 : 16, textAlign: "center", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {existingOrder ? (addMoreMode ? `Add - ${table === "parcel" ? "Parcel" : "T" + table}` : `Bill - ${table === "parcel" ? "Parcel" : "T" + table} - ${existingItems.length} items`) : (table === "parcel" ? "New - Parcel" : `New - Table ${table}`)}
         </div>
-        <div style={{ width: isMobile ? 40 : 60, flexShrink: 0 }} />
+        <div style={{ background: "rgba(255,255,255,0.18)", borderRadius: 20, padding: "6px 12px", fontWeight: 900, fontSize: isMobile ? 12 : 14, fontFamily: "monospace", flexShrink: 0, minWidth: isMobile ? 40 : 60, textAlign: "center" }}>{cartItems.length > 0 ? inr(addMoreMode ? grossSub : totalAmount) : "—"}</div>
       </div>
 
       {runningOrders.length > 0 && !existingOrder && (
@@ -1936,26 +2235,30 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       <div style={{ flex: 1, display: "flex", flexDirection: isMobile ? "column" : "row", gap: 12, overflow: isMobile ? "auto" : "hidden", padding: isMobile ? 8 : 12, paddingBottom: isMobile ? 80 : 12 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 12, overflow: "hidden", height: isMobile ? "44vh" : undefined, flex: isMobile ? undefined : 1, flexShrink: 0, minWidth: 0 }}>
           {favItems.length > 0 && !search.trim() && (
-            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, flexShrink: 0 }}>
+            <button onClick={() => { haptic(); setShowFav((v) => { const n = !v; try { localStorage.setItem("staff_fav_open", n ? "1" : "0"); } catch (e) {} return n; }); }} style={{ alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 999, border: "1px solid " + C.gold, background: showFav ? C.gold : C.card, color: showFav ? "#fff" : C.goldText, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>⭐ Favourites ({favItems.length}) {showFav ? "▲" : "▼"}</button>
+          )}
+          {showFav && favItems.length > 0 && !search.trim() && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: 8, maxHeight: 150, overflowY: "auto", background: C.goldLight, border: "1px solid " + C.line, borderRadius: 12, flexShrink: 0 }}>
               {favItems.map((m) => (
-                <button key={"fav" + m.id} onClick={() => setQty(m.id, (cart[m.id] || 0) + 1)} style={{ padding: "7px 12px", borderRadius: 20, border: "1px solid " + (C.gold || C.red), background: cart[m.id] ? (C.gold || C.red) : C.card, color: cart[m.id] ? "#fff" : C.ink, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>⭐ {m.name}{cart[m.id] ? " ×" + cart[m.id] : ""}</button>
+                <button key={"fav" + m.id} onClick={() => setQty(m.id, (cart[m.id] || 0) + 1)} style={{ padding: "7px 12px", borderRadius: 20, border: "1px solid " + (C.gold || C.red), background: cart[m.id] ? (C.gold || C.red) : C.card, color: cart[m.id] ? "#fff" : C.ink, fontWeight: 800, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{pinnedIds.includes(m.id) ? "📌" : "⭐"} {m.name}{cart[m.id] ? " ×" + cart[m.id] : ""}</button>
               ))}
             </div>
           )}
-          <input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{ padding: "10px 14px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink }} />
-          <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
+          <div style={{ position: "relative", flexShrink: 0 }}><input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "10px 38px 10px 14px", border: `1px solid ${C.line}`, borderRadius: 8, fontSize: 14, outline: "none", background: C.card, color: C.ink }} />{search && <button aria-label="Search clear" onClick={() => setSearch("")} style={{ position: "absolute", top: 6, right: 6, width: 28, height: 28, border: "none", borderRadius: 14, background: C.cardAlt, color: C.gray, fontSize: 13, fontWeight: 800, cursor: "pointer", padding: 0 }}>✕</button>}</div>
+          <div className="ep-noscroll" style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, flexShrink: 0 }}>
             {categories.map(c => (
-              <button key={c} onClick={() => { haptic(); setCategory(c); }} style={{ padding: "7px 14px", borderRadius: 20, border: `1px solid ${category === c ? C.gold : C.line}`, background: category === c ? C.gold : C.card, color: category === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
+              <button key={c} onClick={() => { haptic(); setCategory(c); }} style={{ padding: "8px 16px", borderRadius: 999, boxShadow: category === c ? "0 3px 10px rgba(184,134,11,0.30)" : "none", border: `1px solid ${category === c ? C.gold : C.line}`, background: category === c ? C.gold : C.card, color: category === c ? "#fff" : C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", flexShrink: 0 }}>{c}</button>
             ))}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill, minmax(170px, 1fr))", gap: 8, overflowY: "auto", flex: 1 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill, minmax(170px, 1fr))", gap: 10, overflowY: "auto", flex: 1, alignContent: "start", paddingBottom: 4, paddingRight: 2 }}>
             {filtered.map(m => {
               const q = cart[m.id] || 0;
               return (
-                <button key={m.id} onClick={() => setQty(m.id, q + 1)} style={{ textAlign: "left", padding: isMobile ? 10 : 12, borderRadius: 10, border: `1.5px solid ${q > 0 ? C.green : C.line}`, background: C.card, cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isMobile ? 60 : 68, color: C.ink }}>
-                  <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: C.ink, marginBottom: 4, lineHeight: 1.2 }}>{m.name}</div>
+                <button key={m.id} onClick={() => setQty(m.id, q + 1)} className="ep-card" style={{ textAlign: "left", padding: isMobile ? 10 : 12, borderRadius: 12, border: `1.5px solid ${q > 0 ? C.green : C.line}`, background: q > 0 ? C.greenLight : C.card, boxShadow: q > 0 ? "0 2px 10px rgba(22,163,74,0.15)" : "0 1px 3px rgba(0,0,0,0.05)", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isMobile ? 70 : 78, color: C.ink, display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 4 }}>
+                  <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: C.ink, marginBottom: 4, lineHeight: 1.25, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", paddingRight: 24 }}>{m.name}</div>
+                  {isOwner && <span role="button" title="Favourite pin" onClick={(e) => { e.stopPropagation(); togglePin(m.id); }} style={{ position: "absolute", bottom: 4, right: 6, fontSize: 16, lineHeight: 1, padding: 4, cursor: "pointer", opacity: pinnedIds.includes(m.id) ? 1 : 0.35 }}>{pinnedIds.includes(m.id) ? "⭐" : "☆"}</span>}
                   <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 900, color: C.goldText, fontFamily: "monospace" }}>{inr(m.price)}</div>
-                  {q > 0 && <span style={{ position: "absolute", top: 6, right: 6, background: C.green, color: "#fff", borderRadius: 10, padding: "1px 8px", fontSize: 10, fontWeight: 800, animation: "successBounce 0.3s" }}>{q}</span>}
+                  {q > 0 && <span style={{ position: "absolute", top: 6, right: 6, background: C.green, color: "#fff", borderRadius: 12, padding: "2px 9px", fontSize: 11, fontWeight: 800, boxShadow: "0 2px 6px rgba(22,163,74,0.35)", animation: "successBounce 0.3s" }}>{q}</span>}
                 </button>
               );
             })}
@@ -1963,10 +2266,10 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
           </div>
         </div>
 
-        <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0, width: isMobile ? "100%" : 380, minHeight: isMobile ? 400 : undefined }}>
-          <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.line}`, fontWeight: 800, fontSize: isMobile ? 13 : 15, color: C.ink }}>{(existingOrder ? "Bill" : "New Order") + " - " + (table === "parcel" ? "Parcel" : "Table " + table) + " (" + cartItems.length + ")"}{isOwner && <button onClick={() => setAddMenuOpen(true)} style={{ float: "right", margin: "-3px 0", padding: "5px 12px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ Menu</button>}</div>
+        <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, boxShadow: "0 6px 24px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0, width: isMobile ? "100%" : 400, minHeight: isMobile ? 400 : undefined }}>
+          <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.line}`, background: C.cardAlt, fontWeight: 800, fontSize: isMobile ? 13 : 15, color: C.ink, letterSpacing: 0.2 }}>{(existingOrder ? "Bill" : "New Order") + " - " + (table === "parcel" ? "Parcel" : "Table " + table) + " (" + cartItems.length + ")"}{isOwner && <button onClick={() => setAddMenuOpen(true)} style={{ float: "right", margin: "-3px 0", padding: "5px 12px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ Menu</button>}{!existingOrder && cartItems.length > 0 && <button onClick={() => { if (window.confirm("Poora cart khaali karein?")) { setCart({}); try { localStorage.removeItem("staff_draft_" + table); } catch (e) {} } }} style={{ float: "right", margin: "-3px 8px -3px 0", padding: "5px 12px", border: "1.5px solid " + C.red, borderRadius: 6, background: "transparent", color: C.red, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Clear</button>}</div>
           <div style={{ flex: isMobile ? "none" : 1, overflowY: isMobile ? "visible" : "auto", minHeight: isMobile ? 0 : 140 }}>
-            {cartItems.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.gray, fontSize: 13 }}>Menu se item tap karo</div>}
+            {cartItems.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: C.gray, fontSize: 13, fontWeight: 700 }}><div style={{ fontSize: 40, marginBottom: 8, opacity: 0.5 }}>🧾</div>Menu se item tap karo</div>}
             {cartItems.length > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: C.cardAlt, borderBottom: "1px solid " + C.line, fontSize: 10, fontWeight: 800, color: C.gray, letterSpacing: 0.5, textTransform: "uppercase" }}>
                 <div style={{ flex: 1 }}>Item</div>
@@ -1992,7 +2295,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
                   <div style={{ display: "flex", alignItems: "center", width: 84, justifyContent: "center", border: "1px solid " + C.line, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
                     <button onClick={() => setQty(id, q - 1)} style={{ width: 26, height: 26, border: "none", background: C.cardAlt, color: C.ink, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>-</button>
                     <span style={{ flex: 1, textAlign: "center", fontWeight: 900, fontSize: 13, color: C.ink }}>{q}</span>
-                    <button onClick={() => setQty(id, q + 1)} style={{ width: 26, height: 26, border: "none", background: C.cardAlt, color: C.ink, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
+                    <button onClick={() => setQty(id, q + 1)} style={{ width: 26, height: 26, border: "none", background: C.goldLight, color: C.goldText, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
                   </div>
                   <div style={{ width: 64, textAlign: "right", fontWeight: 800, fontSize: 13, color: C.ink, fontFamily: "monospace", flexShrink: 0 }}>{inr((rates[id] ?? m.price) * q)}</div>
                   <button onClick={() => setQty(id, 0)} style={{ width: 16, background: "transparent", border: "none", color: C.gray, fontSize: 13, cursor: "pointer", padding: 0, flexShrink: 0 }}>x</button>

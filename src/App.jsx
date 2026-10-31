@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db, auth, authReady } from "./firebase";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider, signInWithCredential } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc,
   getDocs, getDoc, addDoc, query, orderBy, serverTimestamp, where, limit, arrayUnion, arrayRemove,
@@ -2020,7 +2020,7 @@ function printKotSlipGlobal(order) {
     const w = iframe.contentWindow;
     setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 60000);
     w.document.open();
-    w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:8px;font-weight:700}h2,h3{text-align:center;margin:3px 0}.r{font-size:17px;padding:4px 0;border-bottom:1px dashed #000}.c{text-align:center;font-size:12px}</style></head><body><h2>KOT #${kot.kotNumber || 1}${kot.isRunning ? " (RUNNING)" : ""}</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + escapeHtml(String(order.table))}</h3><div class="c">${escapeHtml(now)} · #${escapeHtml(order.id.slice(1, 5).toUpperCase())}${order.waiter ? " · " + escapeHtml(order.waiter) : ""}</div><div style="margin-top:8px">${rows}</div>${order.notes ? `<div class="c" style="margin-top:8px">Note: ${escapeHtml(order.notes)}</div>` : ""}</body></html>`);
+    w.document.write(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:8px;font-weight:700}h2,h3{text-align:center;margin:3px 0}.r{font-size:17px;padding:4px 0;border-bottom:1px dashed #000}.c{text-align:center;font-size:12px}</style></head><body><h2>KOT #${kot.kotNumber || 1}${kot.isRunning ? " (RUNNING)" : ""}</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + escapeHtml(String(order.table))}</h3><div class="c">${escapeHtml(now)} · #${escapeHtml(order.id.slice(1, 5).toUpperCase())}${order.waiter ? " · " + escapeHtml(order.waiter) : ""}</div><div style="margin-top:8px">${rows}</div>${order.notes ? `<div class="c" style="margin-top:8px">Note: ${escapeHtml(order.notes)}</div>` : ""}</body></html>`);
     w.document.close();
     setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("⚠️ KOT print nahi ho paya: " + e.message); } }, 400);
   } catch (e) { console.error("KOT print error:", e); }
@@ -2041,7 +2041,7 @@ function printBillSlip(order, items, calc, opt) {
   const w = iframe.contentWindow;
   setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 60000);
   w.document.open();
-  w.document.write(`<!doctype html><html><head><title>Bill ${billNo}</title><style>
+  w.document.write(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>Bill ${billNo}</title><style>
 *{box-sizing:border-box;color:#000 !important}
 @page{margin:0}
 body{font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;padding:8px;width:290px;margin:0 auto}
@@ -2753,7 +2753,42 @@ const handleWaiterPinSubmitOld = () => {
     }
   };
 
-  const handleSendOtp = () => {
+  const otpConfRef = useRef(null);
+  const otpRecRef = useRef(null);
+  useEffect(() => {
+    if (DEMO_OTP) return;
+    const u = auth.currentUser;
+    const p = String(custPhone || "").replace(/\D/g, "").slice(-10);
+    setIsLoggedIn(!!(u && u.phoneNumber && u.phoneNumber === "+91" + p));
+  }, [custPhone]);
+  const handleSendOtp = async () => {
+    const p = String(custPhone || "").replace(/\D/g, "").slice(-10);
+    if (p.length !== 10) { showToast("⚠️ 10 digit phone daalo", 'error'); return; }
+    if (DEMO_OTP) { handleSendOtpDemo(); return; }
+    try {
+      const u = await ensureUser();
+      if (u.phoneNumber) { setIsLoggedIn(true); showToast("✅ Phone pehle se verified hai", 'success'); return; }
+      if (!u.isAnonymous) { showToast("ℹ️ Staff login chal raha hai - pehle logout karo", 'info'); return; }
+      try { otpRecRef.current && otpRecRef.current.clear(); } catch (x) {}
+      otpRecRef.current = new RecaptchaVerifier(auth, "otp-recaptcha", { size: "invisible" });
+      otpConfRef.current = await linkWithPhoneNumber(u, "+91" + p, otpRecRef.current);
+      setCustPhone(p); setOtpCode(""); setOtpStep("verify");
+      showToast("📩 OTP SMS bheja gaya", 'success');
+    } catch (e) {
+      console.error("OTP send:", e);
+      try { otpRecRef.current && otpRecRef.current.clear(); } catch (x) {}
+      const m = {
+        "auth/operation-not-allowed": "Firebase me Phone sign-in ON karo",
+        "auth/invalid-phone-number": "Phone number galat hai",
+        "auth/too-many-requests": "Bahut try ho gaye, thodi der baad",
+        "auth/quota-exceeded": "SMS limit khatam (Firebase quota/billing)",
+        "auth/captcha-check-failed": "Captcha fail - domain Authorized domains me add karo",
+        "auth/billing-not-enabled": "Real SMS ke liye Firebase billing (Blaze) chahiye"
+      };
+      showToast("❌ " + (m[e.code] || e.code || e.message), 'error');
+    }
+  };
+  const handleSendOtpDemo = () => {
     if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid phone", 'error'); return; }
     if (!DEMO_OTP) {
       showToast("ℹ️ OTP service abhi connected nahi — naam & phone se order karo", 'info');
@@ -2771,7 +2806,31 @@ const handleWaiterPinSubmitOld = () => {
     showToast(`🔐 OTP: ${code}`, 'success');
     alert(`🔐 Demo OTP: ${code}`);
   };
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
+    if (DEMO_OTP && !otpConfRef.current) { handleVerifyOtpDemo(); return; }
+    if (!otpConfRef.current) { showToast("⚠️ Pehle OTP bhejo", 'error'); return; }
+    const p = String(custPhone || "").replace(/\D/g, "").slice(-10);
+    try {
+      await otpConfRef.current.confirm(String(otpCode).trim());
+    } catch (e) {
+      if (e.code === "auth/credential-already-in-use" || e.code === "auth/account-exists-with-different-credential") {
+        try {
+          const cred = PhoneAuthProvider.credentialFromError(e);
+          if (!cred) throw e;
+          await signInWithCredential(auth, cred);
+        } catch (e2) { showToast("❌ OTP verify fail: " + (e2.code || e2.message), 'error'); return; }
+      } else {
+        showToast(e.code === "auth/invalid-verification-code" ? "❌ OTP galat hai" : "❌ OTP fail: " + (e.code || e.message), 'error');
+        return;
+      }
+    }
+    try { await auth.currentUser.getIdToken(true); } catch (e) {}
+    otpConfRef.current = null;
+    setIsLoggedIn(true); setOtpStep("phone");
+    showToast("✅ Phone verify ho gaya", 'success');
+    try { await setDoc(doc(db, "customers", p), { phone: p, name: custName || "Guest", address: custAddress || "", uid: auth.currentUser.uid, lastLogin: Date.now() }, { merge: true }); } catch (e) {}
+  };
+  const handleVerifyOtpDemo = () => {
     if (generatedOtp && otpCode === generatedOtp) {
       setIsLoggedIn(true); setOtpStep("phone");
       (async () => {
@@ -2964,7 +3023,7 @@ const handleWaiterPinSubmitOld = () => {
     } catch (e) {
       console.error("Order error:", e);
       if (payIdRef.current) alert("⚠️ Payment ho gaya hai par order save nahi hua.\nPayment ID: " + payIdRef.current + "\nYe ID staff ko dikhao.");
-      else showToast("⚠️ Order fail: " + (e.code || e.message || "unknown"), 'error');
+      else showToast("⚠️ " + authMsg(e), 'error');
     } finally { setIsProcessingPayment(false); }
   }, [isProcessingPayment, cartItems, custName, custPhone, custAddress, orderType, table, paymentMethod, finalTotal, subtotal, discountAmount, deliveryFee, claimedReward, newEarnedCoins, isScheduled, scheduleDate, scheduleTime, appliedDiscount, loyaltyDiscount, loyaltyTier, notes, menu, placeOrder, sendPushNotification, consumeFlashStock, showToast]);
 
@@ -3653,6 +3712,7 @@ const handleWaiterPinSubmitOld = () => {
 
                 <div style={{ background: COLORS.paper2, padding: 16, borderRadius: 16, marginBottom: 16 }}>
                   <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>🔐 Quick OTP</div>
+                  <div id="otp-recaptcha"></div>
                   {!isLoggedIn ? (
                     <div>
                       {otpStep === "phone" ? (
@@ -4544,7 +4604,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
       const w = iframe.contentWindow;
       setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 60000);
       w.document.open();
-      w.document.write(`<!doctype html><html><head><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:8px;font-weight:700}h2,h3{text-align:center;margin:3px 0}.r{font-size:17px;padding:4px 0;border-bottom:1px dashed #000}.c{text-align:center;font-size:12px}</style></head><body><h2>KOT #${kot.kotNumber || 1}${kot.isRunning ? " (RUNNING)" : ""}</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + escapeHtml(String(order.table))}</h3><div class="c">${escapeHtml(now)} · #${escapeHtml(order.id.slice(1, 5).toUpperCase())}${order.waiter ? " · " + escapeHtml(order.waiter) : ""}</div><div style="margin-top:8px">${rows}</div>${order.notes ? `<div class="c" style="margin-top:8px">Note: ${escapeHtml(order.notes)}</div>` : ""}</body></html>`);
+      w.document.write(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:8px;font-weight:700}h2,h3{text-align:center;margin:3px 0}.r{font-size:17px;padding:4px 0;border-bottom:1px dashed #000}.c{text-align:center;font-size:12px}</style></head><body><h2>KOT #${kot.kotNumber || 1}${kot.isRunning ? " (RUNNING)" : ""}</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + escapeHtml(String(order.table))}</h3><div class="c">${escapeHtml(now)} · #${escapeHtml(order.id.slice(1, 5).toUpperCase())}${order.waiter ? " · " + escapeHtml(order.waiter) : ""}</div><div style="margin-top:8px">${rows}</div>${order.notes ? `<div class="c" style="margin-top:8px">Note: ${escapeHtml(order.notes)}</div>` : ""}</body></html>`);
       w.document.close();
       w.onafterprint = () => setTimeout(next, 400);
 setTimeout(next, 20000);
@@ -4713,7 +4773,7 @@ setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("⚠️ KOT p
 
     w.document.open();
     w.document.write(`<!doctype html>
-<html><head><title>Bill ${billNo}</title>
+<html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>Bill ${billNo}</title>
 <style>
   *{box-sizing:border-box;color:#000 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   div,span,b{font-size:13px !important;font-weight:700}
@@ -6640,9 +6700,22 @@ async function setOrderOnce(order) {
   await setDoc(ref, order);
 }
 
+function authMsg(e) {
+  const c = (e && e.code) || "";
+  const m = {
+    "auth/operation-not-allowed": "Login system band hai (Firebase > Authentication > Anonymous ON karo)",
+    "auth/admin-restricted-operation": "Login system band hai (Firebase > Authentication > Anonymous ON karo)",
+    "auth/network-request-failed": "Internet/network dikkat. Dobara try karo",
+    "auth/web-storage-unsupported": "Is browser me storage band hai. Chrome/Safari me link kholo",
+    "auth/unauthorized-domain": "Ye website Firebase Authorized domains me nahi hai",
+    "auth/too-many-requests": "Bahut try ho gaye, thodi der baad try karo",
+    "permission-denied": "Order allow nahi hua (Firestore rules) - staff ko batao"
+  };
+  return "Order fail: " + (m[c] || c || (e && e.message) || "unknown");
+}
 let _anonInFlight = null;
 async function ensureUser() {
-  try { await Promise.race([authReady, new Promise((r) => setTimeout(r, 4000))]); } catch (e) {}
+  try { await Promise.race([authReady, new Promise((r) => setTimeout(r, 8000))]); } catch (e) {}
   if (auth.currentUser) return auth.currentUser;
   if (!_anonInFlight) {
     _anonInFlight = (async () => {
@@ -7189,6 +7262,7 @@ const earned = Math.floor(getOrderTotal(order) / (Number(loyaltyRules?.rate) || 
           const userRef = doc(db, "loyaltyUsers", phone);
           const userSnap = await tx.get(userRef);
           const curCoins = userSnap.exists() ? (userSnap.data().coins || 0) : 0;
+          if (used > curCoins) throw new Error("Customer ke paas itne coins nahi - reward claim galat hai");
           const newCoins = Math.max(0, curCoins + earned - used);
 
           if (userSnap.exists()) {
@@ -7290,3 +7364,5 @@ const earned = Math.floor(getOrderTotal(order) / (Number(loyaltyRules?.rate) || 
     </ErrorBoundary>
   );
 }
+
+// EP-PATCH-v1
