@@ -697,7 +697,7 @@ function StaffAppInner() {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setCalls(list);
         if (list.length > prevCallsRef.current) {
-          try { new Audio("https://assets.mixkit.co/active-storage/sfx/951/951-preview.mp3").play().catch(() => {}); } catch (e) {}
+          try { if (localStorage.getItem("staff_mute") !== "1") new Audio("https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3").play().catch(() => {}); } catch (e) {}
         }
         prevCallsRef.current = list.length;
       },
@@ -754,7 +754,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
       if (u && !u.isAnonymous) {
         try {
           const s = await getDoc(doc(db, "staff", u.uid));
-          if (s.exists()) { setUser(u); setStaffData(s.data()); setWaiterName(s.data().name || "Staff"); }
+          if (s.exists() && s.data().active !== false) { setUser(u); setStaffData(s.data()); setWaiterName(s.data().name || "Staff"); }
           else { await signOut(auth); }
         } catch (e) { console.error(e); }
       } else { setUser(null); setStaffData(null); }
@@ -798,6 +798,18 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
 
   const newCount = orders.filter(o => o.status === "new" && toMillis(o.createdAt) > Date.now() - FRESH_MS).length;
   const parcelCount = orders.filter(isOpenParcel).length;
+  /*P13*/ const prevReadyRef = useRef(null);
+  useEffect(() => {
+    const ready = orders.filter((o) => o.status === "ready" && !o.paid && Date.now() - toMillis(o.createdAt) < 18 * 3600 * 1000).map((o) => o.id);
+    if (prevReadyRef.current === null) { prevReadyRef.current = ready; return; }
+    const prev = new Set(prevReadyRef.current);
+    const fresh = orders.filter((o) => ready.includes(o.id) && !prev.has(o.id));
+    if (fresh.length) {
+      fresh.forEach((o) => toast((o.orderType === "parcel" ? "Parcel" : "Table " + o.table) + " READY - serve karo", "success", { duration: 5000 }));
+      haptic(40);
+    }
+    prevReadyRef.current = ready;
+  }, [orders]);
 
   useEffect(() => {
     const fresh = orders.filter(o => o.status === "new" && toMillis(o.createdAt) > Date.now() - FRESH_MS);
@@ -845,7 +857,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
     try {
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const s = await getDoc(doc(db, "staff", cred.user.uid));
-      if (!s.exists()) { await signOut(auth); setLoginError("Ye account staff ka nahi hai"); }
+      if (!s.exists() || s.data().active === false) { await signOut(auth); setLoginError("Ye account staff ka nahi hai ya band hai"); }
       else toast("Welcome back!", "success");
     } catch (err) {
       const msg = ["auth/invalid-credential", "auth/wrong-password", "auth/user-not-found"].includes(err.code) ? "Email ya password galat hai"
@@ -980,7 +992,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
     <h2 style={{ margin: "0 0 16px", fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Bookings ({bookings?.length || 0})</h2>
     {(!bookings || bookings.length === 0) && <div style={{ textAlign: "center", padding: 40, color: C.gray }}><div style={{ fontSize: 40, marginBottom: 8 }}>📅</div><div style={{ fontSize: 13, fontWeight: 700 }}>Koi booking nahi</div></div>}
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {(bookings || []).sort((a,b) => b.createdAt - a.createdAt).map(b => (
+      {[...(bookings || [])].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0)).map(b => (
         <div key={b.id} style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, gap: 8, flexWrap: "wrap" }}>
             <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{b.type === "party" ? "🎉 Party" : "🍽️ Table"}</div>
@@ -989,7 +1001,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
           <div style={{ fontSize: 12, color: C.ink, fontWeight: 700 }}>{b.name} · {b.phone}</div>
           <div style={{ fontSize: 11, color: C.gray, marginTop: 4 }}>{b.date} at {b.time} · {b.guests} guests</div>
           <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-            <a href={`https://wa.me/91${b.phone}`} target="_blank" rel="noopener noreferrer" style={{ background: "#25D366", color: "#fff", padding: "7px 14px", borderRadius: 8, textDecoration: "none", fontWeight: 800, fontSize: 12 }}>✅ Confirm</a>
+            <a href={`https://wa.me/91${b.phone}`} target="_blank" rel="noopener noreferrer" onClick={() => { updateDoc(doc(db, "bookings", b.id), { status: "confirmed", confirmedAt: Date.now() }).catch(() => {}); }} style={{ background: "#25D366", color: "#fff", padding: "7px 14px", borderRadius: 8, textDecoration: "none", fontWeight: 800, fontSize: 12 }}>✅ Confirm</a>
             <button onClick={async () => { if (window.confirm("Delete booking?")) { try { await deleteDoc(doc(db, "bookings", b.id)); toast("Deleted", "success"); } catch (e) { toast(e.message, "error"); } } }} style={{ background: "transparent", color: C.red, border: `1.5px solid ${C.red}`, padding: "7px 14px", borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Delete</button>
           </div>
         </div>
@@ -1446,6 +1458,15 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
 // ===========================================================================
 // KITCHEN VIEW (with aging bar)
 // ===========================================================================
+/*P5*/ function kotDisplayItems(o) {
+  const kots = o.kots || [];
+  const last = kots[kots.length - 1];
+  if (kots.length < 2 || !last) return o.items || [];
+  const fresh = (last.items || []).map((i) => ({ ...i }));
+  const gone = (last.removedItems || []).map((i) => ({ ...i, _cancel: true }));
+  const prev = kots.slice(0, -1).flatMap((k) => k.items || []).map((i) => ({ ...i, _old: true }));
+  return [...fresh, ...gone, ...prev];
+}
 function KOTView({ C, isMobile, orders, setOrders }) {
   const toast = useToast();
   const haptic = useHaptic();
@@ -1467,7 +1488,7 @@ function KOTView({ C, isMobile, orders, setOrders }) {
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
         {kotOrders.map(o => {
           const isNew = o.status === "new";
-          const mins = Math.floor((Date.now() - o.createdAt) / 60000);
+          const mins = Math.floor((Date.now() - (o.lastKotAt || o.createdAt)) / 60000);
           const late = mins >= 15;
           const aging = Math.min(100, (mins / 20) * 100);
           return (
@@ -1479,7 +1500,7 @@ function KOTView({ C, isMobile, orders, setOrders }) {
                 <div style={{ fontWeight: 800, fontSize: isMobile ? 15 : 17, color: C.ink }}>{o.orderType === "parcel" ? "Parcel" : `Table ${o.table}`}</div>
                 <span style={{ fontSize: 12, color: late ? C.red : C.gray, fontWeight: 800 }}>{mins}m</span>
               </div>
-              {(o.items || []).map((it, i) => <div key={i} style={{ fontSize: isMobile ? 13 : 15, fontWeight: 700, padding: "6px 0", borderBottom: `1px dashed ${C.line}`, color: C.ink }}>{it.qty}x {it.name}{it.portion ? <span style={{ color: C.gray, fontWeight: 500 }}> ({it.portion})</span> : ""}</div>)}
+              {kotDisplayItems(o).map((it, i) => <div key={i} style={{ opacity: it._old ? 0.45 : 1, textDecoration: it._cancel ? "line-through" : "none", fontSize: isMobile ? 13 : 15, fontWeight: 700, padding: "6px 0", borderBottom: `1px dashed ${C.line}`, color: C.ink }}>{it.qty}x {it.name}{it.portion ? <span style={{ color: C.gray, fontWeight: 500 }}> ({it.portion})</span> : ""}</div>)}
               <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
                 <button onClick={() => advanceOrder(o)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 8, background: isNew ? C.red : C.amber, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>{isNew ? "Start Cooking" : "Mark Ready"}</button>
                 <button onClick={() => printKOT(o)} style={{ padding: "10px 14px", border: `1.5px solid ${C.line}`, borderRadius: 8, background: "transparent", color: C.ink, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Print</button>
@@ -1786,16 +1807,23 @@ function TableMergeModal({ C, isMobile, primaryOrder, allOrders, onClose }) {
     try {
       const other = allOrders.find(o => o.id === selectedId);
       if (!other) { setBusy(false); return; }
-      const mb = writeBatch(db);
-      mb.update(doc(db, "orders", primaryOrder.id), {
-        items: [...(primaryOrder.items || []), ...(other.items || [])],
-        kots: [...(primaryOrder.kots || []), ...(other.kots || [])],
-        subtotal: (Number(primaryOrder.subtotal) || 0) + (Number(other.subtotal) || 0),
-        finalTotal: (Number(primaryOrder.finalTotal) || 0) + (Number(other.finalTotal) || 0),
-        mergedFrom: [...(primaryOrder.mergedFrom || []), other.table],
+      /*P6*/ await runTransaction(db, async (tx) => {
+        const pRef = doc(db, "orders", primaryOrder.id), oRef = doc(db, "orders", other.id);
+        const [pS, oS] = await Promise.all([tx.get(pRef), tx.get(oRef)]);
+        if (!pS.exists() || !oS.exists()) throw new Error("Order ab maujood nahi hai");
+        const p = pS.data(), q = oS.data();
+        if (p.paid || q.paid || p.status === "cancelled" || q.status === "cancelled") throw new Error("Paid/cancelled order merge nahi ho sakta");
+        tx.update(pRef, {
+          items: [...(p.items || []), ...(q.items || [])],
+          kots: [...(p.kots || []), ...(q.kots || [])],
+          subtotal: (Number(p.subtotal) || 0) + (Number(q.subtotal) || 0),
+          billDiscount: (Number(p.billDiscount) || 0) + (Number(q.billDiscount) || 0),
+          gstAmount: (Number(p.gstAmount) || 0) + (Number(q.gstAmount) || 0),
+          finalTotal: (Number(p.finalTotal) || 0) + (Number(q.finalTotal) || 0),
+          mergedFrom: [...(p.mergedFrom || []), q.table],
+        });
+        tx.update(oRef, { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "merge", cancelledReason: "Merged into " + primaryOrder.table, mergedInto: primaryOrder.id });
       });
-      mb.update(doc(db, "orders", other.id), { status: "cancelled", cancelledAt: Date.now(), cancelledReason: "Merged into " + primaryOrder.table });
-      await mb.commit();
       logAudit("tables_merged", { orderId: primaryOrder.id, table: primaryOrder.table, merged: other.table, total: primaryOrder.finalTotal || 0 }); toast("Merged successfully", "success");
       onClose();
     } catch (e) { toast(e.message, "error"); setBusy(false); }
@@ -1890,6 +1918,11 @@ function SplitBillModal({ C, isMobile, order, onClose }) {
 // ===========================================================================
 // BILLING VIEW (with debounce + autosave + sticky bar + confetti)
 // ===========================================================================
+/*P7*/ function addedTotals(live, added) {
+  const d = Math.round(added * (Number(live.billDiscountPct) || 0) / 100);
+  const g = Math.round((added - d) * (Number(live.gstRate) || 0) / 100);
+  return { finalTotal: (Number(live.finalTotal) || 0) + added - d + g, billDiscount: (Number(live.billDiscount) || 0) + d, gstAmount: (Number(live.gstAmount) || 0) + g };
+}
 function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterName, existingOrder, addMoreMode, onBack, isOwner, onPaidSuccess, onSwitchAdd }) {
   const toast = useToast();
   const haptic = useHaptic();
@@ -2013,6 +2046,10 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
 
   // Restore draft on open (only if new order) - runs once per table open
   const draftRestoredRef = useRef(false);
+  /*P1*/ useEffect(() => {
+    if (existingOrder || addMoreMode || !draftRestoredRef.current) return;
+    try { if (Object.keys(cart).length === 0) localStorage.removeItem("staff_draft_" + table); } catch (e) {}
+  }, [cart, table, existingOrder, addMoreMode]);
   useEffect(() => {
     if (draftRestoredRef.current) return;
     if (!existingOrder && !addMoreMode) {
@@ -2042,7 +2079,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const categories = useMemo(() => ["All", ...Array.from(new Set(menu.map(m => m.category)))], [menu]);
   const filtered = useMemo(() => menu.filter(m => m.available && (category === "All" || m.category === category) && (!debouncedSearch.trim() || (m.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || String(m.category || "").toLowerCase().includes(debouncedSearch.toLowerCase())))), [menu, category, debouncedSearch]);
 
-  const cartItems = Object.entries(cart).filter(([, q]) => q > 0);
+  /*P2*/ const cartItems = Object.entries(cart).filter(([id, q]) => q > 0 && (menu.some((x) => x.id === id) || existingItems.some((e) => e.itemId === id)));
   const resolveItem = (id) => { const m = menu.find(x => x.id === id); const ex = existingItems.find(e => e.itemId === id); if (ex && !addMoreMode) return ex; return m || ex || null; };
   // NOTE: cart me sirf CURRENT edit ki qty hoti hai (addMoreMode me sirf naye items).
   // Isliye subtotal = sum(cart qty x price). Purani qty yahan add NAHI karni.
@@ -2100,7 +2137,14 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     const g = Math.round(((sub - d) * gstRate) / 100);
     const finalTotal = Math.max(0, sub - d) + g;
 
-    if (removedItems.length) logAudit("items_removed", { orderId: existingOrder.id, table: existingOrder.table || "", items: removedItems.map(i => i.qty + "x " + i.name).join(", ") });
+    /*P9*/ if (removedItems.length) {
+      let why = "";
+      if (!isOwner) {
+        why = (window.prompt("Item hata rahe ho - reason likho (zaroori):", "") || "").trim();
+        if (!why) throw new Error("Item hatane ka reason zaroori hai");
+      }
+      logAudit("items_removed", { orderId: existingOrder.id, table: existingOrder.table || "", reason: why, items: removedItems.map(i => i.qty + "x " + i.name).join(", ") });
+    }
 
     const extra = {};
     if (newKotItems.length || removedItems.length) {
@@ -2116,6 +2160,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       tx.update(oref, { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, billEditedAt: Date.now(), ...extra });
     });
     if (newKotItems.length) printKOT({ ...existingOrder, items: newKotItems, kots: [] });
+    /*P8*/ if (removedItems.length) printKOT({ ...existingOrder, items: removedItems.map((i) => ({ ...i, name: "CANCEL >> " + i.name })), kots: [] });
     return { finalItems, sub, discAmt: d, gstAmt: g, finalTotal };
   };
 
@@ -2153,7 +2198,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
             kots: [...liveKots, runKot],
             items: mergedItems,
             status: "new",
-            finalTotal: (Number(live.finalTotal) || 0) + addedTotal,
+            ...addedTotals(live, addedTotal),
             subtotal: (Number(live.subtotal) || 0) + addedTotal,
             paid: false,
             paymentStatus: "pending",
@@ -2274,7 +2319,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
                 else merged.push(newItem);
               });
               return merged;
-            })(), status: "new", finalTotal: (Number(live.finalTotal) || 0) + addedTotal, subtotal: (Number(live.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
+            })(), status: "new", ...addedTotals(live, addedTotal), subtotal: (Number(live.subtotal) || 0) + addedTotal, paid: false, paymentStatus: "pending", lastKotAt: Date.now() });
       });
       printKOT({ ...baseOrder, items: newItems, kots: [runKot] });
       toast(`KOT #${nextNo} added`, "success");
@@ -3489,6 +3534,7 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
     if (saving) return;
     setSaving(true);
     try {
+      /*P11*/ if (mode === "credit" && !vendorId) { toast("Udhaar ke liye vendor chuno, warna due track nahi hoga", "warning"); return; }
       await addDoc(collection(db, "expenses"), { date, amount: amt, category: cat, mode, vendorId: vendorId || null, note: note.trim(), by: waiterName || "Staff", createdAt: Date.now() });
       logAudit("expense_added", { total: amt, reason: cat + (note.trim() ? " - " + note.trim() : "") });
       haptic(25);
@@ -4234,8 +4280,15 @@ function ImportView({ C, isMobile, isOwner, waiterName, onDone }) {
       }
 
       const active = parsed.filter((p) => !p._skip && p._valid);
-      for (let i = 0; i < active.length; i += 20) {
-        const chunk = active.slice(i, i + 20);
+      /*P12*/ const seenKeys = new Set();
+      try {
+        const exSnap = await getDocs(query(collection(db, "expenses"), where("importedFrom", "==", "gemini")));
+        exSnap.docs.forEach((d) => { const x = d.data(); seenKeys.add([x.date, Number(x.amount), x.vendorId || "", x.note || ""].join("|")); });
+      } catch (e) {}
+      const toImport = active.filter((p) => !seenKeys.has([p.date, Number(p.amount), resolveVendorId(p.vendorName, nameToId) || "", (p.note || "") + (p.vendorPhone ? " | " + p.vendorPhone : "")].join("|")));
+      imported.skipped = active.length - toImport.length;
+      for (let i = 0; i < toImport.length; i += 20) {
+        const chunk = toImport.slice(i, i + 20);
         const batch = writeBatch(db);
         chunk.forEach((p) => {
           const vId = resolveVendorId(p.vendorName, nameToId);
@@ -4269,7 +4322,7 @@ function ImportView({ C, isMobile, isOwner, waiterName, onDone }) {
 
       haptic(50);
       setResult({ ok: true, ...imported, totalAmount: stats.totalAmount });
-      toast("Import ho gaya: " + imported.expenses + " expenses, " + imported.vendors + " naye vendor", "success");
+      toast("Import ho gaya: " + imported.expenses + " expenses, " + imported.vendors + " naye vendor" + (imported.skipped ? ", " + imported.skipped + " duplicate skip" : ""), "success");
       if (onDone) onDone();
     } catch (e) {
       setResult({ ok: false, error: e.message });
