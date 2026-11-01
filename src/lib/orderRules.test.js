@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  isActiveOrder, isOpenDineIn, isOpenParcel, isDue, paidOrders, paidRevenue, OPEN_WINDOW_MS,
+  isActiveOrder, isOpenDineIn, isOpenParcel, isDue, paidOrders, paidRevenue, buildPaidPatch, OPEN_WINDOW_MS,
 } from "./orderRules.js";
 
 const now = () => Date.now();
@@ -60,4 +60,26 @@ test("revenue me sirf paid aur non-cancelled", () => {
 });
 test("finalTotal na ho to 0 maana jaye", () => {
   assert.equal(paidRevenue([mk({ paid: true, finalTotal: undefined })]), 0);
+});
+
+test("buildPaidPatch: sahi fields likhta hai", () => {
+  const p = buildPaidPatch(mk({}), "upi", "Ramesh");
+  assert.equal(p.paid, true);
+  assert.equal(p.paymentStatus, "paid");
+  assert.equal(p.payment, "upi");
+  assert.equal(p.paidBy, "Ramesh");
+  assert.equal(typeof p.paidAt, "number");
+});
+test("buildPaidPatch: naam na ho to Staff", () => {
+  assert.equal(buildPaidPatch(mk({}), "cash").paidBy, "Staff");
+});
+test("buildPaidPatch: parcel paid hote hi served", () => {
+  assert.equal(buildPaidPatch(mk({ orderType: "parcel", status: "new" }), "cash").status, "served");
+});
+test("buildPaidPatch: ready dine-in served ho jata hai", () => {
+  assert.equal(buildPaidPatch(mk({ status: "ready" }), "cash").status, "served");
+});
+test("buildPaidPatch: preparing/new ka status nahi chhedta (kitchen se gayab na ho)", () => {
+  assert.equal("status" in buildPaidPatch(mk({ status: "preparing" }), "cash"), false);
+  assert.equal("status" in buildPaidPatch(mk({ status: "new" }), "cash"), false);
 });

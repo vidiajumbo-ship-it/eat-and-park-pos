@@ -27,3 +27,18 @@ export const isActiveOrder = (o) => !isCancelled(o) && !o.paid && o.paymentStatu
 export const paidOrders = (orders) => orders.filter((o) => o.paid && !isCancelled(o));
 export const paidRevenue = (orders) =>
   paidOrders(orders).reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+
+// "Paid" karte waqt Firestore me jo fields likhni hain (Orders tab + Billing dono yahi use karte hain).
+// Parcel ya ready order paid hote hi "served" ho jata hai; preparing/new ka status nahi chhedte
+// (warna kitchen se order beech me gayab ho jayega).
+export const buildPaidPatch = (order, mode, by) => {
+  const patch = {
+    paid: true,
+    paymentStatus: "paid",
+    paidAt: Date.now(),
+    paidBy: by || "Staff",
+    payment: mode,
+  };
+  if (order.orderType === "parcel" || order.status === "ready") patch.status = "served";
+  return patch;
+};

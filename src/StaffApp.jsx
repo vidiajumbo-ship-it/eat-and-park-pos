@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef, useContext, createContext, useCallback } from "react";
 import { db, auth } from "./firebase";
 import { assertEditable, resolveVendorId } from "./lib/guards";
-import { PAID_STATUSES, isOpenParcel, isOpenDineIn, isActiveOrder, paidOrders, paidRevenue } from "./lib/orderRules";
+import { PAID_STATUSES, OPEN_WINDOW_MS, isOpenParcel, isOpenDineIn, isActiveOrder, paidOrders, paidRevenue, buildPaidPatch } from "./lib/orderRules";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, getDoc, updateDoc, addDoc,
@@ -790,7 +790,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
   const parcelCount = orders.filter(isOpenParcel).length;
   /*P13*/ const prevReadyRef = useRef(null);
   useEffect(() => {
-    const ready = orders.filter((o) => o.status === "ready" && !o.paid && Date.now() - toMillis(o.createdAt) < 18 * 3600 * 1000).map((o) => o.id);
+    const ready = orders.filter((o) => o.status === "ready" && !o.paid && Date.now() - toMillis(o.createdAt) < OPEN_WINDOW_MS).map((o) => o.id);
     if (prevReadyRef.current === null) { prevReadyRef.current = ready; return; }
     const prev = new Set(prevReadyRef.current);
     const fresh = orders.filter((o) => ready.includes(o.id) && !prev.has(o.id));
@@ -1341,8 +1341,8 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
     if (payLockRef.current) return;
     payLockRef.current = true;
     haptic(30);
-    const patch = { paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: mode };
-    if (order.orderType === "parcel" || order.status === "ready") patch.status = "served";
+    const patch = buildPaidPatch(order, mode, waiterName);
+    // status "served" ka rule: buildPaidPatch (orderRules.js) - orders tab
     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...patch } : o));
     try {
       await updateDoc(doc(db, "orders", order.id), patch);
@@ -1462,7 +1462,7 @@ function KOTView({ C, isMobile, orders, setOrders }) {
   const haptic = useHaptic();
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(x => x + 1), 15000); return () => clearInterval(iv); }, []);
-  const kotOrders = orders.filter(o => (o.status === "new" || o.status === "preparing") && Date.now() - (o.createdAt || 0) < 18 * 3600 * 1000);
+  const kotOrders = orders.filter(o => (o.status === "new" || o.status === "preparing") && Date.now() - (o.createdAt || 0) < OPEN_WINDOW_MS);
   const advanceOrder = async (order) => {
     const idx = STATUS_FLOW.indexOf(order.status);
     if (idx < 0 || idx >= STATUS_FLOW.length - 1) return;
@@ -2264,8 +2264,8 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
         return;
       }
       const applied = await applyCartChanges();
-      const paidPatch = { paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: payMode };
-      if (existingOrder.orderType === "parcel" || existingOrder.status === "ready") paidPatch.status = "served";
+      const paidPatch = buildPaidPatch(existingOrder, payMode, waiterName);
+      // status "served" ka rule: buildPaidPatch (orderRules.js) - billing
       await updateDoc(doc(db, "orders", existingOrder.id), paidPatch);
       printBill({ ...existingOrder, items: applied.finalItems, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: true });
       haptic(80);
@@ -3743,10 +3743,19 @@ function ReportsView({ C, isMobile, isOwner, waiterName }) {
       const pSnap = await getDocs(query(collection(db, "vendorPayments"), where("date", "==", todayKey), where("mode", "==", "cash")));
       cashVendorPay = pSnap.docs.reduce((t, d) => t + (Number(d.data().amount) || 0), 0);
     } catch (e) { toast("Vendor payments load nahi hue, Day Close roka gaya: " + e.message, "error"); return; }
+    // Aaj drawer me jo cash AAYA (paidAt aaj) - order kisi bhi din ka ho (jaise kal ka due aaj settle hua)
+    let cashIn = s.pay.cash;
+    try {
+      const t0 = new Date(todayKey + "T00:00:00").getTime();
+      const paidSnap = await getDocs(query(collection(db, "orders"), where("paidAt", ">=", t0), where("paidAt", "<", t0 + 86400000)));
+      cashIn = paidSnap.docs.map((d) => d.data())
+        .filter((x) => x.paid && x.status !== "cancelled" && String(x.payment || "cash").toLowerCase() === "cash")
+        .reduce((t, x) => t + (Number(x.finalTotal) || 0), 0);
+    } catch (e) { toast("Aaj ka cash load nahi hua, Day Close roka gaya: " + e.message, "error"); return; }
     const opening = Number(op) || 0;
     const counted = Number(cc) || 0;
-    const expected = opening + s.pay.cash - cashExp - cashVendorPay;
-    const rec = { date: todayKey, revenue: s.revenue, cash: s.pay.cash, upi: s.pay.upi, card: s.pay.card, cashVendorPayments: cashVendorPay, duePending: s.duePending, expenses: s.expTotal, cashExpenses: cashExp, profit: s.profit, orders: s.valid.length, openingCash: opening, countedCash: counted, expectedCash: expected, cashDiff: counted - expected, by: waiterName || "Staff", at: Date.now() };
+    const expected = opening + cashIn - cashExp - cashVendorPay;
+    const rec = { date: todayKey, revenue: s.revenue, cash: cashIn, upi: s.pay.upi, card: s.pay.card, cashVendorPayments: cashVendorPay, duePending: s.duePending, expenses: s.expTotal, cashExpenses: cashExp, profit: s.profit, orders: s.valid.length, openingCash: opening, countedCash: counted, expectedCash: expected, cashDiff: counted - expected, by: waiterName || "Staff", at: Date.now() };
     try {
       await setDoc(doc(db, "dayClose", todayKey), rec);
       logAudit("day_closed", { total: s.revenue, reason: "Cash fark: " + (counted - expected) });
