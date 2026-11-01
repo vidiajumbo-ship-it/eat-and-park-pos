@@ -4,7 +4,8 @@ service cloud.firestore {
 
     function signedIn() { return request.auth != null; }
     function hasStaffDoc() {
-      return signedIn() && exists(/databases/$(db)/documents/staff/$(request.auth.uid));
+      return signedIn() && exists(/databases/$(db)/documents/staff/$(request.auth.uid))
+        && get(/databases/$(db)/documents/staff/$(request.auth.uid)).data.get('active', true) != false;
     }
     function staffRole() {
       return get(/databases/$(db)/documents/staff/$(request.auth.uid)).data.role;
@@ -15,6 +16,20 @@ service cloud.firestore {
       return signedIn()
         && exists(/databases/$(db)/documents/orders/$(orderId))
         && get(/databases/$(db)/documents/orders/$(orderId)).data.createdBy == request.auth.uid;
+    }
+    // Waiter/staff (admin/owner/manager nahi) ke liye: console se bhi ye 3 cheezein nahi ho sakti
+    //  - paid order ko unpaid karna (Undo Paid sirf owner)
+    //  - cancelled order ko wapas chalu karna (Restore sirf owner)
+    //  - discount % badhana (discount sirf owner)
+    function staffEditOk() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return !(before.get('paid', false) == true && after.get('paid', false) != true)
+        && !(before.get('status', '') == 'cancelled' && after.get('status', '') != 'cancelled')
+        && after.get('billDiscountPct', 0) <= before.get('billDiscountPct', 0);
+    }
+    function staffCreateOk() {
+      return request.resource.data.get('billDiscountPct', 0) == 0;
     }
     function validCustomerOrder() {
       let d = request.resource.data;
@@ -46,9 +61,9 @@ service cloud.firestore {
       allow create: if signedIn()
         && id.matches('^o[a-z0-9]{6,40}$')
         && request.resource.data.createdBy == request.auth.uid
-        && (isStaff() || validCustomerOrder());
+        && ((isStaff() && (isAdmin() || staffCreateOk())) || validCustomerOrder());
       allow read: if isStaff() || (signedIn() && resource.data.createdBy == request.auth.uid);
-      allow update: if isStaff()
+      allow update: if (isStaff() && (isAdmin() || staffEditOk()))
         || (signedIn() && resource.data.createdBy == request.auth.uid
             && resource.data.status == 'new' && resource.data.paid == false
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt'])
