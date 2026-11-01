@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef, useContext, createContext, useCallback } from "react";
 import { db, auth } from "./firebase";
 import { assertEditable, resolveVendorId } from "./lib/guards";
+import { PAID_STATUSES, isOpenParcel, isOpenDineIn, isActiveOrder, paidOrders, paidRevenue } from "./lib/orderRules";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, getDoc, updateDoc, addDoc,
@@ -78,19 +79,6 @@ const timeAgo = (ts) => {
   return Math.floor(h / 24) + "d";
 };
 const TABLE_COUNT = 20;
-// Chalu parcel: paid / due / cancelled nahi, aur 18 ghante ke andar
-const PAID_STATUSES = ["paid"];
-const isOpenParcel = (o) =>
-  o.orderType === "parcel" && o.status !== "cancelled" && !o.paid &&
-  o.paymentStatus !== "due" && !PAID_STATUSES.includes(o.paymentStatus) &&
-  Date.now() - (o.createdAt || 0) < 18 * 3600 * 1000;
-// Table tab tak occupied jab tak paid / due / cancelled na ho (served hone par table free nahi dikhna chahiye)
-const isOpenDineIn = (o) =>
-  o.orderType === "dine_in" && o.status !== "cancelled" && !o.paid &&
-  o.paymentStatus !== "due" && !PAID_STATUSES.includes(o.paymentStatus) &&
-  Date.now() - (o.createdAt || 0) < 18 * 3600 * 1000;
-// Chalu order = unpaid, due nahi, cancelled nahi (Tables, Dashboard, Orders teeno yahi use karte hain)
-const isActiveOrder = (o) => o.status !== "cancelled" && !o.paid && o.paymentStatus !== "due";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const STATUS = {
@@ -910,7 +898,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
 
   const activeOrders = orders.filter(o => (isOpenDineIn(o) || isOpenParcel(o)));
   const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
-  const todayRevenue = orders.filter(o => o.paid && o.status !== "cancelled" && o.createdAt >= startOfToday.getTime()).reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+  const todayRevenue = paidRevenue(orders.filter(o => o.createdAt >= startOfToday.getTime()));
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "system-ui, sans-serif", display: "flex", flexDirection: "column", color: C.ink }}>
@@ -1535,9 +1523,9 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
     return orders;
   }, [orders, range, customDate]);
 
-  const todayRevenue = filtered.filter(o => o.paid && o.status !== "cancelled").reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+  const todayRevenue = paidRevenue(filtered);
   const todayTotal = filtered.filter(o => o.status !== "cancelled").length;
-  const paidCount = filtered.filter(o => o.paid && o.status !== "cancelled").length;
+  const paidCount = paidOrders(filtered).length;
   const activeOrders = filtered.filter(isActiveOrder).length;
   const avgOrder = paidCount ? Math.round(todayRevenue / paidCount) : 0;
   const statusCounts = { new: 0, preparing: 0, ready: 0, served: 0 };
