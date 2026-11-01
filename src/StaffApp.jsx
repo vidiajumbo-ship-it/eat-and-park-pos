@@ -9,6 +9,47 @@ import {
   query, where, runTransaction, deleteDoc, getDocs, orderBy, limit, writeBatch
 } from "firebase/firestore";
 
+// ============ SAFE HELPERS ============
+function getErrorMessage(error) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object" && "message" in error) {
+    return String(error.message);
+  }
+  return "An unexpected error occurred. Please try again.";
+}
+function isRefreshNeeded(error) {
+  const msg = getErrorMessage(error);
+  return msg === "REFRESH_NEEDED" || msg.includes("badal diya");
+}
+function safeStorageGet(key, fallback = null) {
+  try {
+    const v = window.localStorage.getItem(key);
+    return v === null ? fallback : v;
+  } catch {
+    return fallback;
+  }
+}
+function safeStorageSet(key, value) {
+  try {
+    window.localStorage.setItem(key, String(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+function safeStorageRemove(key) {
+  try {
+    window.localStorage.removeItem(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+// ======================================
+
+
+
 // ===========================================================================
 // COLORS
 // ===========================================================================
