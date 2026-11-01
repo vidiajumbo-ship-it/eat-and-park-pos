@@ -89,6 +89,8 @@ const isOpenDineIn = (o) =>
   o.orderType === "dine_in" && o.status !== "cancelled" && !o.paid &&
   o.paymentStatus !== "due" && !PAID_STATUSES.includes(o.paymentStatus) &&
   Date.now() - (o.createdAt || 0) < 18 * 3600 * 1000;
+// Chalu order = unpaid, due nahi, cancelled nahi (Tables, Dashboard, Orders teeno yahi use karte hain)
+const isActiveOrder = (o) => o.status !== "cancelled" && !o.paid && o.paymentStatus !== "due";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const STATUS = {
@@ -906,9 +908,9 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
     );
   }
 
-  const activeOrders = orders.filter(o => o.status !== "served" && o.status !== "cancelled");
+  const activeOrders = orders.filter(o => (isOpenDineIn(o) || isOpenParcel(o)));
   const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
-  const todayRevenue = orders.filter(o => o.paid && o.status !== "cancelled" && (o.paidAt || o.createdAt) >= startOfToday.getTime()).reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
+  const todayRevenue = orders.filter(o => o.paid && o.status !== "cancelled" && o.createdAt >= startOfToday.getTime()).reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "system-ui, sans-serif", display: "flex", flexDirection: "column", color: C.ink }}>
@@ -1279,7 +1281,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
   });
   const filtered =
     filter === "all" ? rangeAll
-    : filter === "active" ? rangeAll.filter(o => o.status !== "served" && !o.paid)
+    : filter === "active" ? rangeAll.filter(isActiveOrder)
     : filter === "paid" ? rangeAll.filter(o => o.paid)
     : filter === "served" ? rangeAll.filter(o => o.status === "served")
     : filter === "cancelled" ? rangeAll
@@ -1352,7 +1354,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
     payLockRef.current = true;
     haptic(30);
     const patch = { paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: mode };
-    if (order.orderType === "parcel") patch.status = "served";
+    if (order.orderType === "parcel" || order.status === "ready") patch.status = "served";
     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...patch } : o));
     try {
       await updateDoc(doc(db, "orders", order.id), patch);
@@ -1536,7 +1538,7 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
   const todayRevenue = filtered.filter(o => o.paid && o.status !== "cancelled").reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
   const todayTotal = filtered.filter(o => o.status !== "cancelled").length;
   const paidCount = filtered.filter(o => o.paid && o.status !== "cancelled").length;
-  const activeOrders = filtered.filter(o => o.status !== "served" && o.status !== "cancelled").length;
+  const activeOrders = filtered.filter(isActiveOrder).length;
   const avgOrder = paidCount ? Math.round(todayRevenue / paidCount) : 0;
   const statusCounts = { new: 0, preparing: 0, ready: 0, served: 0 };
   filtered.forEach(o => { if (statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
@@ -2275,7 +2277,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       }
       const applied = await applyCartChanges();
       const paidPatch = { paid: true, paymentStatus: "paid", paidAt: Date.now(), paidBy: waiterName || "Staff", payment: payMode };
-      if (existingOrder.orderType === "parcel") paidPatch.status = "served";
+      if (existingOrder.orderType === "parcel" || existingOrder.status === "ready") paidPatch.status = "served";
       await updateDoc(doc(db, "orders", existingOrder.id), paidPatch);
       printBill({ ...existingOrder, items: applied.finalItems, finalTotal: applied.finalTotal, subtotal: applied.sub, gstAmount: applied.gstAmt, billDiscount: applied.discAmt, payment: payMode, paid: true });
       haptic(80);
