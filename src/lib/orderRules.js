@@ -21,7 +21,7 @@ export const isOpenParcel = (o) => o.orderType === "parcel" && isOpenBase(o);
 export const isOpenDineIn = (o) => o.orderType === "dine_in" && isOpenBase(o);
 
 // "Active" = unpaid, due nahi, cancelled nahi (Tables, Dashboard, Orders tab teeno yahi)
-export const isActiveOrder = (o) => !isCancelled(o) && !o.paid && o.paymentStatus !== "due";
+export const isActiveOrder = (o) => !isCancelled(o) && !o.paid && o.paymentStatus !== "due" && Date.now() - (o.createdAt || 0) < OPEN_WINDOW_MS;
 
 // Paid orders aur unka revenue (cancelled kabhi nahi ginte)
 export const paidOrders = (orders) => orders.filter((o) => o.paid && !isCancelled(o));

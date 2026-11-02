@@ -693,8 +693,8 @@ function StaffAppInner() {
   const [selectedTable, setSelectedTable] = useState(null);
   const [cart, setCart] = useState({});
   const [waiterName, setWaiterName] = useState("");
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("staff_dark") === "1");
-  const [lang, setLang] = useState(() => localStorage.getItem("staff_lang") || "en");
+  const [darkMode, setDarkMode] = useState(() => safeStorageGet("staff_dark", "0") === "1");
+  const [lang, setLang] = useState(() => safeStorageGet("staff_lang", "en"));
   const [searchTable, setSearchTable] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [feedbackOrder, setFeedbackOrder] = useState(null);
@@ -708,12 +708,12 @@ function StaffAppInner() {
   const [confetti, setConfetti] = useState(false);
   const [showEstimate, setShowEstimate] = useState(false);
   const [estItems, setEstItems] = useState(() => { try { return JSON.parse(localStorage.getItem("staff_estimate_items") || "[]"); } catch (e) { return []; } });
-  const [estPersons, setEstPersons] = useState(() => Number(localStorage.getItem("staff_estimate_persons")) || 2);
+  const [estPersons, setEstPersons] = useState(() => Number(safeStorageGet("staff_estimate_persons", "0")) || 2);
   useEffect(() => {
     try { localStorage.setItem("staff_estimate_items", JSON.stringify(estItems)); localStorage.setItem("staff_estimate_persons", String(estPersons)); } catch (e) {}
   }, [estItems, estPersons]);
   const [estimatePending, setEstimatePending] = useState(false);
-  const [muted, setMuted] = useState(() => localStorage.getItem("staff_mute") === "1");
+  const [muted, setMuted] = useState(() => safeStorageGet("staff_mute", "0") === "1");
   const prevNewIdsRef = useRef(null);
   const [lowCount, setLowCount] = useState(0);
   // 🔔 Waiter calls listener (unified patch)
@@ -757,7 +757,7 @@ function StaffAppInner() {
     const u2 = onSnapshot(doc(db, "inventory", "state"), (s) => { invStock = s.exists() ? (s.data().stock || {}) : {}; calc(); }, () => {});
     return () => { u1(); u2(); };
   }, [user]);
-  const [viewMode, setViewMode] = useState(() => localStorage.getItem("staff_view_mode") || "auto");
+  const [viewMode, setViewMode] = useState(() => safeStorageGet("staff_view_mode", "auto"));
   const [autoMobile, setAutoMobile] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
 
   useEffect(() => {
@@ -823,7 +823,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
     if (user && "Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {});
   }, [user]);
 
-  const playSound = () => { if (localStorage.getItem("staff_mute") === "1") return; try { const a = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"); a.volume = 0.6; a.play().catch(() => {}); } catch (e) {} };
+  const playSound = () => { if (safeStorageGet("staff_mute", "0") === "1") return; try { const a = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"); a.volume = 0.6; a.play().catch(() => {}); } catch (e) {} };
   const clickSound = () => { try { const a = new Audio("data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT");
     a.volume = 0.15; a.play().catch(() => {}); } catch (e) {} };
 
@@ -937,7 +937,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
     );
   }
 
-  const activeOrders = orders.filter(o => (isOpenDineIn(o) || isOpenParcel(o)));
+  const activeOrders = orders.filter(isActiveOrder);
   const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
   const todayRevenue = paidRevenue(orders.filter(o => o.createdAt >= startOfToday.getTime()));
 
@@ -1084,7 +1084,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
               <div style={{ fontWeight: 800, fontSize: 15, color: C.ink, marginTop: 4 }}>{staffData?.name || "Staff"}</div>
               <div style={{ fontSize: 12, color: C.gray, marginTop: 2 }}>{staffData?.role || "waiter"}</div>
             </div>
-            {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "history", label: "History", icon: "🕘" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "inventory", label: "Saman", icon: "🧾" }, { id: "audit", label: "Audit Log", icon: "📝" }, { id: "expenses", label: "Kharcha", icon: "💸" }, { id: "reports", label: "Reports / P&L", icon: "📈" }, { id: "import", label: "Bulk Import", icon: "📥" }].map(tab => (
+            {[{ id: "parcel", label: "Parcel", icon: "🛍️" }, { id: "tables", label: "Tables", icon: "🍽️" }, { id: "orders", label: "Orders", icon: "📋" }, { id: "kot", label: "Kitchen", icon: "🍳" }, { id: "dashboard", label: "Dashboard", icon: "📊" }, { id: "history", label: "History", icon: "🕘" }, { id: "stock", label: "Stock", icon: "📦" }, { id: "bookings", label: "Bookings", icon: "📅" }, { id: "inventory", label: "Saman", icon: "🧾" }, { id: "audit", label: "Audit Log", icon: "📝" }, { id: "expenses", label: "Kharcha", icon: "💸" }, { id: "reports", label: "Reports / P&L", icon: "📈" }, { id: "import", label: "Bulk Import", icon: "📥" }].map(tab => (
               <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); setSidebarOpen(false); setSelectedTable(null); setOrdersRange(null); }} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 16px", border: "none", background: activeTab === tab.id ? C.goldLight : "transparent", color: activeTab === tab.id ? C.gold : C.ink, fontWeight: 700, fontSize: 14, borderRadius: 10, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
                 <span style={{ fontSize: 18 }}>{tab.icon}</span><span>{tab.label}</span>
               </button>
@@ -1390,7 +1390,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
       logAudit("paid", { orderId: order.id, total: order.finalTotal || 0, mode }); toast("Payment received!", "success");
       if (onPaidSuccess) onPaidSuccess();
     } catch (e) {
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, paid: false, paymentStatus: "pending" } : o));
+      setOrders(prev => prev.map(o => o.id === order.id ? order : o));
       toast(e.message, "error");
     } finally {
       payLockRef.current = false;
@@ -1571,9 +1571,9 @@ function DashboardView({ C, isMobile, orders, dueOrders, menu, onStatusClick, on
   const avgOrder = paidCount ? Math.round(todayRevenue / paidCount) : 0;
   const statusCounts = { new: 0, preparing: 0, ready: 0, served: 0 };
   filtered.forEach(o => { if (statusCounts[o.status] !== undefined) statusCounts[o.status]++; });
-  const recentOrders = [...filtered].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
+  const recentOrders = [...filtered].filter(o => o.status !== "cancelled").sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
   const hourCounts = Array.from({ length: 24 }, () => 0);
-  filtered.forEach(o => { hourCounts[new Date(o.createdAt).getHours()]++; });
+  filtered.forEach(o => { if (o.status !== "cancelled") hourCounts[new Date(o.createdAt).getHours()]++; });
   const rangeLabel = { today: "Today", yesterday: "Yesterday", "7days": "Last 7 Days", "30days": "Last 30 Days", month: "This Month", custom: `Date: ${customDate}` }[range] || "Today";
 
   return (
@@ -1713,7 +1713,7 @@ ${order.waiter ? `<div class="c">Waiter: ${esc(order.waiter)}</div>` : ""}
 
 function printHtml(title, bodyHtml, opts = {}) {
   try {
-    const css = opts.css || "@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}";
+    const css = opts.css || "@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}h2{text-align:center;font-size:22px;margin:4px 0}.c{text-align:center;font-size:11px}.line{border-top:2px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:13px}td{padding:3px 2px}";
     const iframe = document.createElement("iframe");
     iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
     document.body.appendChild(iframe);
@@ -1887,7 +1887,15 @@ function TableMoveModal({ C, isMobile, order, allOrders, onClose }) {
     if (!to || busy) return;
     setBusy(true);
     try {
-      await updateDoc(doc(db, "orders", order.id), { table: to, movedFrom: order.table, movedAt: Date.now() });
+      if (allOrders.some((o) => o.id !== order.id && isOpenDineIn(o) && Number(o.table) === Number(to))) throw new Error("Table " + to + " ab khali nahi hai");
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, "orders", order.id);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error("Order ab maujood nahi hai");
+        const d = snap.data();
+        if (d.paid || d.status === "cancelled") throw new Error("Paid/cancelled order move nahi ho sakta");
+        tx.update(ref, { table: to, movedFrom: order.table, movedAt: Date.now() });
+      });
       logAudit("table_moved", { orderId: order.id, from: order.table, to });
       toast(`Table ${order.table} → ${to}`, "success");
       onClose();
@@ -2085,7 +2093,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     if (draftRestoredRef.current) return;
     if (!existingOrder && !addMoreMode) {
       try {
-        const draft = localStorage.getItem(`staff_draft_${table}`);
+        const draft = safeStorageGet(`staff_draft_${table}`);
         if (draft && Object.keys(cart).length === 0) {
           const parsed = JSON.parse(draft);
           if (parsed && Object.keys(parsed).length > 0) {
@@ -2105,10 +2113,10 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     const cnt = {};
     orders.forEach((o) => { if (o.status === "cancelled") return; (o.items || []).forEach((it) => { cnt[it.itemId] = (cnt[it.itemId] || 0) + (Number(it.qty) || 0); }); });
     const seenFav = new Set();
-    return menu.filter((m) => m.available && (cnt[m.id] || pinnedIds.includes(m.id))).sort((a, b) => { const pa = pinnedIds.indexOf(a.id), pb = pinnedIds.indexOf(b.id); if (pa >= 0 || pb >= 0) return pa < 0 ? 1 : pb < 0 ? -1 : pa - pb; return cnt[b.id] - cnt[a.id]; }).filter((m) => { const k = String(m.name || "").trim().toLowerCase(); if (seenFav.has(k)) return false; seenFav.add(k); return true; }).slice(0, 12 + pinnedIds.length);
+    return menu.filter((m) => m.available !== false && (cnt[m.id] || pinnedIds.includes(m.id))).sort((a, b) => { const pa = pinnedIds.indexOf(a.id), pb = pinnedIds.indexOf(b.id); if (pa >= 0 || pb >= 0) return pa < 0 ? 1 : pb < 0 ? -1 : pa - pb; return cnt[b.id] - cnt[a.id]; }).filter((m) => { const k = String(m.name || "").trim().toLowerCase(); if (seenFav.has(k)) return false; seenFav.add(k); return true; }).slice(0, 12 + pinnedIds.length);
   }, [orders, menu, pinnedIds]);
   const categories = useMemo(() => ["All", ...Array.from(new Set(menu.map(m => m.category)))], [menu]);
-  const filtered = useMemo(() => menu.filter(m => m.available && (category === "All" || m.category === category) && (!debouncedSearch.trim() || (m.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || String(m.category || "").toLowerCase().includes(debouncedSearch.toLowerCase())))), [menu, category, debouncedSearch]);
+  const filtered = useMemo(() => menu.filter(m => m.available !== false && (category === "All" || m.category === category) && (!debouncedSearch.trim() || (m.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || String(m.category || "").toLowerCase().includes(debouncedSearch.toLowerCase())))), [menu, category, debouncedSearch]);
 
   /*P2*/ const cartItems = Object.entries(cart).filter(([id, q]) => q > 0 && (menu.some((x) => x.id === id) || existingItems.some((e) => e.itemId === id)));
   const resolveItem = (id) => { const m = menu.find(x => x.id === id); const ex = existingItems.find(e => e.itemId === id); if (ex && !addMoreMode) return ex; return m || ex || null; };
@@ -2187,7 +2195,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     await runTransaction(db, async (tx) => {
       const oref = doc(db, "orders", existingOrder.id);
       const osnap = await tx.get(oref);
-      assertEditable(osnap.exists() ? osnap.data() : null);
+      assertEditable(osnap.exists() ? osnap.data() : null, existingOrder);
       tx.update(oref, { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, billEditedAt: Date.now(), ...extra });
     });
     if (newKotItems.length) printKOT({ ...existingOrder, items: newKotItems, kots: [] });
@@ -2199,7 +2207,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     if (cartItems.length === 0 || lockRef.current) return;
     if (!existingOrder && !addMoreMode && table !== "parcel") {
       const busy = orders.some(o => isOpenDineIn(o) && Number(o.table) === Number(table));
-      if (busy && !window.confirm("Table " + table + " par order chalu hai. Phir bhi naya banayein?")) return;
+      if (busy) { toast("Table " + table + " par order chalu hai - 'Add to Running' use karo", "warning"); return; }
     }
     lockRef.current = true;
     if (existingOrder && addMoreMode) {
@@ -3777,8 +3785,12 @@ function ReportsView({ C, isMobile, isOwner, waiterName }) {
     if (op === null) return;
     const cc = window.prompt("Abhi drawer me kitna cash gina? (Rs)", "");
     if (cc === null || cc.trim() === "") { toast("Gine hue cash likhna zaroori hai", "warning"); return; }
-    const s = stats;
-    const cashExp = expenses.filter((e) => (e.mode || "cash") === "cash").reduce((t, e) => t + (Number(e.amount) || 0), 0);
+    let s = stats, freshExp = expenses;
+    try {
+      const [fo, fe] = await Promise.all([loadOrdersRange(todayKey, todayKey), loadExpensesRange(todayKey, todayKey)]);
+      s = calcStats(fo, fe); freshExp = fe;
+    } catch (e) { toast("Fresh data load nahi hua, Day Close roka gaya: " + e.message, "error"); return; }
+    const cashExp = freshExp.filter((e) => (e.mode || "cash") === "cash").reduce((t, e) => t + (Number(e.amount) || 0), 0);
     let cashVendorPay = 0;
     try {
       const pSnap = await getDocs(query(collection(db, "vendorPayments"), where("date", "==", todayKey), where("mode", "==", "cash")));
