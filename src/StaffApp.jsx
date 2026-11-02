@@ -547,7 +547,7 @@ function EstimatePanel({ C, menu, orders, isMobile, items, setItems, persons, se
       m.available !== false &&
       (catFilter === "All" || m.category === catFilter) &&
       (!s || String(m.name || "").toLowerCase().includes(s))
-    ).slice(0, 150);
+    );
   }, [menu, dSearch, catFilter]);
 
   const chip = (active) => ({
@@ -798,10 +798,15 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
   useEffect(() => {
     if (!user) return;
     const startToday = new Date(); startToday.setHours(0,0,0,0);
-    const unsubMenu = onSnapshot(doc(db, "settings", "menu"), (snap) => {
+    // 🔍 DEBUG: Auth state log karo
+		const unsubAuth = onAuthStateChanged(auth, (user) => {
+			console.log("🔐 AUTH STATE:", user ? `Logged in as ${user.uid}` : "NOT LOGGED IN");
+		});
+
+		const unsubMenu = onSnapshot(doc(db, "settings", "menu"), (snap) => {
   if (snap.exists() && Array.isArray(snap.data().items) && snap.data().items.length > 0) {
     // 🚀 FIX: 3900 items se crash hone se bachane ke liye sirf 150 items load karo
-    setMenu(snap.data().items.slice(0, 150));
+    setMenu(snap.data().items);
   } else {
     console.warn("⚠️ Menu khali hai. Customer app se pehli baar khulne pe seed hoga.");
     setMenu([]);
@@ -2117,7 +2122,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     return menu.filter((m) => m.available !== false && (cnt[m.id] || pinnedIds.includes(m.id))).sort((a, b) => { const pa = pinnedIds.indexOf(a.id), pb = pinnedIds.indexOf(b.id); if (pa >= 0 || pb >= 0) return pa < 0 ? 1 : pb < 0 ? -1 : pa - pb; return cnt[b.id] - cnt[a.id]; }).filter((m) => { const k = String(m.name || "").trim().toLowerCase(); if (seenFav.has(k)) return false; seenFav.add(k); return true; }).slice(0, 12 + pinnedIds.length);
   }, [orders, menu, pinnedIds]);
   const categories = useMemo(() => ["All", ...Array.from(new Set(menu.map(m => m.category)))], [menu]);
-  const filtered = useMemo(() => menu.filter(m => m.available !== false && (category === "All" || m.category === category) && (!debouncedSearch.trim() || (m.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || String(m.category || "").toLowerCase().includes(debouncedSearch.toLowerCase())))).slice(0, 150), [menu, category, debouncedSearch]);
+  const filtered = useMemo(() => menu.filter(m => m.available !== false && (category === "All" || m.category === category) && (!debouncedSearch.trim() || (m.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || String(m.category || "").toLowerCase().includes(debouncedSearch.toLowerCase())))), [menu, category, debouncedSearch]);
 
   /*P2*/ const cartItems = Object.entries(cart).filter(([id, q]) => q > 0 && (menu.some((x) => x.id === id) || existingItems.some((e) => e.itemId === id)));
   const resolveItem = (id) => { const m = menu.find(x => x.id === id); const ex = existingItems.find(e => e.itemId === id); if (ex && !addMoreMode) return ex; return m || ex || null; };
