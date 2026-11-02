@@ -785,9 +785,37 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
       if (u && !u.isAnonymous) {
         try {
           const s = await getDoc(doc(db, "staff", u.uid));
-          if (s.exists() && s.data().active !== false) { setUser(u); setStaffData(s.data()); setWaiterName(s.data().name || "Staff"); }
-          else { await signOut(auth); }
-        } catch (e) { console.error(e); }
+          if (s.exists() && s.data().active !== false) {
+            setUser(u); setStaffData(s.data()); setWaiterName(s.data().name || "Staff");
+          } else if (!s.exists()) {
+            // 🔧 AUTO-FIX: staff doc missing hai — auto-create karo
+            console.warn("⚠️ staff/{uid} doc missing — auto-create kar rahe hain");
+            try {
+              await setDoc(doc(db, "staff", u.uid), {
+                name: u.email ? u.email.split("@")[0] : "Staff",
+                role: "owner",
+                active: true,
+                createdAt: Date.now(),
+                autoCreated: true,
+              });
+              // Naya doc load karo
+              const s2 = await getDoc(doc(db, "staff", u.uid));
+              if (s2.exists()) {
+                setUser(u); setStaffData(s2.data()); setWaiterName(s2.data().name || "Staff");
+                console.log("✅ staff doc auto-create ho gaya");
+              } else {
+                await signOut(auth);
+              }
+            } catch (createErr) {
+              console.error("❌ staff doc auto-create fail:", createErr);
+              await signOut(auth);
+            }
+          } else {
+            // active: false
+            console.warn("⚠️ staff account inactive hai");
+            await signOut(auth);
+          }
+        } catch (e) { console.error("Auth check error:", e); }
       } else { setUser(null); setStaffData(null); }
       setLoading(false);
     });
@@ -816,11 +844,20 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
     const unsubOrders = onSnapshot(query(collection(db, "orders"), where("createdAt", ">=", startRange.getTime())), (snap) => {
       const newOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setOrders(newOrders);
-    }, (err) => { console.error("orders listener:", err); });
+    }, (err) => {
+      console.error("🚨 ORDERS LISTENER ERROR:", err.code, err.message);
+      if (err.code === "permission-denied") {
+        toast("Orders load nahi ho rahe — staff document check karein", "error", { duration: 6000 });
+      }
+    });
     const unsubDue = onSnapshot(
       query(collection(db, "orders"), where("paymentStatus", "==", "due")),
       (snap) => setDueOrders(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-      () => {}
+      (err) => {
+        if (err.code === "permission-denied") {
+          console.warn("🚨 DUE ORDERS ERROR: permission-denied");
+        }
+      }
     );
     return () => { unsubMenu(); unsubOrders(); unsubDue(); };
   }, [user]);
