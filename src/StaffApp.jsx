@@ -2475,7 +2475,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
 
         <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, boxShadow: "0 6px 24px rgba(0,0,0,0.08)", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0, width: isMobile ? "100%" : 400, minHeight: isMobile ? 400 : undefined }}>
           <div style={{ padding: "12px 14px", borderBottom: `1px solid ${C.line}`, background: C.cardAlt, fontWeight: 800, fontSize: isMobile ? 13 : 15, color: C.ink, letterSpacing: 0.2 }}>{(existingOrder ? "Bill" : "New Order") + " - " + (table === "parcel" ? "Parcel" : "Table " + table) + " (" + cartItems.length + ")"}{isOwner && <button onClick={() => setAddMenuOpen(true)} style={{ float: "right", margin: "-3px 0", padding: "5px 12px", border: "none", borderRadius: 6, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ Menu</button>}{!existingOrder && cartItems.length > 0 && <button onClick={() => { if (window.confirm("Poora cart khaali karein?")) { setCart({}); try { localStorage.removeItem("staff_draft_" + table); } catch (e) {} } }} style={{ float: "right", margin: "-3px 8px -3px 0", padding: "5px 12px", border: "1.5px solid " + C.red, borderRadius: 6, background: "transparent", color: C.red, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Clear</button>}</div>
-          <div style={{ flex: isMobile ? "none" : 1, overflowY: isMobile ? "visible" : "auto", minHeight: isMobile ? 0 : 140 }}>
+                    <div style={{ flex: isMobile ? "none" : 1, overflowY: isMobile ? "visible" : "auto", minHeight: isMobile ? 0 : 140 }}>
             {cartItems.length === 0 && <div style={{ textAlign: "center", padding: "40px 20px", color: C.gray, fontSize: 13, fontWeight: 700 }}><div style={{ fontSize: 40, marginBottom: 8, opacity: 0.5 }}>🧾</div>Menu se item tap karo</div>}
             {cartItems.length > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: C.cardAlt, borderBottom: "1px solid " + C.line, fontSize: 10, fontWeight: 800, color: C.gray, letterSpacing: 0.5, textTransform: "uppercase" }}>
@@ -2501,7 +2501,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
                   </div>
                   <div style={{ display: "flex", alignItems: "center", width: 84, justifyContent: "center", border: "1px solid " + C.line, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
                     <button onClick={() => setQty(id, q - 1)} style={{ width: 26, height: 26, border: "none", background: C.cardAlt, color: C.ink, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>-</button>
-                    <input type="number" value={q} onChange={(e) => setQty(id, parseInt(e.target.value) || 0)} style={{ width: 36, textAlign: "center", fontWeight: 900, fontSize: 13, color: C.ink, border: "none", background: "transparent", outline: "none", fontFamily: "monospace" }} />
+                    <input type="number" value={q} onChange={(e) => setQty(id, parseInt(e.target.value) || 0)} style={{ flex: 1, width: "100%", minWidth: 30, textAlign: "center", fontWeight: 900, fontSize: 13, color: C.ink, border: "none", background: "transparent", outline: "none", fontFamily: "monospace" }} />
                     <button onClick={() => setQty(id, q + 1)} style={{ width: 26, height: 26, border: "none", background: C.goldLight, color: C.goldText, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
                   </div>
                   <div style={{ width: 64, textAlign: "right", fontWeight: 800, fontSize: 13, color: C.ink, fontFamily: "monospace", flexShrink: 0 }}>{inr((rates[id] ?? m.price) * q)}</div>
@@ -2510,7 +2510,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
               );
             })}
           </div>
-          <div style={{ borderTop: `2px solid ${C.line}`, padding: 10, background: C.light, overflowY: isMobile ? "visible" : "auto", maxHeight: isMobile ? "none" : "55vh" }}>
+<div style={{ borderTop: `2px solid ${C.line}`, padding: 10, background: C.light, overflowY: isMobile ? "visible" : "auto", maxHeight: isMobile ? "none" : "55vh" }}>
             {!addMoreMode && (
               <button onClick={() => setShowAdj((v) => !v)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 10px", marginBottom: 8, border: "1px solid " + C.line, borderRadius: 8, background: C.card, color: C.ink, fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
                 <span>Disc {discount}% - GST {gstRate ? gstRate + "%" : "No"} - {String(payMode).toUpperCase()}</span>
@@ -2536,6 +2536,43 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
                 {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["due", "Due"]].map(([id, label]) => <button key={id} onClick={() => setPayMode(id)} style={{ padding: "3px 9px", borderRadius: 4, border: `1px solid ${payMode === id ? C.gold : C.line}`, background: payMode === id ? C.gold : C.card, color: payMode === id ? "#fff" : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>)}
               </div>
             )}
+            
+            {!addMoreMode && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: 8, background: C.cardAlt, borderRadius: 6 }}>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input placeholder="Customer Name" value={custName} onChange={e => setCustName(e.target.value)} style={{ flex: 1, padding: "4px 6px", border: `1px solid ${C.line}`, borderRadius: 4, fontSize: 11, background: C.card, color: C.ink, outline: "none" }} />
+                    <input placeholder="Phone No." value={custPhone} onChange={e => setCustPhone(e.target.value)} type="tel" style={{ flex: 1, padding: "4px 6px", border: `1px solid ${C.line}`, borderRadius: 4, fontSize: 11, background: C.card, color: C.ink, outline: "none" }} />
+                  </div>
+                  {table === "parcel" && (
+                    <input placeholder="Delivery Address" value={custAddress} onChange={e => setCustAddress(e.target.value)} style={{ width: "100%", padding: "4px 6px", border: `1px solid ${C.line}`, borderRadius: 4, fontSize: 11, background: C.card, color: C.ink, outline: "none" }} />
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>CASH DISC</span>
+                  <input type="number" min={0} value={cashDiscount || ""} onChange={e => setCashDiscount(Math.max(0, Number(e.target.value) || 0))} placeholder="₹" style={{ width: 60, padding: "4px 6px", border: `1px solid ${C.line}`, borderRadius: 4, fontSize: 11, background: C.card, color: C.ink, fontWeight: 700, outline: "none" }} />
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>PAY</span>
+                  {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["due", "Due"], ["split", "Split"]].map(([id, label]) => (
+                    <button key={id} onClick={() => setPayMode(id)} style={{ padding: "3px 9px", borderRadius: 4, border: `1px solid ${payMode === id ? C.gold : C.line}`, background: payMode === id ? C.gold : C.card, color: payMode === id ? "#fff" : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
+                  ))}
+                </div>
+                {payMode === "split" && (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", background: C.cardAlt, padding: 8, borderRadius: 6 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 9, color: C.gray, fontWeight: 700 }}>Cash</div>
+                      <input type="number" value={splitCash} onChange={e => { setSplitCash(e.target.value); setSplitUpi(String(totalAmount - Number(e.target.value))); }} placeholder="₹" style={{ width: "100%", padding: "4px", border: `1px solid ${C.line}`, borderRadius: 4, fontSize: 12, fontWeight: 700 }} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 9, color: C.gray, fontWeight: 700 }}>UPI / Online</div>
+                      <input type="number" value={splitUpi} onChange={e => { setSplitUpi(e.target.value); setSplitCash(String(totalAmount - Number(e.target.value))); }} placeholder="₹" style={{ width: "100%", padding: "4px", border: `1px solid ${C.line}`, borderRadius: 4, fontSize: 12, fontWeight: 700 }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ background: C.card, borderRadius: 6, padding: 8, marginBottom: 6 }}>
               {addMoreMode && <>
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: 11 }}><span style={{ color: C.gray }}>Running ({existingItems.length})</span><span style={{ fontWeight: 700, fontFamily: "monospace", color: C.ink }}>{inr(existingSubtotal)}</span></div>
