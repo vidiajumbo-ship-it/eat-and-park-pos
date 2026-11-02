@@ -1,5 +1,5 @@
 
-/* eslint-disable react-hooks/exhaustive-deps, no-unused-vars */
+* eslint-disable react-hooks/exhaustive-deps, no-unused-vars *
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db, auth, authReady } from "./firebase";
@@ -2769,16 +2769,22 @@ const handleWaiterPinSubmitOld = () => {
       const u = await ensureUser();
       if (u.phoneNumber) { setIsLoggedIn(true); showToast("✅ Phone pehle se verified hai", 'success'); return; }
       if (!u.isAnonymous) { showToast("ℹ️ Staff login chal raha hai - pehle logout karo", 'info'); return; }
-      try { otpRecRef.current && otpRecRef.current.clear(); } catch (x) {}
+     try { otpRecRef.current && otpRecRef.current.clear(); } catch (x) {}
+      otpRecRef.current = null;
+      const _box = document.getElementById("otp-recaptcha");
+      if (_box) _box.innerHTML = "";
       otpRecRef.current = new RecaptchaVerifier(auth, "otp-recaptcha", { size: "invisible" });
       otpConfRef.current = await linkWithPhoneNumber(u, "+91" + p, otpRecRef.current);
       setCustPhone(p); setOtpCode(""); setOtpStep("verify");
       showToast("📩 OTP SMS bheja gaya", 'success');
     } catch (e) {
-      console.error("OTP send:", e);
+      console.error("OTP send:", e.code, e.message);
       try { otpRecRef.current && otpRecRef.current.clear(); } catch (x) {}
+      otpRecRef.current = null;
+      const _b = document.getElementById("otp-recaptcha");
+      if (_b) _b.innerHTML = "";
       const m = {
-        "auth/operation-not-allowed": "Firebase me Phone sign-in ON karo",
+        "auth/operation-not-allowed": "Phone SMS blocked (operation-not-allowed): SMS region policy me India allow karo / sahi Firebase project check karo",",
         "auth/invalid-phone-number": "Phone number galat hai",
         "auth/too-many-requests": "Bahut try ho gaye, thodi der baad",
         "auth/quota-exceeded": "SMS limit khatam (Firebase quota/billing)",
