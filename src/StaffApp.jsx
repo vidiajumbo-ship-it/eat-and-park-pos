@@ -2029,8 +2029,14 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const [placing, setPlacing] = useState(false);
   const [runningOrders, setRunningOrders] = useState([]);
   const [discount, setDiscount] = useState(0);
+  const [cashDiscount, setCashDiscount] = useState(0);
   const [gstRate, setGstRate] = useState(0);
   const [payMode, setPayMode] = useState("cash");
+  const [splitCash, setSplitCash] = useState("");
+  const [splitUpi, setSplitUpi] = useState("");
+  const [custName, setCustName] = useState("");
+  const [custPhone, setCustPhone] = useState("");
+  const [custAddress, setCustAddress] = useState("");
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
@@ -2172,7 +2178,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
   const grossSub = cartSubtotal;
   const discAmt = Math.round(grossSub * discount / 100);
   const gstAmt = Math.round((grossSub - discAmt) * gstRate / 100);
-  const totalAmount = Math.max(0, grossSub - discAmt) + gstAmt;
+  const totalAmount = Math.max(0, grossSub - discAmt + gstAmt - Number(cashDiscount || 0));
 
   useEffect(() => {
     const running = orders.filter(o => Number(o.table) === Number(table) && isOpenDineIn(o));
@@ -2217,7 +2223,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
     const sub = finalItems.reduce((s, it) => s + it.price * it.qty, 0);
     const d = Math.round((sub * discount) / 100);
     const g = Math.round(((sub - d) * gstRate) / 100);
-    const finalTotal = Math.max(0, sub - d) + g;
+    const finalTotal = Math.max(0, sub - d + g - Number(cashDiscount || 0));
 
     /*P9*/ if (removedItems.length) {
       let why = "";
@@ -2239,7 +2245,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       const oref = doc(db, "orders", existingOrder.id);
       const osnap = await tx.get(oref);
       assertEditable(osnap.exists() ? osnap.data() : null, existingOrder);
-      tx.update(oref, { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, billEditedAt: Date.now(), ...extra });
+      tx.update(oref, { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, cashDiscount: Number(cashDiscount || 0), paymentSplit: payMode === "split" ? { cash: Number(splitCash), online: Number(splitUpi) } : null, customer: { name: custName || "Walk-in", phone: custPhone || "", address: custAddress || "" }, billEditedAt: Date.now(), ...extra });
     });
     if (newKotItems.length) printKOT({ ...existingOrder, items: newKotItems, kots: [] });
     /*P8*/ if (removedItems.length) printKOT({ ...existingOrder, items: removedItems.map((i) => ({ ...i, name: "CANCEL >> " + i.name })), kots: [] });
@@ -2310,7 +2316,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       const d = Math.round((sub * discount) / 100);
       const g = Math.round(((sub - d) * gstRate) / 100);
       const finalTotal = Math.max(0, sub - d) + g;
-      const order = { id: orderId, table: table === "parcel" ? "" : table, orderType: table === "parcel" ? "parcel" : "dine_in", customer: { name: "Walk-in", phone: "" }, items, waiter: waiterName || "Staff", kots: [{ id: uid("kot"), kotNumber: 1, items, createdAt: Date.now(), status: "new", isRunning: false }], status: "new", paid: false, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, createdAt: Date.now(), createdBy: auth.currentUser?.uid };
+      const order = { id: orderId, table: table === "parcel" ? "" : table, orderType: table === "parcel" ? "parcel" : "dine_in", customer: { name: custName || "Walk-in", phone: custPhone || "", address: custAddress || "" }, cashDiscount: Number(cashDiscount || 0), paymentSplit: payMode === "split" ? { cash: Number(splitCash), online: Number(splitUpi) } : null, items, waiter: waiterName || "Staff", kots: [{ id: uid("kot"), kotNumber: 1, items, createdAt: Date.now(), status: "new", isRunning: false }], status: "new", paid: false, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, createdAt: Date.now(), createdBy: auth.currentUser?.uid };
       await setDoc(doc(db, "orders", orderId), order);
       printKOT(order);
       try { localStorage.removeItem(`staff_draft_${table}`); } catch (e) {}
@@ -2495,7 +2501,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
                   </div>
                   <div style={{ display: "flex", alignItems: "center", width: 84, justifyContent: "center", border: "1px solid " + C.line, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
                     <button onClick={() => setQty(id, q - 1)} style={{ width: 26, height: 26, border: "none", background: C.cardAlt, color: C.ink, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>-</button>
-                    <span style={{ flex: 1, textAlign: "center", fontWeight: 900, fontSize: 13, color: C.ink }}>{q}</span>
+                    <input type="number" value={q} onChange={(e) => setQty(id, parseInt(e.target.value) || 0)} style={{ width: 36, textAlign: "center", fontWeight: 900, fontSize: 13, color: C.ink, border: "none", background: "transparent", outline: "none", fontFamily: "monospace" }} />
                     <button onClick={() => setQty(id, q + 1)} style={{ width: 26, height: 26, border: "none", background: C.goldLight, color: C.goldText, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
                   </div>
                   <div style={{ width: 64, textAlign: "right", fontWeight: 800, fontSize: 13, color: C.ink, fontFamily: "monospace", flexShrink: 0 }}>{inr((rates[id] ?? m.price) * q)}</div>
