@@ -1,5 +1,5 @@
 
-* eslint-disable react-hooks/exhaustive-deps, no-unused-vars *
+/* eslint-disable react-hooks/exhaustive-deps, no-unused-vars */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db, auth, authReady } from "./firebase";
