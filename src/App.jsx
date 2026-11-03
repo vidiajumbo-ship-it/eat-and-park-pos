@@ -2672,7 +2672,7 @@ if (savedCart) {
       items, waiter: waiterName || "Staff", takenBy: "waiter",
       kots: [{ id: uid("kot"), kotNumber: 1, items: items.map(it => ({ ...it, kotNumber: 1 })), createdAt: Date.now(), status: "new", isRunning: false }],
       notes: orderNotes, payment: "cash", paymentStatus: "pending",
-      status: "new", paid: (paymentInfo.status === "paid" || paymentInfo.status === "paid_unverified"), createdAt: Date.now(),
+      status: "new", paid: false, createdAt: Date.now(),
       coinsClaimed: true, earnedCoins: 0, rewardUsedCoins: 0,
       deliveryFee: 0, loyaltyDiscount: 0, discount: 0,
       subtotal: total, finalTotal: total
@@ -2713,7 +2713,7 @@ const handleWaiterPinSubmit = async () => {
     if (!s.exists()) { await signOut(auth); showToast("❌ Ye account staff/waiter ka nahi hai", "error"); setWaiterPinInput(""); return; }
     setWaiterUnlocked(true); setShowWaiterPinModal(false); setWaiterPinInput(""); setShowWaiterMode(true);
     showToast("🔓 Waiter Mode Unlocked!", "success");
-  } catch (e) { showToast("❌ Login fail", "error"); setWaiterPinInput(""); }
+  } catch (e) { console.error(e); showToast("❌ Login fail: " + (e.code || e.message), "error"); setWaiterPinInput(""); }
 };
 const handleWaiterPinSubmitUnused = () => {
   if (waiterLock.isLocked()) {
@@ -2784,7 +2784,7 @@ const handleWaiterPinSubmitOld = () => {
       const _b = document.getElementById("otp-recaptcha");
       if (_b) _b.innerHTML = "";
       const m = {
-        "auth/operation-not-allowed": "Phone SMS blocked (operation-not-allowed): SMS region policy me India allow karo / sahi Firebase project check karo",",
+        "auth/operation-not-allowed": "Phone SMS blocked (operation-not-allowed): SMS region policy me India allow karo / sahi Firebase project check karo",
         "auth/invalid-phone-number": "Phone number galat hai",
         "auth/too-many-requests": "Bahut try ho gaye, thodi der baad",
         "auth/quota-exceeded": "SMS limit khatam (Firebase quota/billing)",
@@ -3253,6 +3253,45 @@ const handleWaiterPinSubmitOld = () => {
   return (
     <div style={{ maxWidth: viewMode === "desktop" ? 1100 : 480, margin: "0 auto", paddingBottom: cartCount ? 120 : 60, background: "var(--bg-color, #fff)", minHeight: "100vh", position: "relative" }}>
       {toast && <Toast message={toast} type={toastType} />}
+
+      {!isLoggedIn && !waiterUnlocked && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 150, background: COLORS.paper, overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ width: "100%", maxWidth: 380, textAlign: "center" }}>
+            <div style={{ fontSize: 56, marginBottom: 8 }}>🍽️</div>
+            <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 28, fontWeight: 800, margin: "0 0 4px" }}>{RESTAURANT.name}</h1>
+            <p style={{ fontSize: 13, color: COLORS.textLight, margin: "0 0 24px" }}>Menu dekhne ke liye pehle login karo</p>
+
+            <div id="otp-recaptcha"></div>
+
+            {otpStep === "phone" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <input type="text" placeholder="Aapka Naam *" value={custName} onChange={(e) => setCustName(e.target.value)} style={inputStyle} />
+                <input type="tel" inputMode="numeric" maxLength={10} placeholder="10-digit Phone *" value={custPhone} onChange={(e) => setCustPhone(e.target.value.replace(/\D/g, ""))} style={inputStyle} />
+                <button onClick={() => { if (!custName.trim()) { showToast("⚠️ Pehle naam daalo", "error"); return; } handleSendOtp(); }}
+                  style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 14, padding: 16, fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
+                  📩 OTP Bhejo
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ fontSize: 13, color: COLORS.textLight }}>OTP {custPhone} par bheja gaya</div>
+                <input type="text" inputMode="numeric" maxLength={6} placeholder="OTP daalo" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} style={{ ...inputStyle, textAlign: "center", letterSpacing: 8, fontWeight: 800 }} />
+                <button onClick={handleVerifyOtp}
+                  style={{ background: COLORS.success, color: "#fff", border: "none", borderRadius: 14, padding: 16, fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
+                  ✓ Verify & Menu Dekho
+                </button>
+                <button onClick={() => { setOtpStep("phone"); setOtpCode(""); }} style={{ background: "none", border: "none", color: COLORS.textLight, fontWeight: 700, cursor: "pointer" }}>← Number badlo</button>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap", marginTop: 32 }}>
+              <button onClick={() => requestPinPrompt("staff")} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>🔒 Staff</button>
+              <button onClick={() => setShowWaiterPinModal(true)} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>🧑‍🍳 Waiter</button>
+              <button onClick={() => requestPinPrompt("admin")} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>⚙️ Admin</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <button onClick={() => { requestWaiter(table); showToast("🔔 Waiter notified!", 'success'); }}
         style={{ position: "fixed", top: 80, right: 16, background: COLORS.rust, color: "#fff", border: "none", borderRadius: 20, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 8px 24px rgba(192,57,43,0.4)", cursor: "pointer", zIndex: 60, fontSize: 13, fontWeight: 800 }}>🔔 Waiter Call</button>

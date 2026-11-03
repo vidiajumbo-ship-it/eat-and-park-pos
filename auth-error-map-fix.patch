@@ -1,0 +1,9 @@
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -2784,7 +2784,7 @@
+         if (_b) _b.innerHTML = "";
+         const m = {
+-          "auth/operation-not-allowed": "Phone SMS blocked (operation-not-allowed): SMS region policy me India allow karo / sahi Firebase project check karo",",
++          "auth/operation-not-allowed": "Phone SMS blocked (operation-not-allowed): SMS region policy me India allow karo / sahi Firebase project check karo",
+           "auth/invalid-phone-number": "Phone number galat hai",
+           "auth/too-many-requests": "Bahut try ho gaye, thodi der baad",
