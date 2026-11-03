@@ -53,29 +53,31 @@ function safeStorageRemove(key) {
 // ===========================================================================
 // COLORS
 // ===========================================================================
-const LIGHT = {
+const VELOX_DARK = {
+  bg: "#0B111A", card: "#161F2F", cardAlt: "#1E293B", ink: "#FFFFFF",
+  gray: "#8B9BB4", light: "#0B111A", line: "#273449",
+  red: "#EF4444", redLight: "#451A1A", green: "#10B981", greenLight: "#0A2A20",
+  amber: "#F59E0B", amberLight: "#3A2510", blue: "#3B82F6", blueLight: "#152A4A",
+  gold: "#FF5A1F", goldDark: "#E04814", goldLight: "#2A1A15", goldText: "#FF8C5A",
+};
+const ORIGINAL_LIGHT = {
   bg: "#FAF7EF", card: "#FFFFFF", cardAlt: "#F4EEDD", ink: "#1C1608",
   gray: "#7A7058", light: "#FAF7EF", line: "#E9E0C9",
-  red: "#DC2626", redLight: "#FEF2F2",
-  green: "#16A34A", greenLight: "#F0FDF4",
-  amber: "#F59E0B", amberLight: "#FFFBEB",
-  blue: "#2563EB", blueLight: "#EFF6FF",
+  red: "#DC2626", redLight: "#FEF2F2", green: "#16A34A", greenLight: "#F0FDF4",
+  amber: "#F59E0B", amberLight: "#FFFBEB", blue: "#2563EB", blueLight: "#EFF6FF",
   gold: "#B8860B", goldDark: "#7A5806", goldLight: "#FBF3D9", goldText: "#8A6200",
-};
-const DARK = {
-  bg: "#14110A", card: "#1F1A10", cardAlt: "#2C2516", ink: "#F7F0DA",
-  gray: "#B0A585", light: "#1F1A10", line: "#3D3319",
-  red: "#EF4444", redLight: "#450A0A",
-  green: "#22C55E", greenLight: "#052E16",
-  amber: "#FBBF24", amberLight: "#451A03",
-  blue: "#3B82F6", blueLight: "#1E3A8A",
-  gold: "#D4A017", goldDark: "#8F6A0A", goldLight: "#3A2C08", goldText: "#F0C85A",
 };
 
 // ===========================================================================
 // GLOBAL CSS (animations, press states, shimmer)
 // ===========================================================================
 const GLOBAL_CSS = `
+body { background: #0B111A; color: #FFFFFF; margin: 0; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #273449; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #FF5A1F; }
+\n
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&display=swap');
 h2 { font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; letter-spacing: 0.2px; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
@@ -343,7 +345,7 @@ function SplashScreen({ C }) {
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: "system-ui, sans-serif", flexDirection: "column", gap: 20 }}>
       <div style={{ width: 100, height: 100, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 52, boxShadow: `0 20px 60px ${C.gold}55`, animation: "successBounce 0.6s ease-out" }}>🍽️</div>
-      <div style={{ fontWeight: 900, fontSize: 22, color: C.ink, letterSpacing: "-0.02em" }}>Eat & Park</div>
+      <div style={{ fontWeight: 900, fontSize: 22, color: C.ink, letterSpacing: "-0.02em" }}>Eat & Park Restaurant</div>
       <div style={{ fontWeight: 600, fontSize: 12, color: C.gray, textTransform: "uppercase", letterSpacing: 2 }}>Staff POS</div>
       <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
         {[0, 1, 2].map(i => (
@@ -694,6 +696,7 @@ function StaffAppInner() {
   const [cart, setCart] = useState({});
   const [waiterName, setWaiterName] = useState("");
   const [darkMode, setDarkMode] = useState(() => safeStorageGet("staff_dark", "0") === "1");
+   const [legacyUI, setLegacyUI] = useState(false);
   const [lang, setLang] = useState(() => safeStorageGet("staff_lang", "en"));
   const [searchTable, setSearchTable] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -774,7 +777,7 @@ function StaffAppInner() {
   const cycleViewMode = () => { haptic(15); setViewMode(m => m === "auto" ? "mobile" : m === "mobile" ? "desktop" : "auto"); };
   const viewIcon = viewMode === "auto" ? "🔄" : viewMode === "mobile" ? "📱" : "💻";
 
-  const C = darkMode ? DARK : LIGHT;
+  const C = legacyUI ? ORIGINAL_LIGHT : VELOX_DARK;
 const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role || "").toLowerCase());
 
   useEffect(() => { localStorage.setItem("staff_dark", darkMode ? "1" : "0"); document.body.style.background = C.bg; }, [darkMode]);
@@ -955,27 +958,26 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
 
   if (!user) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: `linear-gradient(135deg, ${C.bg} 0%, ${C.cardAlt} 100%)`, fontFamily: "system-ui, sans-serif", padding: 16 }}>
-        <form onSubmit={handleLogin} style={{ background: C.card, borderRadius: 20, padding: isMobile ? 24 : 36, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.15)", border: `1px solid ${C.line}`, animation: "scaleIn 0.35s ease-out" }}>
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: C.bg, fontFamily: "system-ui, sans-serif", padding: 16 }}>
+        <div style={{ background: C.card, borderRadius: 20, padding: isMobile ? 24 : 36, width: "100%", maxWidth: 400, boxShadow: "0 20px 60px rgba(0,0,0,0.5)", border: `1px solid ${C.line}` }}>
           <div style={{ textAlign: "center", marginBottom: 28 }}>
-            <div style={{ width: 80, height: 80, margin: "0 auto 12px", background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, boxShadow: `0 8px 24px ${C.gold}40` }}>🍽️</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: C.ink, letterSpacing: "-0.02em" }}>Eat & Park</div>
-            <div style={{ fontSize: 13, color: C.gray, marginTop: 4, fontWeight: 600 }}>Staff POS - Sign In</div>
+            <div style={{ width: 70, height: 70, margin: "0 auto 12px", background: C.gold, borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, color: "#fff" }}>🍽️</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: C.ink }}>Eat & Park Restaurant</div>
+            <div style={{ fontSize: 13, color: C.gray, marginTop: 4 }}>Restaurant Command</div>
           </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 11, fontWeight: 800, color: C.gray, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="staff@eatpark.com" style={{ width: "100%", padding: "13px 16px", border: `1.5px solid ${C.line}`, borderRadius: 10, fontSize: 14, boxSizing: "border-box", outline: "none", background: C.card, color: C.ink }} autoFocus required />
-          </div>
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ fontSize: 11, fontWeight: 800, color: C.gray, display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="********" style={{ width: "100%", padding: "13px 16px", border: `1.5px solid ${C.line}`, borderRadius: 10, fontSize: 14, boxSizing: "border-box", outline: "none", background: C.card, color: C.ink }} required />
-          </div>
-          {loginError && <div style={{ background: C.redLight, color: C.red, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, marginBottom: 18 }}>Warning: {loginError}</div>}
-          <button type="submit" style={{ width: "100%", padding: "15px", border: "none", borderRadius: 10, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer", boxShadow: `0 8px 20px ${C.gold}40` }}>Sign In</button>
-          <div style={{ textAlign: "center", marginTop: 22, fontSize: 12, color: C.gray }}>
-            <a href="/" style={{ color: C.blue, textDecoration: "none", fontWeight: 700 }}>Back to Customer App</a>
-          </div>
-        </form>
+          <form onSubmit={handleLogin}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 11, fontWeight: 800, color: C.gray, display: "block", marginBottom: 8, textTransform: "uppercase" }}>Staff Email</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@veloxpos.in" style={{ width: "100%", padding: "14px 16px", border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 15, background: C.bg, color: C.ink, boxSizing: "border-box", outline: "none" }} required />
+            </div>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ fontSize: 11, fontWeight: 800, color: C.gray, display: "block", marginBottom: 8, textTransform: "uppercase" }}>PIN</label>
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••" style={{ width: "100%", padding: "14px 16px", border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 24, background: C.bg, color: C.ink, boxSizing: "border-box", outline: "none", textAlign: "center", letterSpacing: 8 }} required />
+            </div>
+            {loginError && <div style={{ background: C.redLight, color: C.red, padding: "12px 14px", borderRadius: 10, fontSize: 13, fontWeight: 700, marginBottom: 18, textAlign: "center" }}>{loginError}</div>}
+            <button type="submit" style={{ width: "100%", padding: "16px", border: "none", borderRadius: 12, background: C.gold, color: "#fff", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>Start Shift</button>
+          </form>
+        </div>
       </div>
     );
   }
@@ -985,17 +987,51 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
   const todayRevenue = paidRevenue(orders.filter(o => o.createdAt >= startOfToday.getTime()));
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "system-ui, sans-serif", display: "flex", flexDirection: "column", color: C.ink }}>
+    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: "system-ui, sans-serif", display: "flex", flexDirection: "row", color: C.ink }}>
+      
+      {!isMobile && !legacyUI && (
+        <div style={{ width: 260, background: C.card, borderRight: `1px solid ${C.line}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+          <div style={{ padding: "24px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 40, height: 40, background: C.gold, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: "#fff" }}>🍽️</div>
+            <div><div style={{ fontWeight: 800, fontSize: 15 }}>Eat & Park Restaurant</div><div style={{ fontSize: 11, color: C.gray }}>Staff Panel</div></div>
+          </div>
+          <div style={{ flex: 1, padding: "0 12px", display: "flex", flexDirection: "column", gap: 4, overflowY: "auto" }}>
+            {[
+              { id: "tables", label: "Tables", icon: "🛋️" },
+              { id: "orders", label: "Orders", icon: "🏷️" },
+              { id: "kot", label: "Kitchen Display", icon: "🔥" },
+              { id: "dashboard", label: "Reports", icon: "📊" },
+              { id: "history", label: "Bills", icon: "🧾" },
+              { id: "inventory", label: "Stock", icon: "📦" }
+            ].map(tab => (
+              <button key={tab.id} onClick={() => { haptic(); setActiveTab(tab.id); }} 
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", border: "none", borderRadius: 10, cursor: "pointer", fontFamily: "inherit", textAlign: "left", background: activeTab === tab.id ? C.gold : "transparent", color: activeTab === tab.id ? "#fff" : C.gray, fontWeight: 700, fontSize: 14, transition: "all 0.2s" }}>
+                <span style={{ fontSize: 18 }}>{tab.icon}</span>{tab.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ padding: 20, borderTop: `1px solid ${C.line}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: C.cardAlt, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>👤</div>
+              <div><div style={{ fontWeight: 700, fontSize: 13, color: C.ink }}>{staffData?.name || "Staff"}</div><div style={{ fontSize: 10, color: C.gray, textTransform: "uppercase" }}>{staffData?.role || "waiter"}</div></div>
+            </div>
+            <button onClick={() => setLegacyUI(true)} style={{ width: "100%", padding: 8, background: "transparent", border: `1px solid ${C.line}`, color: C.gold, borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 12, marginBottom: 8 }}>Switch to Legacy UI</button>
+            <button onClick={handleLogout} style={{ width: "100%", padding: 8, background: "transparent", border: `1px solid ${C.line}`, color: C.red, borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Logout</button>
+          </div>
+        </div>
+      )}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
       <style>{GLOBAL_CSS}</style>
       <Confetti show={confetti} />
 
       {/* TOP BAR */}
-      <div style={{ background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", padding: isMobile ? "10px 10px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 16px rgba(184,134,11,0.30)", position: "sticky", top: 0, zIndex: 50, gap: 8 }}>
+      <div style={{ display: (isMobile || legacyUI) ? "flex" : "none", background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", padding: isMobile ? "10px 10px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 16px rgba(184,134,11,0.30)", position: "sticky", top: 0, zIndex: 50, gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, minWidth: 0, flex: 1 }}>
           <button onClick={() => { haptic(); setSidebarOpen(true); }} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: isMobile ? 34 : 38, height: isMobile ? 34 : 38, borderRadius: 8, fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>☰</button>
           {!isMobile && <div style={{ width: 42, height: 42, background: "rgba(255,255,255,0.2)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>}
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: isMobile ? 14 : 16, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Eat & Park</div>
+            <div style={{ fontWeight: 800, fontSize: isMobile ? 14 : 16, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Eat & Park Restaurant</div>
             {!isMobile && <div style={{ fontSize: 11, opacity: 0.9, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{staffData?.name || "Staff"} - {staffData?.role || "waiter"}</div>}
           </div>
         </div>
@@ -1008,12 +1044,13 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
           {!isMobile && (
             <button onClick={() => { haptic(); setDarkMode(d => !d); }} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: 38, height: 38, borderRadius: 8, fontSize: 16, cursor: "pointer" }}>{darkMode ? "☀️" : "🌙"}</button>
           )}
+          <button onClick={() => setLegacyUI(false)} style={{ background: "rgba(255,255,255,0.25)", border: "none", color: "#fff", padding: isMobile ? "9px 10px" : "9px 16px", borderRadius: 8, fontWeight: 800, fontSize: 12, cursor: "pointer", marginRight: 8 }}>✨ New UI</button>
           <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", padding: isMobile ? "9px 10px" : "9px 16px", borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Logout</button>
         </div>
       </div>
 
       {/* TABS */}
-      <div style={{ background: C.card, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "0 8px" : "0 16px", display: "flex", gap: 4, overflowX: "auto", alignItems: "center" }}>
+      <div style={{ display: (isMobile || legacyUI) ? "flex" : "none", background: C.card, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "0 8px" : "0 16px", display: "flex", gap: 4, overflowX: "auto", alignItems: "center" }}>
         <button onClick={() => { haptic(); setShowEstimate(true); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: C.green, fontWeight: 900, fontSize: isMobile ? 12 : 13, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, borderBottom: `3px solid ${C.green}` }}>📋 Estimate{estItems.length ? ` (${estItems.length})` : ""}</button>
         {[
           { id: "tables", label: `🍽️ Tables` }, { id: "parcel", label: `🛍️ Parcel${parcelCount ? ` (${parcelCount})` : ""}` },
@@ -1118,7 +1155,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 44, height: 44, background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>
-                <div><div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Eat & Park</div><div style={{ fontSize: 11, color: C.gray }}>Staff Panel</div></div>
+                <div><div style={{ fontWeight: 800, fontSize: 15, color: C.ink }}>Eat & Park Restaurant</div><div style={{ fontSize: 11, color: C.gray }}>Staff Panel</div></div>
               </div>
               <button onClick={() => setSidebarOpen(false)} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: C.gray }}>X</button>
             </div>
@@ -1189,7 +1226,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
           onBack={() => { setSelectedTable(null); setCart({}); setEstimatePending(false); setBillOrder(null); setAddMoreMode(false); }}
           onSwitchAdd={() => { setCart({}); setAddMoreMode(true); }} onPaidSuccess={() => { haptic(60); setConfetti(true); setTimeout(() => setConfetti(false), 1800); }} />
       )}
-    </div>
+     </div> </div>
   );
 }
 
@@ -1324,7 +1361,7 @@ function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, 
                 <button onClick={() => onFeedback(t.order)} style={{ padding: isMobile ? "8px 4px" : "6px", border: `1.5px solid ${C.gray}`, borderRadius: 6, background: "transparent", color: C.gray, fontWeight: 800, fontSize: isMobile ? 10 : 11, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>Feedback</button>
               </div>
             ) : (
-              <button onClick={() => onTableClick(t.table)} style={{ marginTop: 8, padding: isMobile ? "9px 4px" : "7px 4px", border: "none", borderRadius: 6, background: C.ink, color: "#fff", fontWeight: 800, fontSize: isMobile ? 11 : 10, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>New Order</button>
+              <button onClick={() => onTableClick(t.table)} style={{ marginTop: 8, padding: isMobile ? "9px 4px" : "7px 4px", border: "none", borderRadius: 6, background: C.gold, color: "#fff", fontWeight: 800, fontSize: isMobile ? 11 : 10, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>New Order</button>
             )}
           </div>
         ))}
