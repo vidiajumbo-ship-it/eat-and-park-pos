@@ -2773,7 +2773,10 @@ const handleWaiterPinSubmitOld = () => {
       otpRecRef.current = null;
       const _box = document.getElementById("otp-recaptcha");
       if (_box) _box.innerHTML = "";
-      otpRecRef.current = new RecaptchaVerifier(auth, "otp-recaptcha", { size: "invisible" });
+      const _host = document.getElementById("otp-recaptcha");
+const _el = document.createElement("div");
+if (_host) { _host.innerHTML = ""; _host.appendChild(_el); }
+otpRecRef.current = new RecaptchaVerifier(auth, _el, { size: "invisible" });
       otpConfRef.current = await linkWithPhoneNumber(u, "+91" + p, otpRecRef.current);
       setCustPhone(p); setOtpCode(""); setOtpStep("verify");
       showToast("📩 OTP SMS bheja gaya", 'success');
