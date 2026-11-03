@@ -2515,6 +2515,29 @@ if (savedCart) {
     return () => unsubs.forEach(u => u());
   }, [myOrderIds.join(",")]);
 
+  // Login ke baad apne saare orders (Firebase se) apne aap load ho jayein
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const uid = auth.currentUser && auth.currentUser.uid;
+    if (!uid) return;
+    const mine = orders.filter((o) => o.createdBy === uid).map((o) => o.id);
+    if (mine.length === 0) return;
+    setMyOrderIds((prev) => {
+      const next = Array.from(new Set([...prev, ...mine]));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [orders, isLoggedIn]);
+
+  // Page reload / naya device: phone-verified session ho to login apne aap ho jaye
+  useEffect(() => {
+    return onAuthStateChanged(auth, (u) => {
+      if (u && u.phoneNumber) {
+        setCustPhone(u.phoneNumber.replace(/\D/g, "").slice(-10));
+        setIsLoggedIn(true);
+      }
+    });
+  }, []);
+
   const handleSetQty = useCallback((id, q) => {
     const prevCart = cartRef.current;
     const oldQty = getCartQty(prevCart[id]);
@@ -2892,6 +2915,25 @@ otpRecRef.current = new RecaptchaVerifier(auth, _el, { size: "invisible" });
       } catch (e) { }
     }
   }, [showToast]);
+
+  const handleLogout = async () => {
+    if (!window.confirm("Logout karna hai?")) return;
+    try { await signOut(auth); } catch (e) { console.error("logout:", e); }
+    try {
+      localStorage.removeItem("eatpark_customer");
+      localStorage.removeItem("eatpark_orders");
+      localStorage.removeItem("eatpark_cart");
+    } catch (e) {}
+    otpConfRef.current = null;
+    setIsLoggedIn(false);
+    setWaiterUnlocked(false);
+    setShowWaiterMode(false);
+    setCustName(""); setCustPhone(""); setCustAddress("");
+    setOtpStep("phone"); setOtpCode("");
+    setCart({}); setMyOrderIds([]);
+    setShowSidebar(false);
+    showToast("👋 Logout ho gaye", "info");
+  };
 
   const handleGetLocation = () => {
     if (!navigator.geolocation) { showToast("Geolocation not supported", 'error'); return; }
@@ -3704,6 +3746,18 @@ otpRecRef.current = new RecaptchaVerifier(auth, _el, { size: "invisible" });
               <SidebarBtn icon="🎉" text="Party Booking" onClick={() => { setShowSidebar(false); setBookType("party"); setActiveModal('booking'); }} />
               <SidebarBtn icon="👑" text="VIP Loyalty" onClick={() => { setShowSidebar(false); setActiveModal('loyalty'); }} />
               <SidebarBtn icon="⭐" text="Rate on Google" onClick={() => { setShowSidebar(false); window.open(GOOGLE_REVIEW_URL, '_blank'); }} highlight />
+              {isLoggedIn && (
+                <div style={{ marginTop: 8, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: "center", fontSize: 12, color: COLORS.textLight, fontWeight: 600 }}>
+                  👤 {custName || "Guest"} · {custPhone}
+                </div>
+              )}
+              <SidebarBtn icon="🚪" text="Logout" onClick={handleLogout} />
+              {isLoggedIn && (
+                <div style={{ marginTop: 8, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: "center", fontSize: 12, color: COLORS.textLight, fontWeight: 600 }}>
+                  👤 {custName || "Guest"} · {custPhone}
+                </div>
+              )}
+              <SidebarBtn icon="🚪" text="Logout" onClick={handleLogout} />
               <div style={{ marginTop: 16, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: 'center' }}>
                 <QRCodeSVG value={window.location.href} size={100} />
                 <p style={{ fontSize: 11, color: COLORS.textLight, marginTop: 6 }}>📲 Scan to order</p>
