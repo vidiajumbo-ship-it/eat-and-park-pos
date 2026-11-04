@@ -2244,6 +2244,7 @@ function WaiterMode({ orders, menu, categories, setMenuState, placeOrder, advanc
   const [viewMode] = useViewMode();
   const [target, setTarget] = useState(null);
   const [drafts, setDrafts] = useState({});
+  const [showKitchenOnly, setShowKitchenOnly] = useState(false);
 
   const handleDraftChange = (t, items, orderData) => {
     if (items && items.length > 0) {
@@ -2278,13 +2279,63 @@ function WaiterMode({ orders, menu, categories, setMenuState, placeOrder, advanc
       <div style={{ background: "#161F2F", padding: "12px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #273449", position: "sticky", top: 0, zIndex: 10 }}>
         <div style={{ color: "#fff", fontWeight: 800, fontSize: 20, fontFamily: "'Outfit', sans-serif" }}>🧑‍🍳 Waiter Panel</div>
         <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setShowKitchenOnly(prev => !prev)} style={{ background: showKitchenOnly ? "#273449" : "#38BDF8", color: showKitchenOnly ? "#fff" : "#0B111A", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 800, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 10px rgba(56,189,248,0.3)" }}>{showKitchenOnly ? "🪑 Tables" : "🍳 Kitchen View"}</button>
           <button onClick={() => openNew()} style={{ background: "#FF5A1F", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 800, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 10px rgba(255,90,31,0.3)" }}>➕ New Order</button>
           <button onClick={exit} style={{ background: "#273449", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>✕ Exit</button>
         </div>
       </div>
 
       <div style={{ padding: "20px", maxWidth: 1200, margin: "0 auto" }}>
-        <TableStatusBoard orders={combinedOrders} tables={20} compact={false} isDark={true} showStats onTableClick={(o) => setTarget(o)} onEmptyTableClick={(t) => openNew(t)} />
+        {!showKitchenOnly ? (
+          <TableStatusBoard orders={combinedOrders} tables={20} compact={false} isDark={true} showStats onTableClick={(o) => setTarget(o)} onEmptyTableClick={(t) => openNew(t)} />
+        ) : (
+          <div style={{ color: "#fff" }}>
+            <h2 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 28 }}>🧑‍🍳</span> Live Kitchen Orders
+            </h2>
+            <div style={{ display: "grid", gridTemplateColumns: viewMode === "desktop" ? "repeat(3, minmax(0, 1fr))" : "1fr", gap: 16 }}>
+              {["new", "preparing", "ready"].map((status) => {
+                const list = orders.filter(o => o.status === status);
+                return (
+                  <div key={status} style={{ background: "#161F2F", border: "1px solid #273449", borderRadius: 18, padding: 20 }}>
+                    <div style={{ display: "flex", gap: 10, marginBottom: 20, alignItems: "center" }}>
+                      <div style={{ width: 12, height: 12, borderRadius: "50%", background: STATUS_COLOR[status] || "#fff" }} />
+                      <div style={{ fontSize: 15, textTransform: "uppercase", fontWeight: 800, letterSpacing: "0.05em", color: STATUS_COLOR[status] || "#fff" }}>{STATUS_LABEL[status] || status}</div>
+                      <span style={{ fontSize: 13, background: STATUS_COLOR[status] || "#fff", color: "#0B111A", padding: "3px 10px", borderRadius: 14, fontWeight: 800, marginLeft: "auto" }}>{list.length}</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {list.map((o) => (
+                        <div key={o.id} onClick={() => setTarget(o)} style={{ background: "#1F2937", border: "2px solid #374151", borderRadius: 12, padding: 14, cursor: "pointer", transition: "all 0.2s" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: "center" }}>
+                            <div style={{ fontSize: 16, fontWeight: 800, color: "#FCD34D" }}>
+                              {o.orderType === "parcel" ? "🛍️ PARCEL" : `🍽️ Table ${o.table}`}
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF" }}>{timeAgo(o.createdAt)}</div>
+                          </div>
+                          <div style={{ borderTop: "1.5px dashed #374151", paddingTop: 10, marginBottom: 12 }}>
+                            {(o.items || []).map((it, idx) => (
+                              <div key={idx} style={{ fontSize: 14, marginBottom: 6, fontWeight: 600, color: "#E5E7EB" }}>
+                                <span style={{ fontWeight: 800, display: "inline-block", width: 28 }}>{it.qty}×</span> {it.name}
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={(e) => { e.stopPropagation(); advanceStatus(o.id, status); }} style={{ flex: 1, padding: "10px 8px", border: "none", borderRadius: 10, fontWeight: 800, fontSize: 13, cursor: "pointer", background: STATUS_COLOR[status] || "#38BDF8", color: "#0B111A" }}>
+                              {status === "new" ? "👨‍🍳 Start Cooking" : status === "preparing" ? "✅ Mark Ready" : "🍽️ Mark Served"}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {list.length === 0 && (
+                        <div style={{ textAlign: "center", padding: "40px 0", color: "#6B7280", fontSize: 14, fontStyle: "italic" }}>No orders</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {target && (

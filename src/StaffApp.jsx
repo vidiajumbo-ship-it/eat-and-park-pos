@@ -877,6 +877,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
   const parcelCount = orders.filter(isOpenParcel).length;
   /*P13*/ const prevReadyRef = useRef(null);
   useEffect(() => {
+    if (true) return; // [KOT-READONLY] ready toast off
     const ready = orders.filter((o) => o.status === "ready" && !o.paid && Date.now() - toMillis(o.createdAt) < OPEN_WINDOW_MS).map((o) => o.id);
     if (prevReadyRef.current === null) { prevReadyRef.current = ready; return; }
     const prev = new Set(prevReadyRef.current);
@@ -889,6 +890,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
   }, [orders]);
 
   useEffect(() => {
+    if (true) return; // [KOT-READONLY] new-order notify off
     const fresh = orders.filter(o => o.status === "new" && toMillis(o.createdAt) > Date.now() - FRESH_MS);
     const freshIds = fresh.map(o => o.id);
     if (prevNewIdsRef.current === null) { prevNewIdsRef.current = freshIds; return; }
@@ -909,7 +911,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
   useEffect(() => {
     document.title = (newCount ? "(" + newCount + ") " : "") + "Eat & Park Staff";
     if (!user || newCount === 0) return;
-    const iv = setInterval(() => playSound(), 8000);
+    const iv = null; // [KOT-READONLY] beep off
     return () => clearInterval(iv);
   }, [newCount, user]);
 
@@ -1130,7 +1132,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
             onBill={(order) => { haptic(); setBillOrder(order); setSelectedTable("parcel"); setCart({}); setAddMoreMode(false); }}
             onAdd={(order) => { haptic(); setBillOrder(order); setSelectedTable("parcel"); setCart({}); setAddMoreMode(true); }} />
         )}
-        {activeTab === "kot" && <KOTView C={C} isMobile={isMobile} orders={orders} setOrders={setOrders} />}
+        {activeTab === "kot" && <KOTView C={C} isMobile={isMobile} orders={orders} setOrders={setOrders} readOnly={true} />}
 {activeTab === "inventory" && <InventoryPanel C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
         {activeTab === "stock" && <StockPanel C={C} isMobile={isMobile} menu={menu} />}
         {activeTab === "history" && <HistoryView C={C} isMobile={isMobile} isOwner={isOwner} />}
@@ -1578,7 +1580,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
   const prev = kots.slice(0, -1).flatMap((k) => k.items || []).map((i) => ({ ...i, _old: true }));
   return [...fresh, ...gone, ...prev];
 }
-function KOTView({ C, isMobile, orders, setOrders }) {
+function KOTView({ C, isMobile, orders, setOrders, readOnly = false }) {
   const toast = useToast();
   const haptic = useHaptic();
   const [, setTick] = useState(0);
@@ -1612,10 +1614,17 @@ function KOTView({ C, isMobile, orders, setOrders }) {
                 <span style={{ fontSize: 12, color: late ? C.red : C.gray, fontWeight: 800 }}>{mins}m</span>
               </div>
               {kotDisplayItems(o).map((it, i) => <div key={i} style={{ opacity: it._old ? 0.45 : 1, textDecoration: it._cancel ? "line-through" : "none", fontSize: isMobile ? 13 : 15, fontWeight: 700, padding: "6px 0", borderBottom: `1px dashed ${C.line}`, color: C.ink }}>{it.qty}x {it.name}{it.portion ? <span style={{ color: C.gray, fontWeight: 500 }}> ({it.portion})</span> : ""}</div>)}
-              <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
-                <button onClick={() => advanceOrder(o)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 8, background: isNew ? C.red : C.amber, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>{isNew ? "Start Cooking" : "Mark Ready"}</button>
-                <button onClick={() => printKOT(o)} style={{ padding: "10px 14px", border: `1.5px solid ${C.line}`, borderRadius: 8, background: "transparent", color: C.ink, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Print</button>
-              </div>
+              {!readOnly && (
+                <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+                  <button onClick={() => advanceOrder(o)} style={{ flex: 1, padding: "10px", border: "none", borderRadius: 8, background: isNew ? C.red : C.amber, color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>{isNew ? "Start Cooking" : "Mark Ready"}</button>
+                  <button onClick={() => printKOT(o)} style={{ padding: "10px 14px", border: `1.5px solid ${C.line}`, borderRadius: 8, background: "transparent", color: C.ink, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Print</button>
+                </div>
+              )}
+              {readOnly && (
+                <div style={{ marginTop: 12, padding: "10px", textAlign: "center", background: C.cardAlt || C.light, borderRadius: 8, color: C.gray, fontSize: 12, fontWeight: 700, fontStyle: "italic" }}>
+                  👁️ View only — kitchen work waiter handles
+                </div>
+              )}
             </div>
           );
         })}
