@@ -37,3 +37,4 @@ serviceAccountKey*.json
 firestore-debug.log
 *.bak*
 *.backup
+src/*.bak*
