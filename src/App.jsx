@@ -711,7 +711,7 @@ function categoryImage(category) {
 function dishImage(name, category) {
   const n = String(name || "");
   const hit = DISH_IMG_RULES.find(([re]) => re.test(n));
-  return hit ? IMG(hit[1]) : categoryImage(category);
+  return hit ? IMG(hit[1]) : "";
 }
 const GENERIC_IMAGES = new Set([IMG(DEFAULT_IMG_ID), ...CATEGORY_IMG.map(([, id]) => IMG(id))]);
 const withDishImage = (m) => (!m.image || GENERIC_IMAGES.has(m.image) ? { ...m, image: dishImage(m.name, m.category) } : m);
@@ -3555,7 +3555,8 @@ const handleWaiterPinSubmitOld = () => {
                 </div>
                 <div style={{ width: 104, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
                   <div style={{ position: "relative", width: 104, height: 104 }}>
-                    <img src={item.image} alt={item.name} loading="lazy" className="keep-color" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 14, filter: item.available ? "none" : "grayscale(1)" }} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; }} />
+                    <div style={{ position: "absolute", inset: 0, borderRadius: 14, background: "#1E293B", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34 }}>🍽️</div>
+                    {item.image ? <img src={item.image} alt={item.name} loading="lazy" className="keep-color" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", borderRadius: 14, filter: item.available ? "none" : "grayscale(1)" }} onError={(e) => { e.target.style.display = "none"; }} /> : null}
                     <button onClick={() => toggleFavorite(item.id)} aria-label="Favorite" style={{ position: "absolute", top: 5, right: 5, width: 28, height: 28, borderRadius: "50%", border: "none", background: "rgba(11,17,26,0.7)", color: fav ? "#FFB800" : "#fff", fontSize: 15, cursor: "pointer" }}>{fav ? "★" : "☆"}</button>
                   </div>
                   <div style={{ marginTop: -17, position: "relative", zIndex: 1 }}>
@@ -5575,6 +5576,37 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
     try { await setDoc(doc(db, "settings", "menu"), { items: updatedMenu }); } catch (e) { alert("⚠️ Failed to save"); }
     setEditingItem(null); setNewItemImage("");
   };
+  const [autoImgMsg, setAutoImgMsg] = useState("");
+  const autoImagesAll = async () => {
+    if (autoImgMsg) return;
+    const isOwn = (u) => /cloudinary\.com|pexels\.com/.test(u || "");
+    const targets = menu.filter((m) => !isOwn(m.image));
+    if (!targets.length) { alert("Sab items ki photo pehle se set hai"); return; }
+    if (!window.confirm(targets.length + " items ki photo auto lagani hain? (Cloudinary / apni upload ki hui photo nahi badlegi)")) return;
+    const cache = {};
+    const found = {};
+    let calls = 0;
+    for (let i = 0; i < targets.length; i++) {
+      const m = targets[i];
+      const key = String(m.name || "").replace(/\(.*?\)/g, "").replace(/chilly/gi, "chilli").trim().toLowerCase();
+      if (!(key in cache)) {
+        if (calls >= 150) { alert("150 request ho gayi (Pexels limit 200/ghanta). Thodi der baad dobara dabao, baaki items ho jayenge."); break; }
+        calls++;
+        setAutoImgMsg("⏳ " + (i + 1) + "/" + targets.length + " — " + m.name);
+        try { const r = await fetch("/api/image?q=" + encodeURIComponent(key)); const d = await r.json(); cache[key] = d.url || ""; } catch (e) { cache[key] = ""; }
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      if (cache[key]) found[m.id] = cache[key];
+    }
+    const n = Object.keys(found).length;
+    if (n > 0) {
+      const updated = menu.map((m) => (found[m.id] ? { ...m, image: found[m.id] } : m));
+      setMenuState(updated);
+      try { await setDoc(doc(db, "settings", "menu"), { items: updated }); alert("✅ " + n + " items ki photo lag gayi"); }
+      catch (e) { alert("⚠️ Save nahi hua: " + e.message); }
+    }
+    setAutoImgMsg("");
+  };
   const handleDeleteMenuItem = async (id) => { if (window.confirm("Delete this item?")) { const u = menu.filter(m => m.id !== id); setMenuState(u); try { await setDoc(doc(db, "settings", "menu"), { items: u }); } catch (e) { console.error(e); alert("⚠️ Menu save nahi hua. Internet check karo."); } } };
   const handleAddNewDish = async () => {
     if (!addMenuName.trim() || !addMenuPrice) { alert("Enter name and price"); return; }
@@ -5904,6 +5936,7 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
               try { await setDoc(doc(db, "settings", "menu"), { items: merged }); setMenuState(merged); alert("✅ " + missing.length + " items wapas aa gaye. Total: " + merged.length); }
               catch (e) { console.error(e); alert("⚠️ Save nahi hua: " + e.message); }
             }} style={{ width: '100%', background: '#2E7D32', color: '#fff', border: 'none', borderRadius: 12, padding: '14px 16px', fontWeight: 800, cursor: 'pointer', marginBottom: 16 }}>♻️ Purane items wapas jodo</button>
+            <button onClick={autoImagesAll} disabled={!!autoImgMsg} style={{ width: '100%', background: COLORS.info, color: '#fff', border: 'none', borderRadius: 12, padding: '14px 16px', fontWeight: 800, cursor: autoImgMsg ? 'wait' : 'pointer', marginBottom: 16 }}>{autoImgMsg || "🖼️ Auto image lagao (sabhi items)"}</button>
             {DUSSEHRA_ENABLED && (<DussehraRateEditor items={dussehraMenu} onSave={saveDussehraMenu} unavail={unavail} toggleAvail={toggleAvail} />)}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: settings?.vegMode ? COLORS.sageLight : '#fff', border: `1.5px solid ${settings?.vegMode ? COLORS.sage : COLORS.line}`, borderRadius: 14, padding: '14px 16px', marginBottom: 20 }}>
               <div>
