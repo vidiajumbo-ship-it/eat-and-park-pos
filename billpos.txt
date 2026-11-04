@@ -1,0 +1,309 @@
+function BillPOSScreen(p) {
+  return <ErrorBoundary compact onReset={p.onClose}><BillPOSScreenInner {...p} /></ErrorBoundary>;
+}
+function BillPOSScreenInner(p) {
+  const { order, orders, menu, viewMode, items, setItems, calc } = p;
+  const [tab, setTab] = useState(order && order.isDraft ? "menu" : "bill");
+  const [presets] = usePresets();
+  const waiterNames = presets.waiters || [];
+  const gstList = [0, ...((presets.gstRates && presets.gstRates.length ? presets.gstRates : [5, 12, 18]).filter((r) => Number(r) > 0))];
+  const [search, setSearch] = useState("");
+  const [cat, setCat] = useState("all");
+   const [wide, setWide] = useState(() => window.innerWidth >= 900);
+  useEffect(() => {
+    const f = () => setWide(window.innerWidth >= 900);
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
+  const isDesktop = viewMode === "desktop" && wide;
+
+  const isDraft = !!(order && order.isDraft);
+  const cats = p.categories && p.categories.length ? p.categories : Array.from(new Set((menu || []).map((m) => m.category)));
+
+  const list = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (menu || []).filter((m) => m.available && (cat === "all" || m.category === cat || (m.alsoIn || []).includes(cat)) && (!q || String(m.name).toLowerCase().includes(q)));
+  }, [menu, cat, search]);
+
+  const qtyOf = (id) => items.filter((it) => it.itemId === id).reduce((s, it) => s + (it.qty || 0), 0);
+  const itemCount = items.reduce((s, it) => s + (it.qty || 0), 0);
+
+  const addItem = (m) => setItems((prev) => {
+    const i = prev.findIndex((it) => it.itemId === m.id && it.price === m.price && it._new);
+    if (i >= 0) return prev.map((it, k) => (k === i ? { ...it, qty: it.qty + 1 } : it));
+    return [...prev, { _new: true, itemId: m.id, name: m.name, portion: m.portion || "", price: m.price, qty: 1, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) }];
+  });
+  const changeQty = (rowId, d) => setItems((prev) => prev.flatMap((it) => (it._rowId !== rowId ? [it] : (it.qty + d <= 0 ? [] : [{ ...it, qty: Math.round((it.qty + d) * 100) / 100 }]))));
+  const [showNew, setShowNew] = useState(false);
+    const [savingItem, setSavingItem] = useState(false);
+
+  // 🤖 AI ORDER
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiText, setAiText] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiRes, setAiRes] = useState(null);
+  const [aiErr, setAiErr] = useState("");
+  const [listening, setListening] = useState(false);
+  const recRef = useRef(null);
+
+  const closeAi = () => { try { recRef.current && recRef.current.stop(); } catch (e) {} setAiOpen(false); };
+
+  const startMic = () => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { setAiErr("Is browser me mic nahi hai. Keyboard ka 🎤 use karo."); return; }
+    if (listening && recRef.current) { recRef.current.stop(); return; }
+    const r = new SR();
+    r.lang = "hi-IN"; r.interimResults = false; r.continuous = false;
+    r.onresult = (e) => {
+      const t = Array.from(e.results).map((x) => x[0].transcript).join(" ");
+      setAiText((prev) => (prev ? prev + " " : "") + t);
+    };
+    r.onerror = () => setListening(false);
+    r.onend = () => setListening(false);
+    recRef.current = r; setListening(true); setAiErr("");
+    try { r.start(); } catch (e) { setListening(false); }
+  };
+
+    const runAi = async () => {
+    const text = aiText.trim();
+    if (!text || aiBusy) return;
+    setAiBusy(true);
+    setAiErr("");
+    setAiRes(null);
+    try {
+      // 1. Safe Token extraction (Never pass empty Bearer header)
+      let token = null;
+      if (auth.currentUser) {
+        try {
+          token = await auth.currentUser.getIdToken();
+        } catch (tokErr) {
+          console.warn("Token fetch failed:", tokErr);
+        }
+      }
+
+      const headers = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      // 2. Fetch call
+      const r = await HX.fetchWithTimeout("/api/parse-order", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          text,
+          menu: (menu || [])
+            .filter((m) => m.available)
+            .map((m) => ({ id: m.id, name: m.name, portion: m.portion || "" })),
+        }),
+      });
+
+      // 3. Handle non-JSON or error responses gracefully
+      const contentType = r.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(`Server error (${r.status}). Backend API route /api/parse-order check karein.`);
+      }
+
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || "AI processing failed");
+      setAiRes(HX.sanitizeAiLines(data, menu));
+    } catch (e) {
+      console.error("AI Order Error:", e);
+      setAiErr("⚠️ " + (e.message || "Failed to process order"));
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+
+  const applyAi = () => {
+    if (!aiRes) return;
+    setItems((prev) => {
+      const next = [...prev];
+      (aiRes.items || []).forEach((line) => {
+        const m = (menu || []).find((x) => x.id === line.id);
+        if (!m) return;
+        const i = next.findIndex((it) => it.itemId === m.id && it.price === m.price && it._new);
+        if (i >= 0) next[i] = { ...next[i], qty: next[i].qty + line.qty };
+        else next.push({ _new: true, itemId: m.id, name: m.name, portion: m.portion || "", price: m.price, qty: line.qty, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) });
+      });
+      return next;
+    });
+    if (isDraft) {
+      const t = Number(aiRes.table);
+      if (aiRes.orderType === "parcel") p.setOrderType("parcel");
+      else if (t >= 1 && t <= 12) { p.setOrderType("dine_in"); p.setTable(t); }
+    }
+    if (aiRes.notes) p.setNotes(p.notes ? p.notes + ", " + aiRes.notes : aiRes.notes);
+    closeAi(); setAiText(""); setAiRes(null); setTab("bill");
+  };
+
+  const emptyNew = { name: "", price: "", category: cats[0] || "Thali", veg: true, portion: "" };
+  const [newItem, setNewItem] = useState(emptyNew);
+
+  const checkNewItem = () => {
+    const name = newItem.name.trim();
+    const price = Number(newItem.price);
+    if (!name) { alert("⚠️ Item ka naam daalo"); return null; }
+    if (!Number.isFinite(price) || price <= 0) { alert("⚠️ Sahi rate daalo"); return null; }
+    return { name, price };
+  };
+
+  // Sirf is bill me (menu me save nahi hota)
+  const addCustomOnly = () => {
+    const v = checkNewItem();
+    if (!v) return;
+    setItems((prev) => [...prev, { _new: true, itemId: uid("c"), name: v.name, portion: newItem.portion.trim(), price: v.price, qty: 1, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) }]);
+    setNewItem(emptyNew);
+    setShowNew(false);
+  };
+
+  // Menu me hamesha ke liye save + bill me add
+  const saveNewItem = async () => {
+    const v = checkNewItem();
+    if (!v || savingItem) return;
+    setSavingItem(true);
+    try {
+      const dish = mi(uid("m"), v.name, v.price, newItem.category || cats[0] || "Thali", newItem.veg, "", newItem.portion.trim(), false, true, "");
+      const updatedMenu = [dish, ...(menu || [])];
+      await setDoc(doc(db, "settings", "menu"), { items: updatedMenu });
+      if (p.setMenuState) p.setMenuState(updatedMenu);
+      addItem(dish);
+      setNewItem(emptyNew);
+      setShowNew(false);
+    } catch (e) {
+      console.error("Save new item error:", e);
+      alert("❌ Item save nahi hua. Internet check karke dobara try karo.");
+    } finally {
+      setSavingItem(false);
+    }
+  };
+
+  const commitQty = (rowId, raw) => {
+    const v = parseFloat(String(raw).replace(",", "."));
+    if (!Number.isFinite(v) || v <= 0) return false;
+    setItems((prev) => prev.map((it) => (it._rowId === rowId ? { ...it, qty: Math.round(v * 100) / 100 } : it)));
+    return true;
+  };
+  const commitPrice = (rowId, raw) => {
+    const v = parseFloat(String(raw).replace(",", "."));
+    if (!Number.isFinite(v) || v < 0) return false;
+    setItems((prev) => prev.map((it) => (it._rowId === rowId ? { ...it, price: Math.round(v * 100) / 100 } : it)));
+    return true;
+  };
+  const removeRow = (rowId) => setItems((prev) => prev.filter((it) => it._rowId !== rowId));
+
+  const clash = isDraft && p.orderType === "dine_in"
+    ? (orders || []).find((o) => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled" && Number(o.table) === Number(p.table))
+    : null;
+
+    const inp = { padding: isDesktop ? "9px 12px" : "10px 10px", border: `1px solid #E5E7EB`, borderRadius: 8, fontSize: isDesktop ? 13 : 14, width: "100%", boxSizing: "border-box", fontFamily: "inherit", minWidth: 0, background: "#fff", color: "#111827", colorScheme: "light", transition: "all 0.15s ease", outline: "none" };
+
+  const chip = (on, color = "#DC2626") => ({ padding: isDesktop ? "7px 14px" : "8px 12px", borderRadius: 6, border: `1px solid ${on ? color : "#E5E7EB"}`, background: on ? color : "#fff", color: on ? "#fff" : "#374151", fontWeight: 600, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", transition: "all 0.15s ease", boxShadow: on ? `0 1px 3px ${color}40` : "0 1px 2px rgba(0,0,0,0.04)" });
+  const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: isDesktop ? 34 : 30 };
+  const disabled = p.saving || items.length === 0;
+  const footBtn = (bg, color, border) => ({ flex: 1, padding: isDesktop ? "11px 12px" : "9px 6px", borderRadius: 6, border: border || "none", background: disabled ? "#F3F4F6" : bg, color: disabled ? "#9CA3AF" : color, fontWeight: 700, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit", transition: "all 0.15s ease" });
+  const actBtn = (bg, color, border) => ({ display: "none", flex: 1, padding: "11px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
+  const qtyBtn = { width: isDesktop ? 24 : 28, height: isDesktop ? 24 : 28, border: "none", background: "transparent", color: COLORS.sage, fontSize: 16, fontWeight: 800, cursor: "pointer", padding: 0 };
+
+  const menuPane = (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, height: "100%", padding: isDesktop ? "16px 20px" : "12px 14px", background: "#F9FAFB" }}>
+      <div style={{ display: "flex", gap: 6 }}>
+        <input placeholder="🔍 Item search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...inp, flex: 1, width: "auto" }} />
+                <button type="button" onClick={() => setShowNew(true)} style={{ ...chip(true, COLORS.sage), padding: "9px 12px" }}>{isDesktop ? "➕ New Item" : "➕ Item"}</button>
+        <button type="button" onClick={() => { setAiOpen(true); setAiErr(""); setAiRes(null); }} style={{ ...chip(true, COLORS.info), padding: "9px 12px" }}>{isDesktop ? "🤖 AI" : "🤖"}</button>
+
+      </div>
+            {aiOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 270, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }} onClick={closeAi}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 16, width: "100%", maxWidth: 400, maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>🤖 AI Order</div>
+            <div style={{ fontSize: 11, color: COLORS.textLight }}>Bolo ya likho: "table 5, 2 chicken biryani, paneer tikka half, ek cold coffee"</div>
+            <textarea value={aiText} onChange={(e) => setAiText(e.target.value)} rows={3} placeholder="Order yahan bolo / likho..." style={{ ...inp, resize: "none" }} />
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" onClick={startMic} style={{ ...chip(listening, COLORS.rust), flex: 1, padding: "10px 6px" }}>{listening ? "⏹️ Rukho" : "🎤 Bolo"}</button>
+              <button type="button" disabled={aiBusy || !aiText.trim()} onClick={runAi} style={{ ...chip(true, COLORS.info), flex: 1, padding: "10px 6px", opacity: aiBusy || !aiText.trim() ? 0.5 : 1 }}>{aiBusy ? "⏳ Soch raha..." : "✨ Samjho"}</button>
+            </div>
+            {aiErr && <div style={{ color: COLORS.error, fontSize: 12, fontWeight: 700 }}>{aiErr}</div>}
+            {aiRes && (
+              <div style={{ background: COLORS.paper, borderRadius: 10, padding: 10, border: `1.5px solid ${COLORS.gold}` }}>
+                <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4 }}>
+                  {aiRes.orderType === "parcel" ? "🛍️ Parcel" : aiRes.table ? `🍽️ Table ${aiRes.table}` : "🍽️ Table (nahi bola)"}
+                </div>
+                {(aiRes.items || []).map((l, i) => {
+                  const m = (menu || []).find((x) => x.id === l.id);
+                  return m ? <div key={i} style={{ fontSize: 13, fontWeight: 700 }}>{l.qty}× {m.name}{m.portion ? ` (${m.portion})` : ""} <span style={{ color: COLORS.copper }}>₹{m.price * l.qty}</span></div> : null;
+                })}
+                {aiRes.notes && <div style={{ fontSize: 12, marginTop: 4 }}>📝 {aiRes.notes}</div>}
+                {(aiRes.unmatched || []).length > 0 && <div style={{ fontSize: 12, marginTop: 4, color: COLORS.warning, fontWeight: 700 }}>⚠️ Samajh nahi aaya: {aiRes.unmatched.join(", ")}</div>}
+                <button type="button" disabled={(aiRes.items || []).length === 0} onClick={applyAi} style={{ ...chip(true, COLORS.sage), width: "100%", marginTop: 8, padding: "10px 6px" }}>✓ Bill me add karo</button>
+              </div>
+            )}
+            <button type="button" onClick={closeAi} style={{ padding: 8, border: "none", background: "transparent", color: COLORS.textLight, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {showNew && (
+
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 260, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }} onClick={() => setShowNew(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 16, width: "100%", maxWidth: 380, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>➕ Naya Item</div>
+            <input autoFocus placeholder="Item ka naam *" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={inp} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <input type="number" inputMode="decimal" placeholder="Rate ₹ *" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: e.target.value })} style={inp} />
+              <input placeholder="Portion (Half/Full)" value={newItem.portion} onChange={(e) => setNewItem({ ...newItem, portion: e.target.value })} style={inp} />
+            </div>
+            <select value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} style={{ ...inp, background: "#fff" }}>
+              {cats.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button type="button" onClick={() => setNewItem({ ...newItem, veg: true })} style={{ ...chip(newItem.veg, COLORS.sage), flex: 1 }}>🟢 Veg</button>
+              <button type="button" onClick={() => setNewItem({ ...newItem, veg: false })} style={{ ...chip(!newItem.veg, COLORS.rust), flex: 1 }}>🔴 Non-Veg</button>
+            </div>
+            <button type="button" disabled={savingItem} onClick={saveNewItem} style={{ padding: 12, borderRadius: 10, border: "none", background: savingItem ? COLORS.paper2 : COLORS.sage, color: savingItem ? COLORS.textLight : "#fff", fontWeight: 800, fontSize: 14, cursor: savingItem ? "wait" : "pointer" }}>
+              {savingItem ? "⏳ Saving..." : "💾 Menu me save + bill me add"}
+            </button>
+            <button type="button" onClick={addCustomOnly} style={{ padding: 11, borderRadius: 10, border: `2px solid ${COLORS.info}`, background: "transparent", color: COLORS.info, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
+              ➕ Sirf is bill me (menu me save nahi)
+            </button>
+            <button type="button" onClick={() => setShowNew(false)} style={{ padding: 8, border: "none", background: "transparent", color: COLORS.textLight, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, flexShrink: 0 }}>
+        {["all", ...cats].map((c) => (
+          <button key={c} type="button" onClick={() => setCat(c)} style={chip(cat === c, "#111827")}>{c === "all" ? "All" : c}</button>
+        ))}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "grid", gridTemplateColumns: isDesktop ? "repeat(auto-fill, minmax(170px, 1fr))" : "repeat(2, 1fr)", gap: 6, alignContent: "start" }}>
+        {list.length === 0 && <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 20, color: COLORS.textLight, fontSize: 12 }}>Koi item nahi mila</div>}
+        {list.map((m) => {
+          const q = qtyOf(m.id);
+          return (
+            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "6px 8px", borderRadius: 5, border: `1px solid ${q > 0 ? "#16A34A" : "#E5E7EB"}`, background: "#fff", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isDesktop ? 36 : 46, transition: "all 0.15s ease", boxShadow: q > 0 ? "0 1px 3px rgba(22,163,74,0.15)" : "0 1px 2px rgba(0,0,0,0.03)" }} className="smooth-transition hover-lift">
+              <div style={{ display: "flex", gap: 5, alignItems: "flex-start" }}>
+                <VegDot veg={m.veg} />
+                <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2, color: COLORS.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{m.name}</span>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.copper, marginTop: 3 }}>
+                ₹{m.price}{m.portion ? <span style={{ color: COLORS.textLight, fontWeight: 600 }}> · {m.portion}</span> : null}
+              </div>
+              {q > 0 && <span style={{ position: "absolute", top: 4, right: 4, background: COLORS.sage, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 800 }}>{q}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const billPane = (
+    <div style={{ display: "flex", flexDirection: "column", gap: isDesktop ? 8 : 6, minHeight: 0, height: isDesktop ? "100%" : "auto", overflowY: isDesktop ? "auto" : "visible" }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {isDraft ? (
+          <>
+            <button type="button" onClick={() => p.setOrderType("dine_in")} style={chip(p.orderType === "dine_in")}>🍽️ Table</button>
+            <button type="button" onClick={() => p.setOrderType("parcel")} style={chip(p.orderType === "parcel")}>🛍️ Parcel</button>
+            {p.orderType === "dine_in" && (
+              <select value={p.table} onChange={(e) => p.setTable(Number(e.target.value))} style={{ ...inp, width: 84 }}>
