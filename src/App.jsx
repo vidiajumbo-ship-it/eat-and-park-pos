@@ -2358,6 +2358,13 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
   const [runningOrderId, setRunningOrderId] = useState(null);
+  const [otpSending, setOtpSending] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
 
   cartRef.current = cart;
   const settingsRef = useRef(settings);
@@ -2785,23 +2792,20 @@ const handleWaiterPinSubmitOld = () => {
     setIsLoggedIn(!!(u && u.phoneNumber && u.phoneNumber === "+91" + p));
   }, [custPhone]);
   const handleSendOtp = async () => {
+    if (otpSending || resendIn > 0) return;
     const p = String(custPhone || "").replace(/\D/g, "").slice(-10);
     if (p.length !== 10) { showToast("⚠️ 10 digit phone daalo", 'error'); return; }
     if (DEMO_OTP) { handleSendOtpDemo(); return; }
+    setOtpSending(true);
     try {
-      const u = await ensureUser();
+      const u = auth.currentUser || await ensureUser();
       if (u.phoneNumber) { setIsLoggedIn(true); showToast("✅ Phone pehle se verified hai", 'success'); return; }
       if (!u.isAnonymous) { showToast("ℹ️ Staff login chal raha hai - pehle logout karo", 'info'); return; }
-     try { otpRecRef.current && otpRecRef.current.clear(); } catch (x) {}
-      otpRecRef.current = null;
-      const _box = document.getElementById("otp-recaptcha");
-      if (_box) _box.innerHTML = "";
-      const _host = document.getElementById("otp-recaptcha");
-const _el = document.createElement("div");
-if (_host) { _host.innerHTML = ""; _host.appendChild(_el); }
-otpRecRef.current = new RecaptchaVerifier(auth, _el, { size: "invisible" });
+      if (!otpRecRef.current) {
+        otpRecRef.current = new RecaptchaVerifier(auth, "otp-recaptcha", { size: "invisible" });
+      }
       otpConfRef.current = await linkWithPhoneNumber(u, "+91" + p, otpRecRef.current);
-      setCustPhone(p); setOtpCode(""); setOtpStep("verify");
+      setCustPhone(p); setOtpCode(""); setOtpStep("verify"); setResendIn(30);
       showToast("📩 OTP SMS bheja gaya", 'success');
     } catch (e) {
       console.error("OTP send:", e.code, e.message);
@@ -2810,14 +2814,16 @@ otpRecRef.current = new RecaptchaVerifier(auth, _el, { size: "invisible" });
       const _b = document.getElementById("otp-recaptcha");
       if (_b) _b.innerHTML = "";
       const m = {
-        "auth/operation-not-allowed": "Phone SMS blocked (operation-not-allowed): SMS region policy me India allow karo / sahi Firebase project check karo",
+        "auth/operation-not-allowed": "Phone SMS blocked: Firebase me SMS region policy me India allow karo",
         "auth/invalid-phone-number": "Phone number galat hai",
-        "auth/too-many-requests": "Bahut try ho gaye, thodi der baad",
+        "auth/too-many-requests": "Bahut try ho gaye, thodi der baad try karo",
         "auth/quota-exceeded": "SMS limit khatam (Firebase quota/billing)",
         "auth/captcha-check-failed": "Captcha fail - domain Authorized domains me add karo",
         "auth/billing-not-enabled": "Real SMS ke liye Firebase billing (Blaze) chahiye"
       };
       showToast("❌ " + (m[e.code] || e.code || e.message), 'error');
+    } finally {
+      setOtpSending(false);
     }
   };
   const handleSendOtpDemo = () => {
@@ -3296,484 +3302,213 @@ otpRecRef.current = new RecaptchaVerifier(auth, _el, { size: "invisible" });
   const inputStyle = { padding: "12px 16px", border: `1.5px solid ${COLORS.line}`, borderRadius: 12, fontSize: 16, width: "100%", boxSizing: "border-box" };
 
   return (
-    <div style={{ maxWidth: viewMode === "desktop" ? 1100 : 480, margin: "0 auto", paddingBottom: cartCount ? 120 : 60, background: "var(--bg-color, #fff)", minHeight: "100vh", position: "relative" }}>
+    <div style={{ maxWidth: viewMode === "desktop" ? 1100 : 480, margin: "0 auto", paddingBottom: cartCount ? 120 : 60, background: "#0B111A", color: "#fff", minHeight: "100vh", position: "relative" }}>
       {toast && <Toast message={toast} type={toastType} />}
 
       
+      {toast && <Toast message={toast} type={toastType} />}
+
+      {/* ENP-DARK-LOGIN */}
       {!isLoggedIn && !waiterUnlocked && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 150, background: "#0B111A", overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ width: "100%", maxWidth: 400, background: "#161F2F", borderRadius: 24, padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.6)", border: "1px solid #273449" }}>
-            
-            {/* Logo & Header */}
-            <div style={{ textAlign: "center", marginBottom: 24 }}>
-              <div style={{ width: 64, height: 64, background: "#FF5A1F", borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 12px", color: "#fff" }}>🍽️</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: "#fff" }}>Eat & Park</div>
+        <div style={{ position: "fixed", inset: 0, zIndex: 150, background: "#0B111A", overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ width: "100%", maxWidth: 400, background: "#161F2F", borderRadius: 24, padding: 32, border: "1px solid #273449", boxShadow: "0 24px 70px rgba(0,0,0,0.55)" }}>
+            <div style={{ textAlign: "center", marginBottom: 28 }}>
+              <div style={{ width: 70, height: 70, background: "#FF5A1F", borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 34, margin: "0 auto 14px", boxShadow: "0 12px 30px rgba(255,90,31,0.35)" }}>🍽️</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: "#fff" }}>Eat & Park Restaurant</div>
               <div style={{ fontSize: 13, color: "#8B9BB4", marginTop: 4 }}>Customer Login</div>
             </div>
-
-            {/* Role Switch (Staff/Waiter/Admin) */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-              <button onClick={() => requestPinPrompt("staff")} style={{ flex: 1, padding: "10px 0", background: "transparent", border: "1px solid #273449", borderRadius: 12, color: "#8B9BB4", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Staff</button>
-              <button onClick={() => setShowWaiterPinModal(true)} style={{ flex: 1, padding: "10px 0", background: "transparent", border: "1px solid #273449", borderRadius: 12, color: "#8B9BB4", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Waiter</button>
-              <button onClick={() => requestPinPrompt("admin")} style={{ flex: 1, padding: "10px 0", background: "transparent", border: "1px solid #273449", borderRadius: 12, color: "#8B9BB4", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Admin</button>
-            </div>
-
             <div id="otp-recaptcha"></div>
-
             {otpStep === "phone" ? (
               <div>
                 <div style={{ marginBottom: 16 }}>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#8B9BB4", textTransform: "uppercase", marginBottom: 8, letterSpacing: 0.5 }}>Your Name</label>
-                  <input type="text" placeholder="Enter your name" value={custName} onChange={(e) => setCustName(e.target.value)} style={{ width: "100%", padding: "14px 16px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 15, outline: "none", boxSizing: "border-box" }} />
+                  <input type="text" placeholder="Apna naam likho" value={custName} onChange={(e) => setCustName(e.target.value)} style={{ width: "100%", boxSizing: "border-box", padding: "14px 16px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 15, outline: "none" }} />
                 </div>
-                <div style={{ marginBottom: 20 }}>
+                <div style={{ marginBottom: 22 }}>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#8B9BB4", textTransform: "uppercase", marginBottom: 8, letterSpacing: 0.5 }}>Phone Number</label>
-                  <input type="tel" placeholder="10-digit number" value={custPhone} onChange={(e) => setCustPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} style={{ width: "100%", padding: "14px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 20, letterSpacing: 2, fontWeight: 700, outline: "none", boxSizing: "border-box", textAlign: "center" }} />
+                  <input type="tel" inputMode="numeric" maxLength={10} placeholder="10-digit number" value={custPhone} onChange={(e) => setCustPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} style={{ width: "100%", boxSizing: "border-box", padding: "14px 16px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 15, outline: "none", fontSize: 20, letterSpacing: 2, fontWeight: 700, textAlign: "center" }} />
                 </div>
-
-                {/* Numeric Keypad for Phone */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 20 }}>
-                  {[1,2,3,4,5,6,7,8,9].map(num => (
-                    <button key={num} onClick={() => setCustPhone(prev => prev.length < 10 ? prev + num : prev)} style={{ padding: "14px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 20, fontWeight: 700, cursor: "pointer" }}>{num}</button>
-                  ))}
-                  <button onClick={() => setCustPhone("")} style={{ padding: "14px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#FF5A1F", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>C</button>
-                  <button onClick={() => setCustPhone(prev => prev.length < 10 ? prev + "0" : prev)} style={{ padding: "14px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 20, fontWeight: 700, cursor: "pointer" }}>0</button>
-                  <button onClick={() => setCustPhone(prev => prev.slice(0, -1))} style={{ padding: "14px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#FF5A1F", fontSize: 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>⌫</button>
-                </div>
-
-                <button onClick={() => { if (!custName.trim()) { showToast("⚠️ Pehle naam daalo", "error"); return; } handleSendOtp(); }} style={{ width: "100%", padding: "16px", background: "#FF5A1F", border: "none", borderRadius: 14, color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(255,90,31,0.3)" }}>Send OTP</button>
+                <button disabled={otpSending || resendIn > 0} onClick={() => { if (!custName.trim()) { showToast("⚠️ Pehle naam daalo", "error"); return; } handleSendOtp(); }}
+                  style={{ width: "100%", padding: 16, background: "#FF5A1F", border: "none", borderRadius: 14, color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(255,90,31,0.3)", opacity: (otpSending || resendIn > 0) ? 0.6 : 1 }}>
+                  {otpSending ? "⏳ Bhej raha hai..." : resendIn > 0 ? "Dobara bhejo (" + resendIn + "s)" : "Send OTP"}
+                </button>
               </div>
             ) : (
               <div>
-                <div style={{ marginBottom: 20 }}>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#8B9BB4", textTransform: "uppercase", marginBottom: 8, textAlign: "center", letterSpacing: 0.5 }}>Enter OTP sent to {custPhone}</label>
-                  <input type="text" placeholder="••••" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))} style={{ width: "100%", padding: "14px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 28, letterSpacing: 10, fontWeight: 800, outline: "none", boxSizing: "border-box", textAlign: "center" }} />
-                </div>
-
-                {/* Numeric Keypad for OTP */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 20 }}>
-                  {[1,2,3,4,5,6,7,8,9].map(num => (
-                    <button key={num} onClick={() => setOtpCode(prev => prev.length < 6 ? prev + num : prev)} style={{ padding: "14px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 20, fontWeight: 700, cursor: "pointer" }}>{num}</button>
-                  ))}
-                  <button onClick={() => setOtpCode("")} style={{ padding: "14px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#FF5A1F", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>C</button>
-                  <button onClick={() => setOtpCode(prev => prev.length < 6 ? prev + "0" : prev)} style={{ padding: "14px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 20, fontWeight: 700, cursor: "pointer" }}>0</button>
-                  <button onClick={() => setOtpCode(prev => prev.slice(0, -1))} style={{ padding: "14px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#FF5A1F", fontSize: 16, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>⌫</button>
-                </div>
-
-                <button onClick={handleVerifyOtp} style={{ width: "100%", padding: "16px", background: "#10B981", border: "none", borderRadius: 14, color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer", marginBottom: 12, boxShadow: "0 8px 20px rgba(16,185,129,0.3)" }}>Verify & Start</button>
-                <button onClick={() => { setOtpStep("phone"); setOtpCode(""); }} style={{ width: "100%", padding: "12px", background: "transparent", border: "none", color: "#8B9BB4", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>← Change Number</button>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#8B9BB4", textTransform: "uppercase", marginBottom: 8, letterSpacing: 0.5, textAlign: "center" }}>OTP {custPhone} par bheja gaya</label>
+                <input type="text" inputMode="numeric" maxLength={6} placeholder="••••••" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))} style={{ width: "100%", boxSizing: "border-box", padding: "14px 16px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 15, outline: "none", fontSize: 28, letterSpacing: 10, fontWeight: 800, textAlign: "center", marginBottom: 20 }} />
+                <button onClick={handleVerifyOtp} style={{ width: "100%", padding: 16, background: "#10B981", border: "none", borderRadius: 14, color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer", marginBottom: 10, boxShadow: "0 8px 20px rgba(16,185,129,0.3)" }}>Verify & Start</button>
+                <button disabled={otpSending || resendIn > 0} onClick={handleSendOtp} style={{ width: "100%", padding: 10, background: "none", border: "none", color: "#FF8C5A", fontWeight: 800, cursor: "pointer", opacity: resendIn > 0 ? 0.5 : 1 }}>{resendIn > 0 ? "Resend OTP (" + resendIn + "s)" : "🔁 Resend OTP"}</button>
+                <button onClick={() => { setOtpStep("phone"); setOtpCode(""); }} style={{ width: "100%", padding: 10, background: "none", border: "none", color: "#8B9BB4", fontWeight: 700, cursor: "pointer" }}>← Change Number</button>
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-
-      {toast && <Toast message={toast} type={toastType} />}
-
-      {!isLoggedIn && !waiterUnlocked && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 150, background: COLORS.paper, overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ width: "100%", maxWidth: 380, textAlign: "center" }}>
-            <div style={{ fontSize: 56, marginBottom: 8 }}>🍽️</div>
-            <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 28, fontWeight: 800, margin: "0 0 4px" }}>{RESTAURANT.name}</h1>
-            <p style={{ fontSize: 13, color: COLORS.textLight, margin: "0 0 24px" }}>Menu dekhne ke liye pehle login karo</p>
-
-            <div id="otp-recaptcha"></div>
-
-            {otpStep === "phone" ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <input type="text" placeholder="Aapka Naam *" value={custName} onChange={(e) => setCustName(e.target.value)} style={inputStyle} />
-                <input type="tel" inputMode="numeric" maxLength={10} placeholder="10-digit Phone *" value={custPhone} onChange={(e) => setCustPhone(e.target.value.replace(/\D/g, ""))} style={inputStyle} />
-                <button onClick={() => { if (!custName.trim()) { showToast("⚠️ Pehle naam daalo", "error"); return; } handleSendOtp(); }}
-                  style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 14, padding: 16, fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
-                  📩 OTP Bhejo
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ fontSize: 13, color: COLORS.textLight }}>OTP {custPhone} par bheja gaya</div>
-                <input type="text" inputMode="numeric" maxLength={6} placeholder="OTP daalo" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} style={{ ...inputStyle, textAlign: "center", letterSpacing: 8, fontWeight: 800 }} />
-                <button onClick={handleVerifyOtp}
-                  style={{ background: COLORS.success, color: "#fff", border: "none", borderRadius: 14, padding: 16, fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
-                  ✓ Verify & Menu Dekho
-                </button>
-                <button onClick={() => { setOtpStep("phone"); setOtpCode(""); }} style={{ background: "none", border: "none", color: COLORS.textLight, fontWeight: 700, cursor: "pointer" }}>← Number badlo</button>
-              </div>
-            )}
-
-            <div style={{ display: "flex", justifyContent: "center", gap: 8, flexWrap: "wrap", marginTop: 32 }}>
-              <button onClick={() => requestPinPrompt("staff")} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>🔒 Staff</button>
-              <button onClick={() => setShowWaiterPinModal(true)} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>🧑‍🍳 Waiter</button>
-              <button onClick={() => requestPinPrompt("admin")} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>⚙️ Admin</button>
+            <div style={{ display: "flex", gap: 8, marginTop: 26 }}>
+              <button onClick={() => requestPinPrompt("staff")} style={{ flex: 1, padding: "10px 0", background: "transparent", border: "1px solid #273449", borderRadius: 12, color: "#8B9BB4", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Staff</button>
+              <button onClick={() => setShowWaiterPinModal(true)} style={{ flex: 1, padding: "10px 0", background: "transparent", border: "1px solid #273449", borderRadius: 12, color: "#8B9BB4", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Waiter</button>
+              <button onClick={() => requestPinPrompt("admin")} style={{ flex: 1, padding: "10px 0", background: "transparent", border: "1px solid #273449", borderRadius: 12, color: "#8B9BB4", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Admin</button>
             </div>
           </div>
         </div>
       )}
 
-      <button onClick={() => { requestWaiter(table); showToast("🔔 Waiter notified!", 'success'); }}
-        style={{ position: "fixed", top: 80, right: 16, background: COLORS.rust, color: "#fff", border: "none", borderRadius: 20, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 8px 24px rgba(192,57,43,0.4)", cursor: "pointer", zIndex: 60, fontSize: 13, fontWeight: 800 }}>🔔 Waiter Call</button>
+      {/* ENP-CUSTOMER-UI */}
+      <style>{"body{background:#0B111A}.enp-hs::-webkit-scrollbar{display:none}.enp-hs{scrollbar-width:none}"}</style>
 
-            <button onClick={() => {
-        if (waiterUnlocked) setShowWaiterMode(true);
-        else setShowWaiterPinModal(true);
-      }}
-        style={{ position: "fixed", top: 130, right: 16, background: waiterUnlocked ? COLORS.info : COLORS.ink, color: "#fff", border: "none", borderRadius: 20, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 8px 24px rgba(59,130,246,0.4)", cursor: "pointer", zIndex: 60, fontSize: 13, fontWeight: 800 }}>{waiterUnlocked ? "🧑‍🍳 Waiter Mode" : "🔒 Waiter Mode"}</button>
-
-      <div style={{ position: "relative", height: 220, borderRadius: "0 0 24px 24px", overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.1)", marginBottom: 16 }}>
-        <div className="keep-color" style={{ position: "absolute", inset: 0, backgroundImage: `url('${settings?.heroImage || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80"}')`, backgroundSize: "cover", backgroundPosition: "center" }} />
-        <div className="keep-color" style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(26,26,26,0.9) 0%, rgba(26,26,26,0.3) 60%, rgba(26,26,26,0.1) 100%)" }} />
-        <div className="keep-color" style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,0.25)", backdropFilter: "blur(12px)", padding: "6px 12px", borderRadius: 20, color: "#fff", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>Table</span>
-          <select value={table} onChange={(e) => setTable(Number(e.target.value))} style={{ background: "transparent", color: "#fff", border: "none", fontWeight: 800, fontSize: 16, outline: "none" }}>
-            {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (<option key={n} value={n} style={{ color: '#000' }}>{n}</option>))}
-          </select>
+      <div style={{ position: "sticky", top: 0, zIndex: 60, background: "rgba(11,17,26,0.94)", backdropFilter: "blur(10px)", borderBottom: "1px solid #273449", padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+        <button onClick={() => setShowSidebar(true)} aria-label="Menu" style={{ width: 40, height: 40, borderRadius: 12, border: "1px solid #273449", background: "#161F2F", color: "#fff", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>☰</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Outfit', sans-serif", fontWeight: 800, fontSize: 17, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Eat & Park</div>
+          <div style={{ fontSize: 11, color: "#8B9BB4", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{RESTAURANT.tagline}</div>
         </div>
-        <div className="keep-color" style={{ position: "absolute", bottom: 20, left: 20, right: 20 }}>
-          <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 32, color: "#fff", margin: "0 0 4px", fontWeight: 800 }}>{RESTAURANT.name}</h1>
-          <p style={{ fontSize: 13, color: "rgba(255,255,255,0.9)", margin: 0, fontWeight: 500 }}>{RESTAURANT.tagline}</p>
+        <select value={table} onChange={(e) => setTable(Number(e.target.value))} style={{ background: "#161F2F", color: "#fff", border: "1px solid #273449", borderRadius: 10, padding: "9px 8px", fontWeight: 800, fontSize: 13, outline: "none" }}>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (<option key={n} value={n} style={{ color: "#000" }}>Table {n}</option>))}
+        </select>
+        <button onClick={() => { requestWaiter(table); showToast("🔔 Waiter notified!", 'success'); }} title="Waiter Call" style={{ width: 40, height: 40, borderRadius: 12, border: "none", background: "#EF4444", color: "#fff", fontSize: 17, cursor: "pointer", flexShrink: 0 }}>🔔</button>
+        <button onClick={() => { if (waiterUnlocked) setShowWaiterMode(true); else setShowWaiterPinModal(true); }} title="Waiter Mode" style={{ width: 40, height: 40, borderRadius: 12, border: "1px solid #273449", background: waiterUnlocked ? "#3B82F6" : "#161F2F", color: "#fff", fontSize: 17, cursor: "pointer", flexShrink: 0 }}>{waiterUnlocked ? "🧑‍🍳" : "🔒"}</button>
+      </div>
+
+      <div style={{ margin: "14px 14px 0", position: "relative", height: 150, borderRadius: 20, overflow: "hidden", border: "1px solid #273449" }}>
+        <div className="keep-color" style={{ position: "absolute", inset: 0, backgroundImage: "url('" + (settings?.heroImage || "https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=80") + "')", backgroundSize: "cover", backgroundPosition: "center" }} />
+        <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(11,17,26,0.96) 0%, rgba(11,17,26,0.4) 65%, rgba(11,17,26,0.15) 100%)" }} />
+        <div style={{ position: "absolute", left: 16, right: 16, bottom: 14 }}>
+          <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 24, fontWeight: 800, color: "#fff", marginBottom: 8 }}>{RESTAURANT.name}</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <a href={"tel:" + RESTAURANT.phones[0]} style={{ background: "rgba(255,255,255,0.14)", color: "#fff", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, textDecoration: "none" }}>📞 Call</a>
+            <a href={GOOGLE_REVIEW_URL} target="_blank" rel="noopener noreferrer" style={{ background: "rgba(255,255,255,0.14)", color: "#fff", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, textDecoration: "none" }}>⭐ Rate us</a>
+          </div>
         </div>
       </div>
 
       {myActiveOrders.length > 0 && (
-        <div style={{ padding: "0 16px", marginBottom: 12, display: "flex", gap: 8 }}>
-          <button onClick={() => setActiveModal('track')} style={{ flex: 1, background: COLORS.sageLight, border: `2px solid ${COLORS.sage}`, color: COLORS.sageDark, borderRadius: 14, padding: "12px", fontWeight: 800, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontSize: 14 }}>
+        <div style={{ padding: "12px 14px 0", display: "flex", gap: 8 }}>
+          <button onClick={() => setActiveModal('track')} style={{ flex: 1, background: "#0A2A20", border: "1.5px solid #10B981", color: "#10B981", borderRadius: 14, padding: 12, fontWeight: 800, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontSize: 14 }}>
             <span>📦 {myActiveOrders.length} Active Order{myActiveOrders.length > 1 ? 's' : ''}</span><span>Track ➔</span>
           </button>
-          <button onClick={() => setRunningOrderId(myActiveOrders[0].id)} style={{ background: COLORS.info, color: "#fff", border: "none", borderRadius: 14, padding: "0 16px", fontWeight: 800, cursor: "pointer", fontSize: 18 }}>➕</button>
+          <button onClick={() => setRunningOrderId(myActiveOrders[0].id)} style={{ background: "#3B82F6", color: "#fff", border: "none", borderRadius: 14, padding: "0 16px", fontWeight: 800, cursor: "pointer", fontSize: 18 }}>➕</button>
         </div>
       )}
 
-      {!searchQuery.trim() && comboOffers && comboOffers.filter(c => c.active).length > 0 && (
-        <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
-          <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, marginBottom: 12 }}>🎯 Combo Offers</h3>
-          <div style={{ display: 'grid', gap: 12 }}>
-            {comboOffers.filter(c => c.active).map(combo => <ComboCard key={combo.id} combo={combo} onAdd={() => addComboToCart(combo)} />)}
+      {!searchQuery.trim() && comboOffers && comboOffers.filter((c) => c.active).length > 0 && (
+        <div style={{ paddingTop: 18 }}>
+          <div style={{ padding: "0 14px 10px", fontFamily: "'Outfit', sans-serif", fontSize: 17, fontWeight: 800, color: "#fff" }}>🎯 Combo Offers</div>
+          <div className="enp-hs" style={{ display: "flex", gap: 12, overflowX: "auto", padding: "0 14px 4px" }}>
+            {comboOffers.filter((c) => c.active).map((combo) => (
+              <div key={combo.id} style={{ minWidth: 260, maxWidth: 260, flexShrink: 0, background: "linear-gradient(135deg, #1E293B 0%, #161F2F 100%)", border: "1px solid rgba(255,90,31,0.4)", borderRadius: 16, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 30 }}>{combo.image}</span>
+                  <div style={{ flex: 1, minWidth: 0, fontWeight: 800, fontSize: 15, color: "#fff" }}>{combo.name}</div>
+                  <span style={{ background: "#FF5A1F", color: "#fff", padding: "3px 9px", borderRadius: 20, fontSize: 11, fontWeight: 800 }}>{combo.discount}% OFF</span>
+                </div>
+                <div style={{ fontSize: 12, color: "#8B9BB4", lineHeight: 1.5 }}>{(combo.items || []).map((i) => i.quantity + "× " + i.name).join(" · ")}</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto" }}>
+                  <div><span style={{ fontSize: 18, fontWeight: 800, color: "#FF8C5A" }}>₹{combo.finalPrice}</span> <span style={{ fontSize: 12, color: "#8B9BB4", textDecoration: "line-through" }}>₹{combo.totalPrice}</span></div>
+                  <button onClick={() => addComboToCart(combo)} style={{ background: "#FF5A1F", color: "#fff", border: "none", borderRadius: 10, padding: "8px 16px", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>Add</button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {!searchQuery.trim() && flashSaleItems && flashSaleItems.filter(f => f.active).length > 0 && (
-        <div style={{ padding: "16px", borderBottom: `1px solid ${COLORS.line}` }}>
-          <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800, color: COLORS.rust, marginBottom: 12 }}>⚡ Flash Sale</h3>
-          <div style={{ display: 'flex', gap: 12, overflowX: 'auto' }}>
-            {flashSaleItems.filter(f => f.active).map(item => <FlashSaleItem key={item.id} item={item} onAdd={() => addFlashSaleToCart(item)} />)}
+      {!searchQuery.trim() && flashSaleItems && flashSaleItems.filter((f) => f.active && (f.stock == null || f.stock > 0)).length > 0 && (
+        <div style={{ paddingTop: 18 }}>
+          <div style={{ padding: "0 14px 10px", fontFamily: "'Outfit', sans-serif", fontSize: 17, fontWeight: 800, color: "#EF4444" }}>⚡ Flash Sale</div>
+          <div className="enp-hs" style={{ display: "flex", gap: 12, overflowX: "auto", padding: "0 14px 4px" }}>
+            {flashSaleItems.filter((f) => f.active && (f.stock == null || f.stock > 0)).map((item) => (
+              <div key={item.id} style={{ minWidth: 170, flexShrink: 0, background: "#161F2F", border: "1px solid rgba(239,68,68,0.5)", borderRadius: 16, padding: 12 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, color: "#fff", marginBottom: 6 }}>🔥 {item.name}</div>
+                <div style={{ marginBottom: 6 }}><span style={{ fontSize: 18, fontWeight: 800, color: "#EF4444" }}>₹{item.discountPrice}</span> <span style={{ fontSize: 12, color: "#8B9BB4", textDecoration: "line-through" }}>₹{item.price}</span></div>
+                {item.stock != null && item.stock <= 5 && <div style={{ fontSize: 11, color: "#F59E0B", fontWeight: 700, marginBottom: 6 }}>Sirf {item.stock} bache!</div>}
+                <button onClick={() => addFlashSaleToCart(item)} style={{ width: "100%", background: "#EF4444", color: "#fff", border: "none", borderRadius: 10, padding: 8, fontWeight: 800, cursor: "pointer" }}>Add</button>
+              </div>
+            ))}
           </div>
         </div>
       )}
-{!searchQuery.trim() && (
-  <div style={{ 
-    position: 'sticky', top: 0, zIndex: 10,
-    display: "flex", gap: 24, overflowX: "auto", 
-    padding: "12px 16px", background: "#fff",
-    borderBottom: `1px solid ${COLORS.line}`,
-    scrollbarWidth: 'none'
-  }}>
-    {visibleCategories.map((c) => {
-      const isActive = category === c;
-      return (
-        <button 
-          key={c} 
-          onClick={() => setCategory(c)} 
-          style={{ 
-            whiteSpace: "nowrap", 
-            padding: "8px 0", 
-            border: "none",
-            borderBottom: isActive ? `3px solid ${COLORS.copper}` : '3px solid transparent',
-            background: "transparent", 
-            color: isActive ? COLORS.copper : COLORS.textLight, 
-            fontSize: 14, 
-            fontWeight: isActive ? 800 : 600, 
-            cursor: "pointer",
-            transition: 'all 0.2s ease',
-            fontFamily: "'Outfit', sans-serif"
-          }}>
-          {c}
+
+      <div style={{ padding: "18px 14px 12px", display: "flex", gap: 8 }}>
+        <div style={{ position: "relative", flex: 1 }}>
+          <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Dish search karo..." className="keep-color" style={{ width: "100%", boxSizing: "border-box", padding: "13px 40px 13px 42px", background: "#161F2F", border: "1px solid #273449", borderRadius: 14, color: "#fff", fontSize: 15, outline: "none" }} />
+          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16 }}>🔍</span>
+          {searchQuery && <button onClick={() => setSearchQuery("")} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#8B9BB4", fontSize: 16, cursor: "pointer", padding: 6 }}>✕</button>}
+        </div>
+        <button onClick={() => setVegOnly(!vegOnly)} style={{ padding: "0 14px", borderRadius: 14, border: "1px solid " + (vegOnly ? "#10B981" : "#273449"), background: vegOnly ? "#0A2A20" : "#161F2F", color: vegOnly ? "#10B981" : "#8B9BB4", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", gap: 6, cursor: "pointer", whiteSpace: "nowrap" }}>
+          <VegDot veg={true} />{vegOnly ? "Veg" : "All"}
         </button>
-      );
-    })}
-  </div>
-)}
-            <div className={viewMode === "desktop" ? "desktop-menu" : ""} style={{ padding: "16px" }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
-          <SearchBar value={searchQuery} onChange={setSearchQuery} />
-          <button type="button" onClick={() => setShowAiModal(true)} style={{ display: "none", padding: "12px 12px", borderRadius: 10, background: COLORS.info, color: "#fff", border: "none", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}>
-            🤖 AI
-          </button>
-          <button onClick={() => setVegOnly(!vegOnly)} style={{ padding: "12px 12px", borderRadius: 10, border: `1.5px solid ${vegOnly ? COLORS.sage : COLORS.line}`, background: vegOnly ? COLORS.sageLight : "transparent", color: vegOnly ? COLORS.sageDark : COLORS.textLight, fontWeight: 700, display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
-            <VegDot veg={true} /><span style={{ fontSize: 13 }}>{vegOnly ? "Veg" : "All"}</span>
-          </button>
-        </div>
+      </div>
 
+      {!searchQuery.trim() && (
+        <div className="enp-hs" style={{ position: "sticky", top: 60, zIndex: 50, display: "flex", gap: 8, overflowX: "auto", padding: "10px 14px", background: "#0B111A", borderBottom: "1px solid #273449" }}>
+          {visibleCategories.map((c) => {
+            const on = category === c;
+            return (
+              <button key={c} onClick={() => setCategory(c)} style={{ whiteSpace: "nowrap", flexShrink: 0, padding: "8px 16px", borderRadius: 999, border: "1px solid " + (on ? "#FF5A1F" : "#273449"), background: on ? "#FF5A1F" : "#161F2F", color: on ? "#fff" : "#8B9BB4", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: on ? "0 6px 16px rgba(255,90,31,0.3)" : "none" }}>{c}</button>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ padding: "14px 14px 0" }}>
         {!searchQuery.trim() && filteredItems.length > 0 && (
-    <div style={{ marginBottom: 16, marginTop: 8 }}>
-      <h2 style={{ 
-        fontFamily: "'Outfit', sans-serif", 
-        fontSize: 22, 
-        fontWeight: 800, 
-        color: COLORS.ink, 
-        margin: 0,
-        letterSpacing: '-0.01em'
-      }}>
-        {category}
-      </h2>
-      <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 4, fontWeight: 600 }}>
-        {filteredItems.length} items
-      </div>
-    </div>
-  )}
-
-       {filteredItems.length === 0 && (
-  <div style={{ 
-    textAlign: "center", 
-    padding: "60px 20px", 
-    color: COLORS.textLight 
-  }}>
-    <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }}>
-      {EMPTY_STATES[emptyReason].icon}
-    </div>
-    <div style={{ 
-      fontFamily: "'Outfit', sans-serif",
-      fontWeight: 800, 
-      fontSize: 18,
-      color: COLORS.ink,
-      marginBottom: 6
-    }}>
-      {EMPTY_STATES[emptyReason].title}
-    </div>
-    <div style={{ fontSize: 14, lineHeight: 1.5 }}>
-      {EMPTY_STATES[emptyReason].subtitle}
-    </div>
-  </div>
-)}
-       {filteredItems.map((item) => {
-  const isFavorite = favorites.includes(item.id);
-  const qty = getCartQty(cart[item.id]);
-  return (
-    <div 
-      key={item.id} 
-      className="smooth-slide-up"
-      style={{ 
-        display: "flex", 
-        gap: 16,
-        padding: "18px 0", 
-        borderBottom: `1px solid ${COLORS.line}`,
-        opacity: item.available ? 1 : 0.5,
-        alignItems: 'flex-start'
-      }}>
-      
-      {/* LEFT — TEXT */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        
-        {/* Veg dot + Bestseller inline */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          <VegDot veg={item.veg} />
-          {item.isBestseller && (
-            <span style={{ 
-              fontSize: 10, 
-              color: COLORS.copper, 
-              fontWeight: 800,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase'
-            }}>
-              ★ Bestseller
-            </span>
-          )}
-        </div>
-
-        {/* Item Name */}
-        <div style={{ 
-          fontFamily: "'Outfit', sans-serif", 
-          fontSize: 16, 
-          fontWeight: 700, 
-          color: COLORS.ink,
-          marginBottom: 4,
-          lineHeight: 1.3
-        }}>
-          {item.name}
-        </div>
-
-        {/* Portion badge */}
-        {item.portion && (
-          <div style={{ 
-            fontSize: 11, 
-            color: COLORS.textLight, 
-            fontWeight: 600,
-            marginBottom: 6,
-            fontStyle: 'italic'
-          }}>
-            {item.portion}
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 21, fontWeight: 800, color: "#fff" }}>{category}</div>
+            <div style={{ fontSize: 12, color: "#8B9BB4", fontWeight: 700 }}>{filteredItems.length} items</div>
           </div>
         )}
-
-        {/* Price */}
-        <div style={{ 
-          fontFamily: "'Outfit', sans-serif", 
-          fontSize: 15, 
-          fontWeight: 800, 
-          color: COLORS.ink,
-          marginBottom: 6
-        }}>
-          {inr(item.price)}
-        </div>
-
-        {/* Description */}
-        {item.desc && (
-          <div style={{ 
-            fontSize: 12, 
-            color: COLORS.textLight, 
-            lineHeight: 1.5,
-            marginBottom: 10,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden'
-          }}>
-            {item.desc}
+        {filteredItems.length === 0 && (
+          <div style={{ textAlign: "center", padding: "50px 20px", color: "#8B9BB4" }}>
+            <div style={{ fontSize: 44, marginBottom: 12, opacity: 0.6 }}>{EMPTY_STATES[emptyReason].icon}</div>
+            <div style={{ fontWeight: 800, fontSize: 17, color: "#fff", marginBottom: 6 }}>{EMPTY_STATES[emptyReason].title}</div>
+            <div style={{ fontSize: 13, lineHeight: 1.5 }}>{EMPTY_STATES[emptyReason].subtitle}</div>
           </div>
         )}
-
-        {/* ADD Button — website style, left-aligned below text */}
-        <div style={{ marginTop: 8 }}>
-          {!item.available ? (
-            <div style={{
-              display: 'inline-block',
-              color: COLORS.rust,
-              background: COLORS.paper2,
-              borderRadius: 8,
-              fontWeight: 700,
-              fontSize: 12,
-              padding: "8px 18px",
-              fontFamily: "'Outfit', sans-serif"
-            }}>
-              Out of stock
-            </div>
-          ) : qty === 0 ? (
-            <button 
-              onClick={() => handleSetQty(item.id, 1)}
-              style={{
-                color: COLORS.sage,
-                background: "#fff",
-                border: `1.5px solid ${COLORS.sage}`,
-                borderRadius: 8,
-                fontWeight: 800,
-                fontSize: 13,
-                padding: "8px 28px",
-                cursor: "pointer",
-                fontFamily: "'Outfit', sans-serif",
-                letterSpacing: '0.02em',
-                transition: 'all 0.2s ease'
-              }}
-              className="hover-lift">
-              ADD
-            </button>
-          ) : (
-            <div style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "4px",
-              background: "#fff",
-              border: `1.5px solid ${COLORS.sage}`,
-              borderRadius: 8,
-              minWidth: 110
-            }}>
-              <button 
-                onClick={() => handleSetQty(item.id, qty - 1)}
-                style={{ 
-                  width: 32, height: 32, 
-                  border: "none", 
-                  color: COLORS.sage, 
-                  background: "transparent", 
-                  fontSize: 20, 
-                  fontWeight: 800,
-                  cursor: "pointer" 
-                }}>
-                −
-              </button>
-              <span style={{ 
-                fontWeight: 800, 
-                fontSize: 15, 
-                color: COLORS.sage,
-                fontFamily: "'Outfit', sans-serif"
-              }}>
-                {qty}
-              </span>
-              <button 
-                onClick={() => handleSetQty(item.id, qty + 1)}
-                style={{ 
-                  width: 32, height: 32, 
-                  border: "none", 
-                  color: COLORS.sage, 
-                  background: "transparent", 
-                  fontSize: 20, 
-                  fontWeight: 800,
-                  cursor: "pointer" 
-                }}>
-                +
-              </button>
-            </div>
-          )}
+        <div style={{ display: "grid", gridTemplateColumns: viewMode === "desktop" ? "repeat(auto-fill, minmax(340px, 1fr))" : "1fr", gap: 12 }}>
+          {filteredItems.map((item) => {
+            const qty = getCartQty(cart[item.id]);
+            const fav = favorites.includes(item.id);
+            return (
+              <div key={item.id} style={{ display: "flex", gap: 12, padding: 14, background: "#161F2F", border: "1px solid " + (qty > 0 ? "#FF5A1F" : "#273449"), borderRadius: 16, opacity: item.available ? 1 : 0.5, alignItems: "flex-start" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                    <VegDot veg={item.veg} />
+                    {item.isBestseller && <span style={{ fontSize: 10, color: "#FF8C5A", fontWeight: 800, letterSpacing: "0.04em", textTransform: "uppercase" }}>★ Bestseller</span>}
+                    {searchQuery.trim() && <span style={{ fontSize: 10, color: "#8B9BB4", fontWeight: 700 }}>{item.category}</span>}
+                  </div>
+                  <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 16, fontWeight: 700, color: "#fff", lineHeight: 1.3, marginBottom: 3 }}>{item.name}</div>
+                  {item.portion && <div style={{ fontSize: 11, color: "#8B9BB4", fontWeight: 600, marginBottom: 4 }}>{item.portion}</div>}
+                  <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 16, fontWeight: 800, color: "#FF8C5A", marginBottom: 6 }}>{inr(item.price)}</div>
+                  {item.desc && <div style={{ fontSize: 12, color: "#8B9BB4", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.desc}</div>}
+                </div>
+                <div style={{ width: 104, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ position: "relative", width: 104, height: 104 }}>
+                    <img src={item.image} alt={item.name} loading="lazy" className="keep-color" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 14, filter: item.available ? "none" : "grayscale(1)" }} onError={(e) => { e.target.onerror = null; e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; }} />
+                    <button onClick={() => toggleFavorite(item.id)} aria-label="Favorite" style={{ position: "absolute", top: 5, right: 5, width: 28, height: 28, borderRadius: "50%", border: "none", background: "rgba(11,17,26,0.7)", color: fav ? "#FFB800" : "#fff", fontSize: 15, cursor: "pointer" }}>{fav ? "★" : "☆"}</button>
+                  </div>
+                  <div style={{ marginTop: -17, position: "relative", zIndex: 1 }}>
+                    {!item.available ? (
+                      <div style={{ background: "#451A1A", color: "#EF4444", borderRadius: 10, fontWeight: 800, fontSize: 11, padding: "9px 12px", whiteSpace: "nowrap" }}>Out of stock</div>
+                    ) : qty === 0 ? (
+                      <button onClick={() => handleSetQty(item.id, 1)} style={{ width: 88, height: 36, background: "#0B111A", border: "1.5px solid #FF5A1F", borderRadius: 10, color: "#FF5A1F", fontWeight: 800, fontSize: 14, cursor: "pointer", boxShadow: "0 6px 14px rgba(0,0,0,0.35)" }}>ADD</button>
+                    ) : (
+                      <div style={{ width: 88, height: 36, background: "#FF5A1F", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 6px 14px rgba(255,90,31,0.35)" }}>
+                        <button onClick={() => handleSetQty(item.id, qty - 1)} style={{ width: 30, height: 36, border: "none", background: "transparent", color: "#fff", fontSize: 20, fontWeight: 800, cursor: "pointer" }}>−</button>
+                        <span style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>{qty}</span>
+                        <button onClick={() => handleSetQty(item.id, qty + 1)} style={{ width: 30, height: 36, border: "none", background: "transparent", color: "#fff", fontSize: 20, fontWeight: 800, cursor: "pointer" }}>+</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* RIGHT — IMAGE + FAVORITE */}
-      <div style={{ 
-        position: "relative", 
-        width: 120, 
-        height: 120, 
-        flexShrink: 0 
-      }}>
-        <img 
-          src={item.image} 
-          alt={item.name} 
-          loading="lazy" 
-          className="keep-color" 
-          style={{ 
-            width: "100%", 
-            height: "100%", 
-            objectFit: "cover", 
-            borderRadius: 12,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
-          }} 
-          onError={(e) => { 
-            e.target.onerror = null; 
-            e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=400&q=80"; 
-          }} 
-        />
-        
-        {/* Favorite star — top right of image */}
-        <button 
-          onClick={() => toggleFavorite(item.id)} 
-          style={{ 
-            position: 'absolute',
-            top: 6, 
-            right: 6,
-            background: 'rgba(255,255,255,0.95)', 
-            border: 'none', 
-            borderRadius: '50%', 
-            width: 30, 
-            height: 30, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            boxShadow: '0 2px 6px rgba(0,0,0,0.15)', 
-            cursor: 'pointer'
-          }}>
-          <span style={{ fontSize: 15, color: isFavorite ? '#FFB800' : '#CCC' }}>
-            {isFavorite ? '★' : '☆'}
-          </span>
-        </button>
-      </div>
-    </div>
-  );
-})}
-      </div>
-
-      <div style={{ textAlign: "center", padding: "20px 20px 60px", fontSize: 13, color: COLORS.textLight, lineHeight: 1.6 }}>
-        {RESTAURANT.address}<br />{RESTAURANT.phones.join(" · ")}<br /><br />
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
-          <button onClick={() => requestPinPrompt("staff")} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>🔒 Staff Login</button>
-          <button onClick={() => requestPinPrompt("admin")} style={{ background: "none", border: `1px solid ${COLORS.line}`, color: COLORS.textLight, borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>⚙️ Admin Login</button>
+      <div style={{ textAlign: "center", padding: "30px 20px 70px", fontSize: 12, color: "#8B9BB4", lineHeight: 1.7 }}>
+        📍 {RESTAURANT.address}<br />📞 {RESTAURANT.phones.join(" · ")}
+        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 14 }}>
+          <button onClick={() => requestPinPrompt("staff")} style={{ background: "none", border: "1px solid #273449", color: "#8B9BB4", borderRadius: 10, padding: "8px 14px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>🔒 Staff Login</button>
+          <button onClick={() => requestPinPrompt("admin")} style={{ background: "none", border: "1px solid #273449", color: "#8B9BB4", borderRadius: 10, padding: "8px 14px", fontSize: 12, cursor: "pointer", fontWeight: 700 }}>⚙️ Admin Login</button>
         </div>
       </div>
 
@@ -3790,13 +3525,9 @@ otpRecRef.current = new RecaptchaVerifier(auth, _el, { size: "invisible" });
         </div>
       )}
 
-      {!cartOpen && !activeModal && (
-        <button className="keep-color" onClick={() => setShowSidebar(true)} style={{ position: "fixed", top: 16, left: 16, background: COLORS.ink, color: "#fff", border: "none", borderRadius: "50%", width: 50, height: 50, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", zIndex: 50, fontSize: 20 }}>☰</button>
-      )}
-
       {cartCount > 0 && !cartOpen && !activeModal && (
-        <button onClick={() => setCartOpen(true)} style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", width: "calc(100% - 32px)", maxWidth: 400, background: COLORS.sage, color: "#fff", border: "none", borderRadius: 16, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: 800, fontSize: 16, cursor: "pointer", zIndex: 5, boxShadow: "0 12px 28px rgba(74,124,89,0.35)" }}>
-          <span>{cartCount} item{cartCount > 1 ? "s" : ""}</span><span>{inr(finalTotal)} ➔</span>
+        <button onClick={() => setCartOpen(true)} style={{ position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", width: "calc(100% - 28px)", maxWidth: 440, background: "linear-gradient(135deg, #FF5A1F 0%, #E04814 100%)", color: "#fff", border: "none", borderRadius: 16, padding: "15px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: 800, fontSize: 16, cursor: "pointer", zIndex: 55, boxShadow: "0 12px 30px rgba(255,90,31,0.45)" }}>
+          <span>🛒 {cartCount} item{cartCount > 1 ? "s" : ""}</span><span>{inr(finalTotal)} ➔</span>
         </button>
       )}
 
@@ -3892,7 +3623,7 @@ otpRecRef.current = new RecaptchaVerifier(auth, _el, { size: "invisible" });
                       {otpStep === "phone" ? (
                         <div style={{ display: "flex", gap: 8 }}>
                           <input type="tel" placeholder="10-digit Phone" value={custPhone} onChange={(e) => { setCustPhone(e.target.value); checkExistingCustomer(e.target.value); }} style={{ ...inputStyle, flex: 1 }} />
-                          <button onClick={handleSendOtp} style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer" }}>Send</button>
+                          <button onClick={handleSendOtp} disabled={otpSending || resendIn > 0} style={{ background: COLORS.ink, color: "#fff", border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer", opacity: (otpSending || resendIn > 0) ? 0.6 : 1 }}>{otpSending ? "⏳" : resendIn > 0 ? resendIn + "s" : "Send"}</button>
                         </div>
                       ) : (
                         <div style={{ display: "flex", gap: 8 }}>
