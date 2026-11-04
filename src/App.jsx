@@ -1144,12 +1144,13 @@ const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
 // 14.5 TABLE STATUS BOARD
 // ==
 
-const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, onEmptyTableClick, showStats = true, compact = false }) => { useLiveNow(30000);
+const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, onEmptyTableClick, showStats = true, compact = false, isDark = false }) => { useLiveNow(30000);
   const tableData = useMemo(() => {
     const activeOrders = (orders || []).filter(o =>
       o.orderType === "dine_in" &&
       o.status !== "cancelled" &&
-      (o.status !== "served" || (!o.paid && o.payment !== "due"))
+      o.status !== "served" &&
+      !o.paid
     );
 
     const map = {};
@@ -1203,7 +1204,7 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, onEmptyTable
             <span style={{ color: COLORS.sage, fontWeight: 700 }}>{stats.empty}</span> free
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(52px, 1fr))', gap: 6 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
           {tableData.map(t => {
             const c = statusColors[t.status];
             return (
@@ -1212,14 +1213,17 @@ const TableStatusBoard = memo(({ orders, tables = 12, onTableClick, onEmptyTable
                 onClick={() => (t.order ? (onTableClick && onTableClick(t.order)) : (onEmptyTableClick && onEmptyTableClick(t.table)))}
                 disabled={!t.order && !onEmptyTableClick}
                 style={{
-                  aspectRatio: '1', borderRadius: 8,
-                  background: c.bg, border: `1.5px solid ${c.border}`,
-                  fontWeight: 800, fontSize: 13, color: COLORS.ink,
+                  aspectRatio: '1', borderRadius: 14,
+                  background: c.bg, border: `2.5px solid ${c.border}`,
+                  fontWeight: 900, fontSize: 20, color: COLORS.ink,
                   cursor: (t.order || onEmptyTableClick) ? 'pointer' : 'default',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  padding: 0
+                  fontFamily: "'Outfit', sans-serif",
+                  padding: 0,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+                  boxShadow: '0 4px 10px rgba(0,0,0,0.08)'
                 }}>
-                {t.table}
+                <span style={{ fontSize: 11, opacity: 0.7 }}>{c.emoji}</span>
+                <span>T-{t.table}</span>
               </button>
             );
           })}
@@ -1282,13 +1286,12 @@ const itemCount = o ? (t.all || [o]).reduce((n, x) => n + x.items.reduce((sum, i
           return (
             <button
               key={t.table}
-              onClick={() => o && onTableClick && onTableClick(o)}
-              disabled={!o}
+              onClick={() => (o ? (onTableClick && onTableClick(o)) : (onEmptyTableClick && onEmptyTableClick(t.table)))}
               style={{
                 background: c.bg,
                 border: `2px solid ${c.border}`,
                 borderRadius: 14, padding: 14,
-                cursor: o ? 'pointer' : 'default',
+                cursor: 'pointer',
                 textAlign: 'left',
                 fontFamily: 'inherit',
                 transition: 'all 0.2s ease',
@@ -1917,7 +1920,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
   {/* Table dropdown sirf Dine-in me */}
   {orderMode === "dine_in" && (
     <select value={table} onChange={e => setTable(Number(e.target.value))} style={{ ...inputStyle, background: "#fff", marginTop: 10 }}>
-      {Array.from({ length: 12 }, (_, i) => i + 1).map(n => <option key={n} value={n}>Table {n}</option>)}
+      {Array.from({ length: 20 }, (_, i) => i + 1).map(n => <option key={n} value={n}>Table {n}</option>)}
     </select>
   )}
 </div>
@@ -2101,7 +2104,7 @@ const deriveBill = (o) => ({
 });
 
 // Staff wale POS ka hi logic — waiter ke liye
-function POSController({ initialOrder, orders, menu, categories, viewMode, placeOrder, advanceStatus, setMenuState, onClose }) {
+function POSController({ initialOrder, orders, menu, categories, viewMode, placeOrder, advanceStatus, setMenuState, onClose, waiterMode, onDraftChange }) {
   const [init] = useState(() => deriveBill(initialOrder));
   const [billOrder, setBillOrder] = useState(initialOrder);
   const [items, setItems] = useState(init.items);
@@ -2121,6 +2124,12 @@ function POSController({ initialOrder, orders, menu, categories, viewMode, place
   const [waiter, setWaiter] = useState(init.waiter);
   const [sendKot, setSendKot] = useState(init.sendKot);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (billOrder.isDraft && onDraftChange) {
+      onDraftChange(table, items, billOrder);
+    }
+  }, [items, table]);
 
   // Dusra order kholna ho (table clash pe "Wahi kholo")
   const load = (o) => {
@@ -2163,11 +2172,12 @@ function POSController({ initialOrder, orders, menu, categories, viewMode, place
         const kotItems = clean.items.map((it) => ({ ...it, kotNumber: 1 }));
         const fullOrder = JSON.parse(JSON.stringify({
           ...base, ...clean,
+          createdBy: auth.currentUser ? auth.currentUser.uid : "waiter",
           table: orderType === "parcel" ? 0 : table,
           orderType, waiter: waiter || "Staff", items: kotItems,
           kots: sendKot ? [{ id: uid("kot"), kotNumber: 1, items: kotItems, createdAt: Date.now(), status: "new", isRunning: false }] : [],
-          status: sendKot ? "new" : "served",
-          ...(sendKot ? {} : { servedAt: Date.now() })
+          status: (sendKot && !clean.paid) ? "new" : "served",
+          ...((sendKot && !clean.paid) ? {} : { servedAt: Date.now() })
         }));
         await placeOrder(fullOrder);
         return fullOrder;
@@ -2222,7 +2232,7 @@ await guardedOrderUpdate(billOrder, clean);
       discPct={discPct} setDiscPct={setDiscPct} payMode={payMode} setPayMode={setPayMode}
       payStatus={payStatus} setPayStatus={setPayStatus} notes={notes} setNotes={setNotes}
       showBillNo={showBillNo} setShowBillNo={setShowBillNo} saving={saving}
-      hidePrint
+      hidePrint waiterMode={waiterMode}
       onClose={onClose} onOpenOrder={load} onAction={onAction}
     />
   );
@@ -2230,93 +2240,77 @@ await guardedOrderUpdate(billOrder, clean);
 
 // 🧑‍🍳 Waiter Mode — fullscreen, back dabane pe band nahi hota
 function WaiterMode({ orders, menu, categories, setMenuState, placeOrder, advanceStatus, onClose }) {
-  useLiveNow(30000);
+  useLiveNow(5000);
   const [viewMode] = useViewMode();
   const [target, setTarget] = useState(null);
+  const [drafts, setDrafts] = useState({});
 
-  // 🔙 Back button block — sirf ✕ Exit se band hoga
-  useEffect(() => {
-    window.history.pushState({ eatparkWaiter: true }, "");
-    const onPop = () => window.history.pushState({ eatparkWaiter: true }, "");
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
+  const handleDraftChange = (t, items, orderData) => {
+    if (items && items.length > 0) {
+      setDrafts(prev => ({ ...prev, [t]: { ...orderData, items, isDraft: true, table: t } }));
+    } else {
+      setDrafts(prev => { const n = {...prev}; delete n[t]; return n; });
+    }
+  };
 
-  const active = useMemo(
-    () => (orders || []).filter((o) => o.status !== "cancelled" && o.status !== "served").sort((a, b) => b.createdAt - a.createdAt),
-    [orders]
-  );
-
-  const openNew = (t) => setTarget({
-    id: uid("o"), isDraft: true,
-    table: Number(t) || 1, orderType: "dine_in",
-    customer: { name: "Walk-in", phone: "WALK-IN", address: "" },
-    items: [], kots: [], waiter: "", takenBy: "waiter",
-    notes: "", payment: "cash", paymentStatus: "pending", paid: false,
-    status: "new", createdAt: Date.now(),
-    coinsClaimed: true, earnedCoins: 0, rewardUsedCoins: 0,
-    deliveryFee: 0, loyaltyDiscount: 0, discount: 0
-  });
+  const openNew = (t) => {
+    if (drafts[t] && drafts[t].items && drafts[t].items.length > 0) {
+      setTarget(drafts[t]);
+    } else {
+      setTarget({
+        id: uid("o"), isDraft: true,
+        table: Number(t) || 1, orderType: "dine_in",
+        customer: { name: "Walk-in", phone: "WALK-IN", address: "" },
+        items: [], kots: [], waiter: "", takenBy: "waiter",
+        notes: "", payment: "cash", paymentStatus: "pending", paid: false,
+        status: "new", createdAt: Date.now(),
+        coinsClaimed: true, earnedCoins: 0, rewardUsedCoins: 0,
+        deliveryFee: 0, loyaltyDiscount: 0, discount: 0
+      });
+    }
+  };
 
   const exit = () => { if (window.confirm("Waiter Mode band karna hai?")) onClose(); };
+  const combinedOrders = [...(orders || []), ...Object.values(drafts).map(d => ({ ...d, status: 'draft', orderType: 'dine_in' }))];
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 85, background: COLORS.paper, overflowY: "auto", colorScheme: "light" }}>
-      <div style={{ maxWidth: viewMode === "desktop" ? 1100 : 560, margin: "0 auto", padding: "0 12px 40px" }}>
-        <div style={{ position: "sticky", top: 0, zIndex: 5, background: COLORS.paper, padding: "12px 0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, borderBottom: `1px solid ${COLORS.line}`, marginBottom: 12 }}>
-          <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800 }}>🧑‍🍳 Waiter Mode</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => openNew()} style={{ background: COLORS.sage, color: "#fff", border: "none", borderRadius: 12, padding: "10px 14px", fontWeight: 800, cursor: "pointer", fontSize: 14 }}>➕ New Order</button>
-            <button onClick={exit} style={{ background: COLORS.paper2, border: `1.5px solid ${COLORS.line}`, borderRadius: 12, padding: "10px 14px", fontWeight: 800, cursor: "pointer", fontSize: 14 }}>✕ Exit</button>
-          </div>
-        </div>
-
-        <div style={{ fontSize: 12, color: COLORS.textLight, fontWeight: 600, marginBottom: 8 }}>👆 Table pe tap = uska bill / aur items · Khali table pe tap = naya order</div>
-        <TableStatusBoard orders={orders} tables={12} compact showStats onTableClick={(o) => setTarget(o)} onEmptyTableClick={(t) => openNew(t)} />
-
-        <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 16, fontWeight: 800, margin: "18px 0 10px" }}>🔥 Chal rahe orders ({active.length})</div>
-        {active.length === 0 && <div style={{ textAlign: "center", padding: 24, color: COLORS.textLight, fontSize: 13 }}>Koi active order nahi</div>}
-        <div style={{ display: "grid", gridTemplateColumns: viewMode === "desktop" ? "repeat(2, 1fr)" : "1fr", gap: 10 }}>
-          {active.map((o) => (
-            <button key={o.id} onClick={() => setTarget(o)} style={{ background: "#fff", border: `1.5px solid ${COLORS.line}`, borderRadius: 14, padding: 12, textAlign: "left", cursor: "pointer", fontFamily: "inherit", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 15 }}>
-                  {o.orderType === "parcel" ? "🛍️ Parcel" : `🍽️ Table ${o.table}`}
-                  <span style={{ marginLeft: 6, fontSize: 11, color: COLORS.textLight, fontWeight: 600 }}>#{o.id.slice(1, 5).toUpperCase()}</span>
-                  <KotBadge kots={o.kots} />
-                </div>
-                <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 3 }}>
-                  {o.waiter ? `🧑‍🍳 ${o.waiter} · ` : ""}{o.items.length} item{o.items.length !== 1 ? "s" : ""} · {timeAgo(o.createdAt)}
-                </div>
-                <div style={{ fontSize: 11, marginTop: 3, fontWeight: 800, color: STATUS_COLOR[o.status] }}>{STATUS_LABEL[o.status]}</div>
-              </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, color: COLORS.copper, fontSize: 16 }}>{inr(getOrderTotal(o))}</div>
-                <div style={{ marginTop: 4, background: COLORS.info, color: "#fff", borderRadius: 8, padding: "4px 10px", fontSize: 12, fontWeight: 800 }}>🧾 Bill / ➕</div>
-              </div>
-            </button>
-          ))}
+    <div style={{ position: "fixed", inset: 0, zIndex: 85, background: "#0B111A", overflowY: "auto", colorScheme: "dark" }}>
+      <div style={{ background: "#161F2F", padding: "12px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #273449", position: "sticky", top: 0, zIndex: 10 }}>
+        <div style={{ color: "#fff", fontWeight: 800, fontSize: 20, fontFamily: "'Outfit', sans-serif" }}>🧑‍🍳 Waiter Panel</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => openNew()} style={{ background: "#FF5A1F", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 800, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 10px rgba(255,90,31,0.3)" }}>➕ New Order</button>
+          <button onClick={exit} style={{ background: "#273449", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>✕ Exit</button>
         </div>
       </div>
 
+      <div style={{ padding: "20px", maxWidth: 1200, margin: "0 auto" }}>
+        <TableStatusBoard orders={combinedOrders} tables={20} compact={false} isDark={true} showStats onTableClick={(o) => setTarget(o)} onEmptyTableClick={(t) => openNew(t)} />
+      </div>
+
       {target && (
-        <POSController
-          key={target.id}
-          initialOrder={target}
-          orders={orders} menu={menu} categories={categories} viewMode={viewMode}
-          placeOrder={placeOrder} advanceStatus={advanceStatus} setMenuState={setMenuState}
-          onClose={() => setTarget(null)}
-        />
+        <div style={{ position: "fixed", inset: 0, zIndex: 99999, background: "#0B111A", overflow: "hidden", height: "100dvh", display: "flex", flexDirection: "column" }}>
+          <POSController
+            key={target.id}
+            initialOrder={target}
+            orders={orders} menu={menu} categories={categories} viewMode={viewMode}
+            placeOrder={placeOrder} advanceStatus={advanceStatus} setMenuState={setMenuState}
+            waiterMode={true}
+            onDraftChange={handleDraftChange}
+            onClose={() => setTarget(null)}
+          />
+        </div>
       )}
     </div>
   );
 }
+
 // ==
 // 16. CUSTOMER VIEW
 // ==
 
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState, setLoyaltyRules, advanceStatus }) {
   const [category, setCategory] = useState(categories[0] || "Thali");
+  /* ENP-CAT-FIRST */ const [catPickerOpen, setCatPickerOpen] = useState(true);
   const [viewMode, setViewMode] = useViewMode();
   const cartRef = useRef({});
   const lastStatusRef = useRef({});
@@ -2330,8 +2324,8 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [activeModal, setActiveModal] = useState(null);
   const [myOrderIds, setMyOrderIds] = useState([]);
   const [orderType, setOrderType] = useState("dine_in");
-  const [custName, setCustName] = useState("");
-  const [custPhone, setCustPhone] = useState("");
+  const [custName, setCustName] = useState(() => localStorage.getItem("enp_cust_name") || "");
+  const [custPhone, setCustPhone] = useState(() => localStorage.getItem("enp_cust_phone") || "");
   const [custAddress, setCustAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -2343,7 +2337,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [otpStep, setOtpStep] = useState("phone");
   const [otpCode, setOtpCode] = useState("");
   const [generatedOtp, setGeneratedOtp] = useState("");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => localStorage.getItem("enp_cust_logged_in") === "true");
   const [couponCode, setCouponCode] = useState("");
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [couponMin, setCouponMin] = useState(0);
@@ -2540,7 +2534,10 @@ if (savedCart) {
     return onAuthStateChanged(auth, (u) => {
       if (u && u.phoneNumber) {
         setCustPhone(u.phoneNumber.replace(/\D/g, "").slice(-10));
-        setIsLoggedIn(true);
+        localStorage.setItem("enp_cust_logged_in", "true");
+      localStorage.setItem("enp_cust_phone", custPhone);
+      localStorage.setItem("enp_cust_name", custName);
+      setIsLoggedIn(true);
       }
     });
   }, []);
@@ -2931,7 +2928,7 @@ const handleWaiterPinSubmitOld = () => {
       localStorage.removeItem("eatpark_cart");
     } catch (e) {}
     otpConfRef.current = null;
-    setIsLoggedIn(false);
+    handleLogout();
     setWaiterUnlocked(false);
     setShowWaiterMode(false);
     setCustName(""); setCustPhone(""); setCustAddress("");
@@ -3352,7 +3349,7 @@ const handleWaiterPinSubmitOld = () => {
       )}
 
       {/* ENP-CUSTOMER-UI */}
-      <style>{"body{background:#0B111A}.enp-hs::-webkit-scrollbar{display:none}.enp-hs{scrollbar-width:none}"}</style>
+      <style>{"body{background:#0B111A} .slide-up { color: #111827 !important; } .slide-up div, .slide-up span { color: inherit; }.enp-hs::-webkit-scrollbar{display:none}.enp-hs{scrollbar-width:none}"}</style>
 
       <div style={{ position: "sticky", top: 0, zIndex: 60, background: "rgba(11,17,26,0.94)", backdropFilter: "blur(10px)", borderBottom: "1px solid #273449", padding: "10px 14px", display: "flex", alignItems: "center", gap: 8 }}>
         <button onClick={() => setShowSidebar(true)} aria-label="Menu" style={{ width: 40, height: 40, borderRadius: 12, border: "1px solid #273449", background: "#161F2F", color: "#fff", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>☰</button>
@@ -3361,7 +3358,7 @@ const handleWaiterPinSubmitOld = () => {
           <div style={{ fontSize: 11, color: "#8B9BB4", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{RESTAURANT.tagline}</div>
         </div>
         <select value={table} onChange={(e) => setTable(Number(e.target.value))} style={{ background: "#161F2F", color: "#fff", border: "1px solid #273449", borderRadius: 10, padding: "9px 8px", fontWeight: 800, fontSize: 13, outline: "none" }}>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (<option key={n} value={n} style={{ color: "#000" }}>Table {n}</option>))}
+          {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (<option key={n} value={n} style={{ color: "#000" }}>Table {n}</option>))}
         </select>
         <button onClick={() => { requestWaiter(table); showToast("🔔 Waiter notified!", 'success'); }} title="Waiter Call" style={{ width: 40, height: 40, borderRadius: 12, border: "none", background: "#EF4444", color: "#fff", fontSize: 17, cursor: "pointer", flexShrink: 0 }}>🔔</button>
         <button onClick={() => { if (waiterUnlocked) setShowWaiterMode(true); else setShowWaiterPinModal(true); }} title="Waiter Mode" style={{ width: 40, height: 40, borderRadius: 12, border: "1px solid #273449", background: waiterUnlocked ? "#3B82F6" : "#161F2F", color: "#fff", fontSize: 17, cursor: "pointer", flexShrink: 0 }}>{waiterUnlocked ? "🧑‍🍳" : "🔒"}</button>
@@ -3437,18 +3434,44 @@ const handleWaiterPinSubmitOld = () => {
         </button>
       </div>
 
-      {!searchQuery.trim() && (
-        <div className="enp-hs" style={{ position: "sticky", top: 60, zIndex: 50, display: "flex", gap: 8, overflowX: "auto", padding: "10px 14px", background: "#0B111A", borderBottom: "1px solid #273449" }}>
-          {visibleCategories.map((c) => {
-            const on = category === c;
-            return (
-              <button key={c} onClick={() => setCategory(c)} style={{ whiteSpace: "nowrap", flexShrink: 0, padding: "8px 16px", borderRadius: 999, border: "1px solid " + (on ? "#FF5A1F" : "#273449"), background: on ? "#FF5A1F" : "#161F2F", color: on ? "#fff" : "#8B9BB4", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: on ? "0 6px 16px rgba(255,90,31,0.3)" : "none" }}>{c}</button>
-            );
-          })}
+      {!searchQuery.trim() && !catPickerOpen && (
+        <div style={{ position: "sticky", top: 60, zIndex: 50, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#0B111A", borderBottom: "1px solid #273449" }}>
+          <button onClick={() => setCatPickerOpen(true)} style={{ flexShrink: 0, padding: "8px 14px", borderRadius: 999, border: "1px solid #273449", background: "#161F2F", color: "#FF8C5A", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>← Categories</button>
+          <div className="enp-hs" style={{ display: "flex", gap: 8, overflowX: "auto", flex: 1 }}>
+            {visibleCategories.map((c) => {
+              const on = category === c;
+              return (
+                <button key={c} onClick={() => setCategory(c)} style={{ whiteSpace: "nowrap", flexShrink: 0, padding: "8px 16px", borderRadius: 999, border: "1px solid " + (on ? "#FF5A1F" : "#273449"), background: on ? "#FF5A1F" : "#161F2F", color: on ? "#fff" : "#8B9BB4", fontWeight: 700, fontSize: 13, cursor: "pointer", boxShadow: on ? "0 6px 16px rgba(255,90,31,0.3)" : "none" }}>{c}</button>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      <div style={{ padding: "14px 14px 0" }}>
+      {!searchQuery.trim() && catPickerOpen && (
+        <div style={{ padding: "18px 14px 0" }}>
+          <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 4 }}>Kya khana hai? 🍽️</div>
+          <div style={{ fontSize: 13, color: "#8B9BB4", marginBottom: 16 }}>Category chuno, phir items dekho</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+            {visibleCategories.map((c) => {
+              const catItems = menu.filter(m => m.category === c || (m.alsoIn || []).includes(c));
+              const img = (catItems.find(x => x.image) || {}).image;
+              return (
+                <button key={c} onClick={() => { setCategory(c); setCatPickerOpen(false); }} style={{ position: "relative", height: 130, borderRadius: 16, border: "1px solid #273449", overflow: "hidden", cursor: "pointer", padding: 0, background: "#161F2F" }}>
+                  {img && <img src={img} alt={c} loading="lazy" className="keep-color" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.55)" }} onError={(e) => { e.target.style.display = "none"; }} />}
+                  <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(11,17,26,0.95) 10%, rgba(11,17,26,0.2) 100%)" }} />
+                  <div style={{ position: "absolute", left: 12, right: 12, bottom: 10, textAlign: "left" }}>
+                    <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 15, fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>{c}</div>
+                    <div style={{ fontSize: 11, color: "#FF8C5A", fontWeight: 700, marginTop: 2 }}>{catItems.length} items →</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div style={{ padding: "14px 14px 0", display: (catPickerOpen && !searchQuery.trim()) ? "none" : "block" }}>
         {!searchQuery.trim() && filteredItems.length > 0 && (
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 }}>
             <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 21, fontWeight: 800, color: "#fff" }}>{category}</div>
@@ -4060,17 +4083,24 @@ function BillPOSScreenInner(p) {
     ? (orders || []).find((o) => o.orderType === "dine_in" && o.status !== "served" && o.status !== "cancelled" && Number(o.table) === Number(p.table))
     : null;
 
-    const inp = { padding: isDesktop ? "9px 12px" : "10px 10px", border: `1px solid #E5E7EB`, borderRadius: 8, fontSize: isDesktop ? 13 : 14, width: "100%", boxSizing: "border-box", fontFamily: "inherit", minWidth: 0, background: "#fff", color: "#111827", colorScheme: "light", transition: "all 0.15s ease", outline: "none" };
+    const isDark = !!p.waiterMode;
+  const bgMain = isDark ? "#0B111A" : "#F9FAFB";
+  const bgCard = isDark ? "#161F2F" : "#fff";
+  const textMain = isDark ? "#fff" : "#111827";
+  const textMuted = isDark ? "#8B9BB4" : "#374151";
+  const borderMain = isDark ? "#273449" : "#E5E7EB";
 
-  const chip = (on, color = "#DC2626") => ({ padding: isDesktop ? "7px 14px" : "8px 12px", borderRadius: 6, border: `1px solid ${on ? color : "#E5E7EB"}`, background: on ? color : "#fff", color: on ? "#fff" : "#374151", fontWeight: 600, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", transition: "all 0.15s ease", boxShadow: on ? `0 1px 3px ${color}40` : "0 1px 2px rgba(0,0,0,0.04)" });
-  const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: COLORS.textLight, minWidth: isDesktop ? 34 : 30 };
+  const inp = { padding: isDesktop ? "9px 12px" : "10px 10px", border: `1px solid ${isDark ? "#273449" : "#E5E7EB"}`, borderRadius: 8, fontSize: isDesktop ? 13 : 14, width: "100%", boxSizing: "border-box", fontFamily: "inherit", minWidth: 0, background: isDark ? "#161F2F" : "#fff", color: isDark ? "#fff" : "#111827", colorScheme: isDark ? "dark" : "light", transition: "all 0.15s ease", outline: "none" };
+
+  const chip = (on, color = "#DC2626") => ({ padding: isDesktop ? "7px 14px" : "8px 12px", borderRadius: 6, border: `1px solid ${on ? color : (isDark ? "#273449" : "#E5E7EB")}`, background: on ? color : (isDark ? "#161F2F" : "#fff"), color: on ? "#fff" : (isDark ? "#8B9BB4" : "#374151"), fontWeight: 600, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit", transition: "all 0.15s ease", boxShadow: on ? `0 1px 3px ${color}40` : "none" });
+  const lbl = { fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.4, color: isDark ? "#8B9BB4" : COLORS.textLight, minWidth: isDesktop ? 34 : 30 };
   const disabled = p.saving || items.length === 0;
   const footBtn = (bg, color, border) => ({ flex: 1, padding: isDesktop ? "11px 12px" : "9px 6px", borderRadius: 6, border: border || "none", background: disabled ? "#F3F4F6" : bg, color: disabled ? "#9CA3AF" : color, fontWeight: 700, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit", transition: "all 0.15s ease" });
   const actBtn = (bg, color, border) => ({ display: "none", flex: 1, padding: "11px 6px", borderRadius: 10, border: border || "none", background: disabled ? COLORS.paper2 : bg, color: disabled ? COLORS.textLight : color, fontWeight: 800, fontSize: 13, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit" });
   const qtyBtn = { width: isDesktop ? 24 : 28, height: isDesktop ? 24 : 28, border: "none", background: "transparent", color: COLORS.sage, fontSize: 16, fontWeight: 800, cursor: "pointer", padding: 0 };
 
   const menuPane = (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, height: "100%", padding: isDesktop ? "16px 20px" : "12px 14px", background: "#F9FAFB" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0, height: "100%", padding: isDesktop ? "16px 20px" : "12px 14px", background: bgMain }}>
       <div style={{ display: "flex", gap: 6 }}>
         <input placeholder="🔍 Item search..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ ...inp, flex: 1, width: "auto" }} />
                 <button type="button" onClick={() => setShowNew(true)} style={{ ...chip(true, COLORS.sage), padding: "9px 12px" }}>{isDesktop ? "➕ New Item" : "➕ Item"}</button>
@@ -4079,9 +4109,9 @@ function BillPOSScreenInner(p) {
       </div>
             {aiOpen && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 270, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }} onClick={closeAi}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 16, width: "100%", maxWidth: 400, maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: isDark ? "#161F2F" : "#fff", borderRadius: 16, padding: 16, width: "100%", maxWidth: 400, maxHeight: "90vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>🤖 AI Order</div>
-            <div style={{ fontSize: 11, color: COLORS.textLight }}>Bolo ya likho: "table 5, 2 chicken biryani, paneer tikka half, ek cold coffee"</div>
+            <div style={{ fontSize: 11, color: isDark ? "#8B9BB4" : COLORS.textLight }}>Bolo ya likho: "table 5, 2 chicken biryani, paneer tikka half, ek cold coffee"</div>
             <textarea value={aiText} onChange={(e) => setAiText(e.target.value)} rows={3} placeholder="Order yahan bolo / likho..." style={{ ...inp, resize: "none" }} />
             <div style={{ display: "flex", gap: 6 }}>
               <button type="button" onClick={startMic} style={{ ...chip(listening, COLORS.rust), flex: 1, padding: "10px 6px" }}>{listening ? "⏹️ Rukho" : "🎤 Bolo"}</button>
@@ -4089,7 +4119,7 @@ function BillPOSScreenInner(p) {
             </div>
             {aiErr && <div style={{ color: COLORS.error, fontSize: 12, fontWeight: 700 }}>{aiErr}</div>}
             {aiRes && (
-              <div style={{ background: COLORS.paper, borderRadius: 10, padding: 10, border: `1.5px solid ${COLORS.gold}` }}>
+              <div style={{ background: isDark ? "#0B111A" : COLORS.paper, borderRadius: 10, padding: 10, border: `1.5px solid ${COLORS.gold}` }}>
                 <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 4 }}>
                   {aiRes.orderType === "parcel" ? "🛍️ Parcel" : aiRes.table ? `🍽️ Table ${aiRes.table}` : "🍽️ Table (nahi bola)"}
                 </div>
@@ -4102,21 +4132,21 @@ function BillPOSScreenInner(p) {
                 <button type="button" disabled={(aiRes.items || []).length === 0} onClick={applyAi} style={{ ...chip(true, COLORS.sage), width: "100%", marginTop: 8, padding: "10px 6px" }}>✓ Bill me add karo</button>
               </div>
             )}
-            <button type="button" onClick={closeAi} style={{ padding: 8, border: "none", background: "transparent", color: COLORS.textLight, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+            <button type="button" onClick={closeAi} style={{ padding: 8, border: "none", background: "transparent", color: isDark ? "#8B9BB4" : COLORS.textLight, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
           </div>
         </div>
       )}
       {showNew && (
 
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 260, display: "flex", alignItems: "center", justifyContent: "center", padding: 12 }} onClick={() => setShowNew(false)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 16, padding: 16, width: "100%", maxWidth: 380, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: isDark ? "#161F2F" : "#fff", borderRadius: 16, padding: 16, width: "100%", maxWidth: 380, display: "flex", flexDirection: "column", gap: 8 }}>
             <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 18, fontWeight: 800 }}>➕ Naya Item</div>
             <input autoFocus placeholder="Item ka naam *" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} style={inp} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
               <input type="number" inputMode="decimal" placeholder="Rate ₹ *" value={newItem.price} onChange={(e) => setNewItem({ ...newItem, price: e.target.value })} style={inp} />
               <input placeholder="Portion (Half/Full)" value={newItem.portion} onChange={(e) => setNewItem({ ...newItem, portion: e.target.value })} style={inp} />
             </div>
-            <select value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} style={{ ...inp, background: "#fff" }}>
+            <select value={newItem.category} onChange={(e) => setNewItem({ ...newItem, category: e.target.value })} style={{ ...inp, background: isDark ? "#161F2F" : "#fff" }}>
               {cats.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <div style={{ display: "flex", gap: 6 }}>
@@ -4129,7 +4159,7 @@ function BillPOSScreenInner(p) {
             <button type="button" onClick={addCustomOnly} style={{ padding: 11, borderRadius: 10, border: `2px solid ${COLORS.info}`, background: "transparent", color: COLORS.info, fontWeight: 800, fontSize: 13, cursor: "pointer" }}>
               ➕ Sirf is bill me (menu me save nahi)
             </button>
-            <button type="button" onClick={() => setShowNew(false)} style={{ padding: 8, border: "none", background: "transparent", color: COLORS.textLight, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+            <button type="button" onClick={() => setShowNew(false)} style={{ padding: 8, border: "none", background: "transparent", color: isDark ? "#8B9BB4" : COLORS.textLight, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
           </div>
         </div>
       )}
@@ -4139,17 +4169,17 @@ function BillPOSScreenInner(p) {
         ))}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", display: "grid", gridTemplateColumns: isDesktop ? "repeat(auto-fill, minmax(170px, 1fr))" : "repeat(2, 1fr)", gap: 6, alignContent: "start" }}>
-        {list.length === 0 && <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 20, color: COLORS.textLight, fontSize: 12 }}>Koi item nahi mila</div>}
+        {list.length === 0 && <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 20, color: isDark ? "#8B9BB4" : COLORS.textLight, fontSize: 12 }}>Koi item nahi mila</div>}
         {list.map((m) => {
           const q = qtyOf(m.id);
           return (
-            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "6px 8px", borderRadius: 5, border: `1px solid ${q > 0 ? "#16A34A" : "#E5E7EB"}`, background: "#fff", cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isDesktop ? 36 : 46, transition: "all 0.15s ease", boxShadow: q > 0 ? "0 1px 3px rgba(22,163,74,0.15)" : "0 1px 2px rgba(0,0,0,0.03)" }} className="smooth-transition hover-lift">
+            <button key={m.id} type="button" onClick={() => addItem(m)} style={{ textAlign: "left", padding: "6px 8px", borderRadius: 5, border: `1px solid ${q > 0 ? "#16A34A" : borderMain}`, background: bgCard, cursor: "pointer", position: "relative", fontFamily: "inherit", minHeight: isDesktop ? 36 : 46, transition: "all 0.15s ease", boxShadow: q > 0 ? "0 1px 3px rgba(22,163,74,0.15)" : "none" }} className="smooth-transition hover-lift">
               <div style={{ display: "flex", gap: 5, alignItems: "flex-start" }}>
                 <VegDot veg={m.veg} />
-                <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2, color: COLORS.ink, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{m.name}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2, color: textMain, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{m.name}</span>
               </div>
               <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.copper, marginTop: 3 }}>
-                ₹{m.price}{m.portion ? <span style={{ color: COLORS.textLight, fontWeight: 600 }}> · {m.portion}</span> : null}
+                ₹{m.price}{m.portion ? <span style={{ color: isDark ? "#8B9BB4" : COLORS.textLight, fontWeight: 600 }}> · {m.portion}</span> : null}
               </div>
               {q > 0 && <span style={{ position: "absolute", top: 4, right: 4, background: COLORS.sage, color: "#fff", borderRadius: 10, padding: "1px 7px", fontSize: 11, fontWeight: 800 }}>{q}</span>}
             </button>
@@ -4168,10 +4198,10 @@ function BillPOSScreenInner(p) {
             <button type="button" onClick={() => p.setOrderType("parcel")} style={chip(p.orderType === "parcel")}>🛍️ Parcel</button>
             {p.orderType === "dine_in" && (
               <select value={p.table} onChange={(e) => p.setTable(Number(e.target.value))} style={{ ...inp, width: 84 }}>
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>T-{n}</option>)}
+                {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>T-{n}</option>)}
               </select>
             )}
-            <select value={p.waiter} onChange={(e) => p.setWaiter(e.target.value)} style={{ ...inp, flex: 1, minWidth: 90, width: "auto", background: "#fff" }}>
+            <select value={p.waiter} onChange={(e) => p.setWaiter(e.target.value)} style={{ ...inp, flex: 1, minWidth: 90, width: "auto", background: isDark ? "#161F2F" : "#fff" }}>
 
               <option value="">🧑‍🍳 Waiter chuno</option>
               {p.waiter && !waiterNames.includes(p.waiter) && <option value={p.waiter}>{p.waiter}</option>}
@@ -4193,13 +4223,13 @@ function BillPOSScreenInner(p) {
       )}
 
       {(presets.customers || []).length > 0 && (
-        <select value="" onChange={(e) => { const c = (presets.customers || [])[Number(e.target.value)]; if (c) { p.setCustName(c.name); p.setCustPhone(c.phone || ""); } }} style={{ ...inp, background: "#fff" }}>
+        <select value="" onChange={(e) => { const c = (presets.customers || [])[Number(e.target.value)]; if (c) { p.setCustName(c.name); p.setCustPhone(c.phone || ""); } }} style={{ ...inp, background: isDark ? "#161F2F" : "#fff" }}>
           <option value="">👤 Saved customer chuno...</option>
           {(presets.customers || []).map((c, i) => <option key={i} value={i}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}
         </select>
       )}
-           <div style={{ background: "linear-gradient(135deg, #FDFCFA 0%, #F7F5F0 100%)", borderRadius: 12, padding: 10, border: `1px solid #E8E6DC` }}>
-        <div style={{ fontSize: 10, fontWeight: 800, color: COLORS.textLight, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>👤 Customer</div>
+           <div style={{ background: isDark ? "#161F2F" : "linear-gradient(135deg, #FDFCFA 0%, #F7F5F0 100%)", borderRadius: 12, padding: 10, border: `1px solid ${isDark ? "#273449" : "#E8E6DC"}` }}>
+        <div style={{ fontSize: 10, fontWeight: 800, color: isDark ? "#8B9BB4" : COLORS.textLight, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>👤 Customer</div>
         <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6 }}>
           <input placeholder="Name" value={p.custName} onChange={(e) => p.setCustName(e.target.value)} style={inp} />
           <input placeholder="Phone" value={p.custPhone} onChange={(e) => p.setCustPhone(e.target.value)} style={inp} />
@@ -4207,23 +4237,23 @@ function BillPOSScreenInner(p) {
         </div>
       </div>
 
-      <div style={{ flex: isDesktop ? "1 1 auto" : "none", minHeight: isDesktop ? 220 : 140, maxHeight: isDesktop ? "none" : "42dvh", overflowY: "auto", border: `1px solid #E5E7EB`, borderRadius: 6, background: "#fff" }}>
+      <div style={{ flex: isDesktop ? "1 1 auto" : "none", minHeight: isDesktop ? 220 : 140, maxHeight: isDesktop ? "none" : "42dvh", overflowY: "auto", border: `1px solid ${borderMain}`, borderRadius: 6, background: bgCard }}>
         {items.length === 0 && <div style={{ textAlign: "center", padding: "30px 16px", color: "#9CA3AF", fontSize: 13, fontWeight: 600 }}>👈 Menu se item tap karo</div>}
         {items.map((it) => (
           <div key={it._rowId} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderBottom: `1px solid #F3F4F6`, transition: "background 0.15s ease", minHeight: 38 }} onMouseEnter={(e) => e.currentTarget.style.background = "#F9FAFB"} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
             <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#111827" }}>{it.name}{it.portion ? <span style={{ color: "#9CA3AF", fontWeight: 500 }}> · {it.portion}</span> : ""}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: isDark ? "#fff" : "#111827" }}>{it.name}{it.portion ? <span style={{ color: "#9CA3AF", fontWeight: 500 }}> · {it.portion}</span> : ""}</span>
               <input key={it._rowId + "_p_" + it.price} type="number" inputMode="decimal" min={0} step="any" defaultValue={it.price}
                 onBlur={(e) => { if (!commitPrice(it._rowId, e.target.value)) e.target.value = it.price; }}
                 onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
-                style={{ width: 48, padding: "2px 4px", border: `1px solid #E5E7EB`, borderRadius: 4, fontSize: 11, fontWeight: 700, textAlign: "center", color: "#6B7280", background: "#F9FAFB" }} />
+                style={{ width: 48, padding: "2px 4px", border: `1px solid ${isDark ? "#273449" : "#E5E7EB"}`, borderRadius: 4, fontSize: 11, fontWeight: 700, textAlign: "center", color: "#6B7280", background: isDark ? "#0B111A" : "#F9FAFB" }} />
             </div>
-            <div style={{ display: "flex", alignItems: "center", border: `1.5px solid #DC2626`, borderRadius: 6, background: "#fff", overflow: "hidden", height: 30 }}>
+            <div style={{ display: "flex", alignItems: "center", border: `1.5px solid #DC2626`, borderRadius: 6, background: isDark ? "#161F2F" : "#fff", overflow: "hidden", height: 30 }}>
               <button type="button" onClick={() => changeQty(it._rowId, -1)} style={{ width: 26, height: 30, border: "none", background: "#FEF2F2", color: "#DC2626", fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
               <input key={it._rowId + "_q_" + it.qty} type="number" inputMode="decimal" min={0} step="any" defaultValue={it.qty}
                 onBlur={(e) => { if (!commitQty(it._rowId, e.target.value)) e.target.value = it.qty; }}
                 onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
-                style={{ width: 32, height: 30, textAlign: "center", border: "none", background: "#fff", fontWeight: 900, fontSize: 14, color: "#DC2626", padding: 0, outline: "none" }} />
+                style={{ width: 32, height: 30, textAlign: "center", border: "none", background: isDark ? "#161F2F" : "#fff", fontWeight: 900, fontSize: 14, color: "#DC2626", padding: 0, outline: "none" }} />
               <button type="button" onClick={() => changeQty(it._rowId, 1)} style={{ width: 26, height: 30, border: "none", background: "#DC2626", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
             </div>
             <div style={{ width: 58, textAlign: "right", fontWeight: 900, fontSize: 13, fontFamily: "'JetBrains Mono', monospace", color: "#DC2626" }}>₹{Math.round(it.price * it.qty * 100) / 100}</div>
@@ -4281,7 +4311,7 @@ function BillPOSScreenInner(p) {
       </div>
 
       <div style={{ background: "linear-gradient(135deg, #FDFCFA 0%, #F5F3EE 100%)", borderRadius: 14, padding: "14px 16px", fontSize: 13, border: `1.5px solid #E8E0D0`, boxShadow: "0 4px 16px rgba(0,0,0,0.04)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}><span style={{ color: "#6B7280", fontWeight: 600 }}>Subtotal</span><b style={{ fontFamily: "'JetBrains Mono', monospace", color: "#111827" }}>₹{calc.sub}</b></div>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}><span style={{ color: "#6B7280", fontWeight: 600 }}>Subtotal</span><b style={{ fontFamily: "'JetBrains Mono', monospace", color: isDark ? "#fff" : "#111827" }}>₹{calc.sub}</b></div>
         {p.discPct > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.success }}><span>Discount {p.discPct}%</span><b>-₹{calc.discPctAmt}</b></div>}
         {p.disc > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.success }}><span>Extra discount</span><b>-₹{calc.discAmt}</b></div>}
         {calc.gstRate > 0 && <div style={{ display: "flex", justifyContent: "space-between", color: COLORS.copper }}><span>GST {calc.gstRate}%</span><b>+₹{calc.gst}</b></div>}
@@ -4304,7 +4334,7 @@ function BillPOSScreenInner(p) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(17,24,39,0.55)", backdropFilter: "blur(6px)", zIndex: 200, display: "flex", alignItems: isDesktop ? "center" : "flex-end", justifyContent: "center" }} onClick={p.onClose}>
       <div onClick={(e) => e.stopPropagation()} className="slide-up"
-       style={{ background: "#fff", colorScheme: "light", width: isDesktop ? "min(1200px, 97vw)" : "100%",
+       style={{ background: isDark ? "#161F2F" : "#fff", colorScheme: "light", width: isDesktop ? "min(1200px, 97vw)" : "100%",
  maxWidth: isDesktop ? 1280 : 560, height: isDesktop ? "96vh" : "98dvh", borderRadius: isDesktop ? 14 : "20px 20px 0 0", padding: isDesktop ? 0 : "0 0 calc(0px + env(safe-area-inset-bottom, 0px))", display: "flex", flexDirection: "column", boxSizing: "border-box", gap: 0, boxShadow: "0 25px 50px rgba(0,0,0,0.15)", overflow: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 20, fontWeight: 800, background: "linear-gradient(135deg, #1A1A1A 0%, #3C3C3C 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", letterSpacing: "-0.01em" }}>🧾 {isDraft ? "New Order + Bill" : "Order Bill"}</div>
@@ -4312,7 +4342,7 @@ function BillPOSScreenInner(p) {
         </div>
 
         {(isDesktop || tab === "bill") && (
-          <div style={{ order: 99, display: "flex", gap: 8, alignItems: "center", flexShrink: 0, padding: "10px 16px", background: "#F9FAFB", borderTop: `1px solid #E5E7EB` }}>
+          <div style={{ order: 99, display: "flex", gap: 8, alignItems: "center", flexShrink: 0, padding: "10px 16px", background: isDark ? "#0B111A" : "#F9FAFB", borderTop: `1px solid #E5E7EB` }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: "#DC2626", fontFamily: "'JetBrains Mono', monospace", minWidth: 80 }}>₹{calc.total}</div>
             <button type="button" disabled={disabled} onClick={() => p.onAction("save")} style={footBtn("#DC2626", "#fff")}>
               {p.saving ? "⏳..." : (isDraft && p.sendKot ? "🍳 Send KOT" : "💾 Save")}
@@ -4774,7 +4804,7 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
       <div style={{ marginBottom: 24 }}>
         <TableStatusBoard
           orders={orders}
-          tables={12}
+          tables={20}
           compact
           onTableClick={(o) => openBillEditor(o)}
           onEmptyTableClick={(t) => openNewOrder(t)}
@@ -5536,7 +5566,7 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
       {tab === "tables" && (
         <TableStatusBoard
           orders={orders}
-          tables={12}
+          tables={20}
           onTableClick={(o) => {
             setTab("orders");
           }}
@@ -6547,7 +6577,7 @@ const DUSSEHRA_MENU = [
 ];
 
 // Dussehra menu sirf Bihiya project (eat-park-r2) me, jahan VITE_BRANCH=bihiya set ho
-const DUSSEHRA_ENABLED = true;
+const DUSSEHRA_ENABLED = false; // Disabled - fully removed from app
 
 const DEFAULT_OFFERS = [
   { id: "off1", title: "Flat 20% OFF 🍜", desc: "Enjoy 20% off on all Chinese today!" },
@@ -6667,7 +6697,7 @@ export default function App() {
   const [loyaltyRules, setLoyaltyRules] = useState({ rate: 10, rewards: [{ id: "r1", cost: 300, item: "Free French Fry" }] });
   const [loyaltyUsers, setLoyaltyUsers] = useState([]);
   const [coinHistory, setCoinHistory] = useState([]);
-  const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); const t = Number(params.get("table")); return Number.isInteger(t) && t >= 1 && t <= 12 ? t : 1; });
+  const [table, setTable] = useState(() => { const params = new URLSearchParams(window.location.search); const t = Number(params.get("table")); return Number.isInteger(t) && t >= 1 && t <= 20 ? t : 1; });
   const [menu, setMenuState] = useState(DEFAULT_MENU);
   const [unavail, setUnavail] = useState([]);
     const menuEff = useMemo(() => menu.map((m) => ({ ...m, available: !unavail.includes(m.id) })), [menu, unavail]);
