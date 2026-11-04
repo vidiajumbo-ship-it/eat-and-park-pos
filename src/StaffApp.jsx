@@ -1222,7 +1222,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
       <ConnectionBadge C={C} />
 
       {selectedTable && (
-        <BillingView C={C} isMobile={isMobile} table={selectedTable} menu={menu} orders={orders} cart={cart} setCart={setCart} waiterName={waiterName} existingOrder={billOrder} isOwner={isOwner} addMoreMode={addMoreMode}
+        <BillingView C={C} isMobile={isMobile} table={selectedTable} menu={menu} orders={orders} setOrders={setOrders} cart={cart} setCart={setCart} waiterName={waiterName} existingOrder={billOrder} isOwner={isOwner} addMoreMode={addMoreMode}
           onBack={() => { setSelectedTable(null); setCart({}); setEstimatePending(false); setBillOrder(null); setAddMoreMode(false); }}
           onSwitchAdd={() => { setCart({}); setAddMoreMode(true); }} onPaidSuccess={() => { haptic(60); setConfetti(true); setTimeout(() => setConfetti(false), 1800); }} />
       )}
@@ -2042,7 +2042,23 @@ function SplitBillModal({ C, isMobile, order, onClose }) {
   const g = Math.round((added - d) * (Number(live.gstRate) || 0) / 100);
   return { finalTotal: (Number(live.finalTotal) || 0) + added - d + g, billDiscount: (Number(live.billDiscount) || 0) + d, gstAmount: (Number(live.gstAmount) || 0) + g };
 }
-function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterName, existingOrder, addMoreMode, onBack, isOwner, onPaidSuccess, onSwitchAdd }) {
+function listen(makeQuery, onData, label) {
+  let unsub = () => {}, dead = false, timer = null, delay = 1000;
+  const start = () => {
+    unsub = onSnapshot(makeQuery(),
+      (snap) => { delay = 1000; onData(snap); },
+      (err) => {
+        console.error("🚨 " + label, err.code, err.message);
+        if (dead) return;
+        timer = setTimeout(start, delay);
+        delay = Math.min(delay * 2, 15000);
+      });
+  };
+  start();
+  return () => { dead = true; clearTimeout(timer); unsub(); };
+}
+
+function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCart, waiterName, existingOrder, addMoreMode, onBack, isOwner, onPaidSuccess, onSwitchAdd }) {
   const toast = useToast();
   const haptic = useHaptic();
   const [search, setSearch] = useState("");
@@ -2355,6 +2371,7 @@ function BillingView({ C, isMobile, table, menu, orders, cart, setCart, waiterNa
       const finalTotal = Math.max(0, sub - d) + g;
       const order = { id: orderId, table: table === "parcel" ? "" : table, orderType: table === "parcel" ? "parcel" : "dine_in", customer: { name: custName || "Walk-in", phone: custPhone || "", address: custAddress || "" }, cashDiscount: Number(cashDiscount || 0), paymentSplit: payMode === "split" ? { cash: Number(splitCash), online: Number(splitUpi) } : null, items, waiter: waiterName || "Staff", kots: [{ id: uid("kot"), kotNumber: 1, items, createdAt: Date.now(), status: "new", isRunning: false }], status: "new", paid: false, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, createdAt: Date.now(), createdBy: auth.currentUser?.uid };
       await setDoc(doc(db, "orders", orderId), order);
+      if (setOrders) setOrders(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]);
       printKOT(order);
       try { localStorage.removeItem(`staff_draft_${table}`); } catch (e) {}
       haptic(30);
