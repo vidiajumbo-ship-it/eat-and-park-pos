@@ -1,3 +1,4 @@
+import { tryRecover } from "./recover";
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, useRef, useContext, createContext, useCallback } from "react";
 import { db, auth } from "./firebase";
@@ -4707,7 +4708,8 @@ OUTPUT:
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { err: null }; }
   static getDerivedStateFromError(err) { return { err }; }
-  componentDidCatch(err, info) { console.error("Staff app crash:", err, info); }
+  componentDidCatch(err, info) {
+    tryRecover(arguments[0]); console.error("Staff app crash:", err, info); }
   render() {
     if (!this.state.err) return this.props.children;
     return (

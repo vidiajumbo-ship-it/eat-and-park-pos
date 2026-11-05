@@ -1,7 +1,7 @@
 // src/firebase.js
 import { initializeApp } from "firebase/app";
 import { initializeAuth, browserSessionPersistence, onAuthStateChanged } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { initializeFirestore, memoryLocalCache } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -15,9 +15,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = initializeAuth(app, { persistence: browserSessionPersistence });
 
-// Offline persistence (naya tareeka, multiple tabs support)
+// FIX: persistentLocalCache (IndexedDB) crash ka source tha —
+// getTargetData ke andar null state aur INTERNAL ASSERTION FAILED.
+// POS me saara data live listeners se aata hai, isliye memory cache kaafi hai.
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  localCache: memoryLocalCache(),
 });
 
 // authReady promise — App.js isko await karta hai

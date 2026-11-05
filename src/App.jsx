@@ -1,3 +1,4 @@
+import { tryRecover } from "./recover";
 
 /* eslint-disable react-hooks/exhaustive-deps, no-unused-vars */
 
@@ -359,6 +360,7 @@ class ErrorBoundary extends React.Component {
     return { hasError: true, error };
   }
   componentDidCatch(error, info) {
+    tryRecover(arguments[0]);
     console.error('🔴 ErrorBoundary caught:', error);
     console.error('🔴 Component Stack:', info.componentStack);
     this.setState({ error, errorInfo: info });
@@ -2979,7 +2981,6 @@ const handleWaiterPinSubmitOld = () => {
       localStorage.removeItem("eatpark_cart");
     } catch (e) {}
     otpConfRef.current = null;
-    handleLogout();
     setWaiterUnlocked(false);
     setShowWaiterMode(false);
     setCustName(""); setCustPhone(""); setCustAddress("");
