@@ -2247,6 +2247,7 @@ function WaiterMode({ orders, menu, categories, setMenuState, placeOrder, advanc
   const [target, setTarget] = useState(null);
   const [drafts, setDrafts] = useState({});
   const [showKitchenOnly, setShowKitchenOnly] = useState(false);
+  const [waiterTab, setWaiterTab] = useState("tables");
 
   const handleDraftChange = (t, items, orderData) => {
     if (items && items.length > 0) {
@@ -2281,16 +2282,50 @@ function WaiterMode({ orders, menu, categories, setMenuState, placeOrder, advanc
       <div style={{ background: "#161F2F", padding: "12px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #273449", position: "sticky", top: 0, zIndex: 10 }}>
         <div style={{ color: "#fff", fontWeight: 800, fontSize: 20, fontFamily: "'Outfit', sans-serif" }}>🧑‍🍳 Waiter Panel</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setShowKitchenOnly(prev => !prev)} style={{ background: showKitchenOnly ? "#273449" : "#38BDF8", color: showKitchenOnly ? "#fff" : "#0B111A", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 800, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 10px rgba(56,189,248,0.3)" }}>{showKitchenOnly ? "🪑 Tables" : "🍳 Kitchen View"}</button>
+          <div style={{ display: "flex", background: "#273449", borderRadius: 8, padding: 4, gap: 4, flexWrap: "wrap" }}>
+              <button onClick={() => setWaiterTab("tables")} style={{ background: waiterTab === "tables" ? "#38BDF8" : "transparent", color: waiterTab === "tables" ? "#0B111A" : "#fff", border: "none", borderRadius: 6, padding: "6px 12px", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>🪑 Tables</button>
+              <button onClick={() => setWaiterTab("parcel")} style={{ background: waiterTab === "parcel" ? "#38BDF8" : "transparent", color: waiterTab === "parcel" ? "#0B111A" : "#fff", border: "none", borderRadius: 6, padding: "6px 12px", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>🛍️ Parcel</button>
+              <button onClick={() => setWaiterTab("kitchen")} style={{ background: waiterTab === "kitchen" ? "#38BDF8" : "transparent", color: waiterTab === "kitchen" ? "#0B111A" : "#fff", border: "none", borderRadius: 6, padding: "6px 12px", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>🍳 Kitchen</button>
+            </div>
           <button onClick={() => openNew()} style={{ background: "#FF5A1F", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 800, fontSize: 13, cursor: "pointer", boxShadow: "0 4px 10px rgba(255,90,31,0.3)" }}>➕ New Order</button>
           <button onClick={exit} style={{ background: "#273449", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>✕ Exit</button>
         </div>
       </div>
 
       <div style={{ padding: "20px", maxWidth: 1200, margin: "0 auto" }}>
-        {!showKitchenOnly ? (
+        {waiterTab === "tables" && (
           <TableStatusBoard orders={combinedOrders} tables={20} compact={false} isDark={true} showStats onTableClick={(o) => setTarget(o)} onEmptyTableClick={(t) => openNew(t)} />
-        ) : (
+        )}
+        
+        {waiterTab === "parcel" && (
+          <div style={{ color: "#fff" }}>
+            <h2 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 800, display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 28 }}>🛍️</span> Running Parcels
+            </h2>
+            <div style={{ display: "grid", gridTemplateColumns: viewMode === "desktop" ? "repeat(auto-fill, minmax(300px, 1fr))" : "1fr", gap: 12 }}>
+              {orders.filter(o => o.orderType === "parcel" && o.status !== "served" && o.status !== "cancelled" && !o.paid).map(o => (
+                <div key={o.id} onClick={() => setTarget(o)} style={{ background: "#161F2F", border: "1px solid #273449", borderRadius: 12, padding: 14, cursor: "pointer" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <span style={{ color: "#FCD34D", fontWeight: 800 }}>#{o.id.slice(1,5).toUpperCase()}</span>
+                    <span style={{ color: "#9CA3AF", fontSize: 12 }}>{timeAgo(o.createdAt)}</span>
+                  </div>
+                  <div style={{ color: "#fff", fontSize: 14, marginBottom: 8 }}>
+                    {o.customer?.name || "Walk-in"} {o.customer?.phone ? `(${o.customer.phone})` : ""}
+                  </div>
+                  <div style={{ color: "#9CA3AF", fontSize: 13, marginBottom: 8 }}>
+                    {o.items?.length || 0} items · ₹{getOrderTotal(o)}
+                  </div>
+                  <div style={{ background: "#3B82F6", color: "#fff", padding: "8px 0", textAlign: "center", borderRadius: 8, fontWeight: 800, fontSize: 13 }}>Open POS</div>
+                </div>
+              ))}
+              {orders.filter(o => o.orderType === "parcel" && o.status !== "served" && o.status !== "cancelled" && !o.paid).length === 0 && (
+                <div style={{ gridColumn: "1 / -1", textAlign: "center", padding: 40, color: "#8B9BB4", fontStyle: "italic" }}>No running parcel orders</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {waiterTab === "kitchen" && (
           <div style={{ color: "#fff" }}>
             <h2 style={{ margin: "0 0 20px", fontSize: 22, fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ fontSize: 28 }}>🧑‍🍳</span> Live Kitchen Orders
