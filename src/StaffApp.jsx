@@ -1040,7 +1040,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
       <Confetti show={confetti} />
 
       {/* TOP BAR */}
-      <div style={{ display: (isMobile || legacyUI) ? "flex" : "none", background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", padding: isMobile ? "10px 10px" : "14px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 16px rgba(184,134,11,0.30)", position: "sticky", top: 0, zIndex: 50, gap: 8 }}>
+      <div style={{ display: (isMobile || legacyUI) ? "flex" : "none", background: `linear-gradient(135deg, ${C.gold} 0%, ${C.goldDark} 100%)`, color: "#fff", padding: isMobile ? "10px 10px" : "14px 20px", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 16px rgba(184,134,11,0.30)", position: "sticky", top: 0, zIndex: 50, gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 14, minWidth: 0, flex: 1 }}>
           <button onClick={() => { haptic(); setSidebarOpen(true); }} style={{ background: "rgba(255,255,255,0.18)", border: "none", color: "#fff", width: isMobile ? 34 : 38, height: isMobile ? 34 : 38, borderRadius: 8, fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>☰</button>
           {!isMobile && <div style={{ width: 42, height: 42, background: "rgba(255,255,255,0.2)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🍽️</div>}
