@@ -1,6 +1,6 @@
 // src/firebase.js
 import { initializeApp } from "firebase/app";
-import { initializeAuth, browserSessionPersistence, onAuthStateChanged } from "firebase/auth";
+import { getAuth, setPersistence, browserSessionPersistence, onAuthStateChanged } from "firebase/auth";
 import { initializeFirestore, memoryLocalCache } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -13,11 +13,14 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const auth = initializeAuth(app, { persistence: browserSessionPersistence });
 
-// FIX: persistentLocalCache (IndexedDB) crash ka source tha —
-// getTargetData ke andar null state aur INTERNAL ASSERTION FAILED.
-// POS me saara data live listeners se aata hai, isliye memory cache kaafi hai.
+// Auth Fix (Vite build white-screen issue)
+export const auth = getAuth(app);
+setPersistence(auth, browserSessionPersistence).catch((error) => {
+  console.error("Auth persistence error:", error);
+});
+
+// FIX: persistentLocalCache (IndexedDB) crash ka source tha
 export const db = initializeFirestore(app, {
   localCache: memoryLocalCache(),
 });
