@@ -722,6 +722,7 @@ function StaffAppInner() {
   const [lowCount, setLowCount] = useState(0);
   // 🔔 Waiter calls listener (unified patch)
   const [calls, setCalls] = useState([]);
+  const [loyaltyUsers, setLoyaltyUsers] = useState([]);
   const [bookings, setBookings] = useState([]);
   const prevCallsRef = useRef(0);
   useEffect(() => {
@@ -736,6 +737,15 @@ function StaffAppInner() {
         }
         prevCallsRef.current = list.length;
       },
+      () => {}
+    );
+    return () => unsub();
+  }, [user]);
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(
+      collection(db, "loyaltyUsers"),
+      (snap) => setLoyaltyUsers(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
       () => {}
     );
     return () => unsub();
@@ -1054,7 +1064,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
       </div>
 
       {/* TABS */}
-      <div style={{ display: (isMobile || legacyUI) ? "flex" : "none", background: C.card, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "0 8px" : "0 16px", display: "flex", gap: 4, overflowX: "auto", alignItems: "center" }}>
+      <div style={{ display: (isMobile || legacyUI) ? "flex" : "none", background: C.card, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "0 8px" : "0 16px", gap: 4, overflowX: "auto", alignItems: "center" }}>
         <button onClick={() => { haptic(); setShowEstimate(true); }} style={{ padding: isMobile ? "12px 12px" : "15px 20px", border: "none", background: "transparent", color: C.green, fontWeight: 900, fontSize: isMobile ? 12 : 13, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, borderBottom: `3px solid ${C.green}` }}>📋 Estimate{estItems.length ? ` (${estItems.length})` : ""}</button>
         {[
           { id: "tables", label: `🍽️ Tables` }, { id: "parcel", label: `🛍️ Parcel${parcelCount ? ` (${parcelCount})` : ""}` },
@@ -1142,7 +1152,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
         {activeTab === "expenses" && <ExpensesView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
         {activeTab === "reports" && <ReportsView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
         {activeTab === "import" && <ImportView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} onDone={() => {}} />}
-        {activeTab === "customers" && <CustomersView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} />}
+        {activeTab === "customers" && <CustomersView C={C} isMobile={isMobile} isOwner={isOwner} waiterName={waiterName} orders={orders} loyaltyUsers={loyaltyUsers} />}
         {activeTab === "dashboard" && (
           <DashboardView C={C} isMobile={isMobile} orders={orders} dueOrders={dueOrders} menu={menu}
             onStatusClick={(status, bounds) => { setOrdersFilter(status); setOrdersRange(bounds || null); setActiveTab("orders"); }}
@@ -4728,7 +4738,7 @@ const fmtDob = (dob) => {
   return p ? new Date(p.y, p.m - 1, p.d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "";
 };
 
-function CustomersView({ C, isMobile, isOwner, waiterName }) {
+function CustomersView({ C, isMobile, isOwner, waiterName, orders = [], loyaltyUsers = [] }) {
   const toast = useToast();
   const haptic = useHaptic();
   const G = goldOf(C);
@@ -4741,6 +4751,28 @@ function CustomersView({ C, isMobile, isOwner, waiterName }) {
   const [offer, setOffer] = useState(() => safeStorageGet("staff_bday_offer", "Flat 20% OFF + free dessert"));
   const [tpl, setTpl] = useState(() => safeStorageGet("staff_bday_tpl", defaultBdayTpl()));
 
+  const paidByPhone = useMemo(() => {
+    const map = {};
+    (orders || []).forEach((o) => {
+      if (!o.paid || o.status === "cancelled") return;
+      const p = String(o.customer?.phone || "").replace(/\D/g, "").slice(-10);
+      if (p.length !== 10) return;
+      if (!map[p]) map[p] = { orders: 0, spent: 0 };
+      map[p].orders += 1;
+      map[p].spent += Number(o.finalTotal) || 0;
+    });
+    return map;
+  }, [orders]);
+
+  const coinsByPhone = useMemo(() => {
+    const map = {};
+    (loyaltyUsers || []).forEach((u) => {
+      const p = String(u.phone || u.id || "").replace(/\D/g, "").slice(-10);
+      if (p.length === 10) map[p] = Number(u.coins) || 0;
+    });
+    return map;
+  }, [loyaltyUsers]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -4751,11 +4783,13 @@ function CustomersView({ C, isMobile, isOwner, waiterName }) {
   }, []);
   useEffect(() => { if (isOwner) load(); }, [load, isOwner]);
 
-  const rows = useMemo(() => list.map((c) => ({
-    ...c,
-    phone: String(c.phone || c.id || "").replace(/\D/g, "").slice(-10),
-    days: daysToBirthday(c.dob),
-  })), [list]);
+  const rows = useMemo(() => list.map((c) => {
+    const phone = String(c.phone || c.id || "").replace(/\D/g, "").slice(-10);
+    const paid = paidByPhone[phone] || { orders: 0, spent: 0 };
+    const coins = coinsByPhone[phone] || 0;
+    return { ...c, phone, days: daysToBirthday(c.dob), paidOrders: paid.orders, paidSpent: paid.spent, coins };
+  }), [list, paidByPhone, coinsByPhone]);
+
   const mNow = new Date().getMonth() + 1;
   const counts = useMemo(() => ({
     all: rows.length,
@@ -4807,10 +4841,10 @@ function CustomersView({ C, isMobile, isOwner, waiterName }) {
     } catch (e) { toast(e.message, "error"); }
   };
 
-  const header = ["Name", "Phone", "DOB", "Address", "Orders", "Spent", "Last Login"];
+  const header = ["Name", "Phone", "DOB", "Address", "Paid Orders", "Paid Spent", "Coins", "Last Login"];
   const dataRows = (arr) => arr.map((c) => [
     String(c.name || ""), String(c.phone || ""), String(c.dob || ""), String(c.address || ""),
-    Number(c.totalOrders) || 0, Number(c.totalSpent) || 0,
+    Number(c.paidOrders) || 0, Number(c.paidSpent) || 0, Number(c.coins) || 0,
     c.lastLogin ? new Date(Number(c.lastLogin)).toLocaleString("en-IN") : "",
   ]);
   const downloadExcel = () => {
@@ -4909,9 +4943,11 @@ function CustomersView({ C, isMobile, isOwner, waiterName }) {
                   ) : <div style={{ fontSize: 11, color: C.gray, fontWeight: 700 }}>DOB nahi</div>}
                 </div>
               </div>
-              <div style={{ fontSize: 11, color: C.gray, marginTop: 6 }}>
-                Orders {Number(c.totalOrders) || 0} · {inr(c.totalSpent || 0)}{c.lastLogin ? " · login " + new Date(Number(c.lastLogin)).toLocaleDateString("en-IN") : ""}
-                {wished && <span style={{ color: C.green, fontWeight: 800 }}> · ✅ Wish bheji</span>}
+              <div style={{ fontSize: 11, color: C.gray, marginTop: 6, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                <span>Orders {Number(c.paidOrders) || 0} · {inr(c.paidSpent || 0)}</span>
+                <span style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>🪙 {Number(c.coins) || 0} coins</span>
+                {c.lastLogin && <span>· login {new Date(Number(c.lastLogin)).toLocaleDateString("en-IN")}</span>}
+                {wished && <span style={{ color: C.green, fontWeight: 800 }}>· ✅ Wish bheji</span>}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
                 <button onClick={() => sendWish(c)} disabled={!c.dob || c.phone.length !== 10} style={{ flex: 1, padding: 9, border: "none", borderRadius: 8, background: c.dob ? "#25D366" : C.line, color: c.dob ? "#fff" : C.gray, fontWeight: 800, fontSize: 12, cursor: c.dob ? "pointer" : "not-allowed", fontFamily: "inherit" }}>🎂 WhatsApp Wish</button>

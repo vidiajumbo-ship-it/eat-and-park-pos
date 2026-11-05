@@ -2889,6 +2889,7 @@ const handleWaiterPinSubmitOld = () => {
   }, [custPhone]);
   const handleSendOtp = async () => {
     if (otpSending || resendIn > 0) return;
+    if (!String(custName || "").trim()) { showToast("⚠️ Pehle apna naam daalo", 'error'); return; }
     const p = String(custPhone || "").replace(/\D/g, "").slice(-10);
     if (p.length !== 10) { showToast("⚠️ 10 digit phone daalo", 'error'); return; }
     if (DEMO_OTP) { handleSendOtpDemo(); return; }
@@ -2923,6 +2924,7 @@ const handleWaiterPinSubmitOld = () => {
     }
   };
   const handleSendOtpDemo = () => {
+    if (!String(custName || "").trim()) { showToast("⚠️ Pehle apna naam daalo", 'error'); return; }
     if (!custPhone || custPhone.length < 10) { showToast("⚠️ Enter valid phone", 'error'); return; }
     if (!DEMO_OTP) {
       showToast("ℹ️ OTP service abhi connected nahi — naam & phone se order karo", 'info');
@@ -2941,6 +2943,7 @@ const handleWaiterPinSubmitOld = () => {
     alert(`🔐 Demo OTP: ${code}`);
   };
   const handleVerifyOtp = async () => {
+    if (!String(custName || "").trim()) { showToast("⚠️ Pehle apna naam daalo", 'error'); return; }
     if (DEMO_OTP && !otpConfRef.current) { handleVerifyOtpDemo(); return; }
     if (!otpConfRef.current) { showToast("⚠️ Pehle OTP bhejo", 'error'); return; }
     const p = String(custPhone || "").replace(/\D/g, "").slice(-10);
@@ -2962,27 +2965,34 @@ const handleWaiterPinSubmitOld = () => {
     otpConfRef.current = null;
     setIsLoggedIn(true); setOtpStep("phone");
     showToast("✅ Phone verify ho gaya", 'success');
-    try { await setDoc(doc(db, "customers", p), { phone: p, name: custName || "Guest", address: custAddress || "", uid: auth.currentUser.uid, lastLogin: Date.now() }, { merge: true }); } catch (e) {}
+    try {
+      const _patch = { phone: p, address: custAddress || "", uid: auth.currentUser.uid, lastLogin: Date.now() };
+      const _nm = String(custName || "").trim();
+      if (_nm) _patch.name = _nm;
+      await setDoc(doc(db, "customers", p), _patch, { merge: true });
+    } catch (e) {}
   };
   const handleVerifyOtpDemo = () => {
-    if (generatedOtp && otpCode === generatedOtp) {
-      setIsLoggedIn(true); setOtpStep("phone");
-      (async () => {
-        try {
-          const userRef = doc(db, "customers", custPhone);
-          const userSnap = await getDoc(userRef);
-          if (!userSnap.exists()) {
-            await setDoc(userRef, { phone: custPhone, name: custName || "Guest", address: custAddress || "", createdAt: Date.now(), lastLogin: Date.now(), totalOrders: 0, totalSpent: 0 });
-            showToast("✅ New customer registered!", 'success');
-          } else {
-            await updateDoc(userRef, { lastLogin: Date.now(), name: custName || userSnap.data().name });
-            showToast("✅ Welcome back!", 'success');
-          }
-          localStorage.setItem('eatpark_customer', JSON.stringify({ name: custName, phone: custPhone, address: custAddress, isLoggedIn: true }));
-        } catch (error) { console.error(error); }
-      })();
-    } else showToast("❌ Incorrect OTP", 'error');
-  };
+  if (!String(custName || "").trim()) { showToast("⚠️ Pehle apna naam daalo", "error"); return; }
+  if (generatedOtp && otpCode === generatedOtp) {
+    setIsLoggedIn(true); setOtpStep("phone");
+    (async () => {
+      try {
+        const cleanName = String(custName).trim();
+        const userRef = doc(db, "customers", custPhone);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+          await setDoc(userRef, { phone: custPhone, name: cleanName, address: custAddress || "", createdAt: Date.now(), lastLogin: Date.now(), totalOrders: 0, totalSpent: 0 });
+          showToast("✅ New customer registered!", "success");
+        } else {
+          await updateDoc(userRef, { lastLogin: Date.now(), name: cleanName });
+          showToast("✅ Welcome back!", "success");
+        }
+        localStorage.setItem("eatpark_customer", JSON.stringify({ name: cleanName, phone: custPhone, address: custAddress, isLoggedIn: true }));
+      } catch (error) { console.error(error); }
+    })();
+  } else showToast("❌ Incorrect OTP", "error");
+};
   const handleVerifyOtpOld = () => {
     if (otpCode === generatedOtp || otpCode === "1234") {
       setIsLoggedIn(true); setOtpStep("phone");
@@ -3150,11 +3160,20 @@ const handleWaiterPinSubmitOld = () => {
       safeSet('eatpark_orders', orderHistory.slice(-30));
 
       const customerData = safeJSON('eatpark_customer', {});
-      customerData.totalOrders = (customerData.totalOrders || 0) + 1;
-      customerData.totalSpent = (customerData.totalSpent || 0) + finalTotal;
       customerData.lastOrderDate = Date.now();
+      if (paymentInfo.paid) {
+        customerData.totalOrders = (customerData.totalOrders || 0) + 1;
+        customerData.totalSpent = (customerData.totalSpent || 0) + finalTotal;
+      }
       safeSet('eatpark_customer', customerData);
-      try { await updateDoc(doc(db, "customers", custPhone), { totalOrders: customerData.totalOrders, totalSpent: customerData.totalSpent, lastOrderDate: Date.now() }); } catch (e) { }
+      try {
+        const _cPatch = { lastOrderDate: Date.now() };
+        if (paymentInfo.paid) {
+          _cPatch.totalOrders = customerData.totalOrders;
+          _cPatch.totalSpent = customerData.totalSpent;
+        }
+        await updateDoc(doc(db, "customers", custPhone), _cPatch);
+      } catch (e) { }
 
       consumeFlashStock(initialItems);
 
@@ -3421,7 +3440,7 @@ const handleWaiterPinSubmitOld = () => {
                 </div>
                 <div style={{ marginBottom: 22 }}>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#8B9BB4", textTransform: "uppercase", marginBottom: 8, letterSpacing: 0.5 }}>Phone Number</label>
-                  <input type="tel" inputMode="numeric" maxLength={10} placeholder="10-digit number" value={custPhone} onChange={(e) => setCustPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} style={{ width: "100%", boxSizing: "border-box", padding: "14px 16px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 15, outline: "none", fontSize: 20, letterSpacing: 2, fontWeight: 700, textAlign: "center" }} />
+                  <input type="tel" inputMode="numeric" maxLength={10} placeholder="10-digit number" value={custPhone} onChange={(e) => setCustPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} style={{ width: "100%", boxSizing: "border-box", padding: "14px 16px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", outline: "none", fontSize: 20, letterSpacing: 2, fontWeight: 700, textAlign: "center" }} />
                 </div>
                 <button disabled={otpSending || resendIn > 0} onClick={() => { if (!custName.trim()) { showToast("⚠️ Pehle naam daalo", "error"); return; } handleSendOtp(); }}
                   style={{ width: "100%", padding: 16, background: "#FF5A1F", border: "none", borderRadius: 14, color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 20px rgba(255,90,31,0.3)", opacity: (otpSending || resendIn > 0) ? 0.6 : 1 }}>
@@ -3431,7 +3450,7 @@ const handleWaiterPinSubmitOld = () => {
             ) : (
               <div>
                 <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#8B9BB4", textTransform: "uppercase", marginBottom: 8, letterSpacing: 0.5, textAlign: "center" }}>OTP {custPhone} par bheja gaya</label>
-                <input type="text" inputMode="numeric" maxLength={6} placeholder="••••••" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))} style={{ width: "100%", boxSizing: "border-box", padding: "14px 16px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 15, outline: "none", fontSize: 28, letterSpacing: 10, fontWeight: 800, textAlign: "center", marginBottom: 20 }} />
+                <input type="text" inputMode="numeric" maxLength={6} placeholder="••••••" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))} style={{ width: "100%", boxSizing: "border-box", padding: "14px 16px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", outline: "none", fontSize: 28, letterSpacing: 10, fontWeight: 800, textAlign: "center", marginBottom: 20 }} />
                 <button onClick={handleVerifyOtp} style={{ width: "100%", padding: 16, background: "#10B981", border: "none", borderRadius: 14, color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer", marginBottom: 10, boxShadow: "0 8px 20px rgba(16,185,129,0.3)" }}>Verify & Start</button>
                 <button disabled={otpSending || resendIn > 0} onClick={handleSendOtp} style={{ width: "100%", padding: 10, background: "none", border: "none", color: "#FF8C5A", fontWeight: 800, cursor: "pointer", opacity: resendIn > 0 ? 0.5 : 1 }}>{resendIn > 0 ? "Resend OTP (" + resendIn + "s)" : "🔁 Resend OTP"}</button>
                 <button onClick={() => { setOtpStep("phone"); setOtpCode(""); }} style={{ width: "100%", padding: 10, background: "none", border: "none", color: "#8B9BB4", fontWeight: 700, cursor: "pointer" }}>← Change Number</button>
