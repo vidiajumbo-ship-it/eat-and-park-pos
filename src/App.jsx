@@ -2438,6 +2438,52 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
 }, [showWaiterMode]);
   const [waiterUnlocked, setWaiterUnlocked] = useState(wasWaiterOpen);
 
+  // 🎂 DOB popup (login ke baad)
+  const [showDobModal, setShowDobModal] = useState(false);
+  const [dobInput, setDobInput] = useState("");
+  const [dobSaving, setDobSaving] = useState(false);
+  const [dobErr, setDobErr] = useState("");
+  useEffect(() => {
+    if (!isLoggedIn || waiterUnlocked) return;
+    const p = String(custPhone || "").replace(/\D/g, "").slice(-10);
+    if (p.length !== 10) return;
+    let off = false;
+    (async () => {
+      try {
+        if (localStorage.getItem("enp_dob_done_" + p) === "1") return;
+        const skipAt = Number(localStorage.getItem("enp_dob_skip_" + p) || 0);
+        if (Date.now() - skipAt < 3 * 86400000) return;
+        let hasDob = false;
+        try {
+          const s = await getDoc(doc(db, "customers", p));
+          hasDob = s.exists() && !!s.data().dob;
+        } catch (e) {}
+        if (off) return;
+        if (hasDob) { localStorage.setItem("enp_dob_done_" + p, "1"); return; }
+        setShowDobModal(true);
+      } catch (e) {}
+    })();
+    return () => { off = true; };
+  }, [isLoggedIn, custPhone]);
+  const saveDob = async () => {
+    const p = String(custPhone || "").replace(/\D/g, "").slice(-10);
+    if (!dobInput) { setDobErr("Apni date of birth chuno"); return; }
+    if (new Date(dobInput) > new Date()) { setDobErr("Future ki date nahi chalegi"); return; }
+    setDobErr(""); setDobSaving(true);
+    try {
+      await setDoc(doc(db, "customers", p), { phone: p, name: custName || "Guest", dob: dobInput, dobSavedAt: Date.now() }, { merge: true });
+      try { localStorage.setItem("enp_dob_done_" + p, "1"); } catch (e) {}
+      setShowDobModal(false);
+      showToast("🎂 Thanks! Birthday pe special offer milega", "success");
+    } catch (e) { setDobErr("Save nahi hua, dobara try karo"); }
+    finally { setDobSaving(false); }
+  };
+  const skipDob = () => {
+    const p = String(custPhone || "").replace(/\D/g, "").slice(-10);
+    try { localStorage.setItem("enp_dob_skip_" + p, String(Date.now())); } catch (e) {}
+    setShowDobModal(false);
+  };
+
 useEffect(() => {
   if (!showWaiterMode) return;
   window.history.pushState({ w: 1 }, "");
@@ -3396,6 +3442,24 @@ const handleWaiterPinSubmitOld = () => {
               <button onClick={() => setShowWaiterPinModal(true)} style={{ flex: 1, padding: "10px 0", background: "transparent", border: "1px solid #273449", borderRadius: 12, color: "#8B9BB4", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Waiter</button>
               <button onClick={() => requestPinPrompt("admin")} style={{ flex: 1, padding: "10px 0", background: "transparent", border: "1px solid #273449", borderRadius: 12, color: "#8B9BB4", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Admin</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🎂 DOB POPUP */}
+      {showDobModal && isLoggedIn && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ width: "100%", maxWidth: 380, background: "#161F2F", borderRadius: 24, padding: 28, border: "1px solid #273449", boxShadow: "0 24px 70px rgba(0,0,0,0.55)", textAlign: "center" }}>
+            <div style={{ fontSize: 54, marginBottom: 8 }}>🎂</div>
+            <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 800, color: "#fff", lineHeight: 1.3 }}>Give your date of birth and get offer on birthday</div>
+            <div style={{ fontSize: 13, color: "#8B9BB4", marginTop: 8, marginBottom: 18 }}>Apna birthday batao, us din aapko special offer milega 🎁</div>
+            <input type="date" value={dobInput} min="1940-01-01" max={new Date().toISOString().split("T")[0]} onChange={(e) => { setDobInput(e.target.value); setDobErr(""); }}
+              style={{ width: "100%", boxSizing: "border-box", padding: "14px 16px", background: "#0B111A", border: "1px solid #273449", borderRadius: 12, color: "#fff", fontSize: 18, fontWeight: 700, textAlign: "center", outline: "none", colorScheme: "dark" }} />
+            {dobErr && <div style={{ color: "#EF4444", fontSize: 12, fontWeight: 700, marginTop: 8 }}>{dobErr}</div>}
+            <button onClick={saveDob} disabled={dobSaving} style={{ width: "100%", padding: 15, marginTop: 16, background: "#FF5A1F", border: "none", borderRadius: 14, color: "#fff", fontSize: 16, fontWeight: 800, cursor: dobSaving ? "wait" : "pointer", opacity: dobSaving ? 0.6 : 1, boxShadow: "0 8px 20px rgba(255,90,31,0.3)" }}>
+              {dobSaving ? "⏳ Saving..." : "🎁 Save & Get Offer"}
+            </button>
+            <button onClick={skipDob} style={{ width: "100%", padding: 10, marginTop: 6, background: "none", border: "none", color: "#8B9BB4", fontWeight: 700, cursor: "pointer" }}>Baad me</button>
           </div>
         </div>
       )}
