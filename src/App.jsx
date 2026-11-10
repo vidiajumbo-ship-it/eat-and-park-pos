@@ -2758,13 +2758,26 @@ if (savedCart) {
   }, []);
 
   const cancelOrder = useCallback(async (orderId) => {
-    if (!window.confirm("Cancel this order?")) return;
+    // 🆕 Check karo ki order abhi bhi "new" status me hai ya nahi
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    if (order.status !== 'new') {
+      showToast("⚠️ Khana ban chuka hai (Cooking shuru), ab cancel nahi ho sakta. Restaurant se baat karein.", 'error');
+      return;
+    }
+
+    if (!window.confirm("Kya aap sach me ye order cancel karna chahte hain?")) return;
+    
     try {
       await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now() });
       setOrdersState(prev => prev.map(o => o.id === orderId ? { ...o, status: "cancelled" } : o));
       showToast("❌ Order cancelled", 'warning');
-    } catch (e) { showToast("⚠️ Failed to cancel", 'error'); }
-  }, [setOrdersState, showToast]);
+    } catch (e) { 
+      console.error(e);
+      showToast("⚠️ Failed to cancel. Server rules ne block kiya.", 'error'); 
+    }
+  }, [orders, setOrdersState, showToast]);
 
   const reorderOrder = useCallback((order) => {
     const newCart = {};
