@@ -5,7 +5,7 @@ import DeliveryApp from "./DeliveryApp";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { db, auth, authReady } from "./firebase";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider, signInWithCredential } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider, signInWithCredential, setPersistence, browserLocalPersistence } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, updateDoc, deleteDoc,
   getDocs, getDoc, addDoc, query, orderBy, serverTimestamp, where, limit, arrayUnion, arrayRemove,
@@ -7200,6 +7200,7 @@ function authMsg(e) {
 let _anonInFlight = null;
 async function ensureUser() {
   try { await Promise.race([authReady, new Promise((r) => setTimeout(r, 8000))]); } catch (e) {}
+  await setPersistence(auth, browserLocalPersistence); // Ye line add karo
   if (auth.currentUser) return auth.currentUser;
   if (!_anonInFlight) {
     _anonInFlight = (async () => {
