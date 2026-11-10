@@ -2439,6 +2439,9 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [custName, setCustName] = useState(() => localStorage.getItem("enp_cust_name") || "");
   const [custPhone, setCustPhone] = useState(() => localStorage.getItem("enp_cust_phone") || "");
   const [custAddress, setCustAddress] = useState("");
+  const [custPinCode, setCustPinCode] = useState("");
+  const [custExactAddress, setCustExactAddress] = useState("");
+  const [custExactAddress, setCustExactAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [vegOnly, setVegOnly] = useState(false);
@@ -3113,8 +3116,12 @@ const handleWaiterPinSubmitOld = () => {
     if (!navigator.geolocation) { showToast("Geolocation not supported", 'error'); return; }
     showToast("📍 Fetching location...", 'info');
     navigator.geolocation.getCurrentPosition(
-      (position) => { const { latitude, longitude } = position.coords; setCustAddress(`Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}`); showToast("✅ Location fetched!", 'success'); },
-      () => { showToast("⚠️ Unable to get location", 'error'); }
+      (position) => { 
+        const { latitude, longitude } = position.coords; 
+        setCustAddress(`Lat: ${latitude.toFixed(5)}, Lng: ${longitude.toFixed(5)}`); 
+        showToast("✅ GPS Location aagayi! Ab exact address likhein.", 'success'); 
+      },
+      () => { showToast("⚠️ Location permission block hai ya GPS off hai.", 'error'); }
     );
   };
 
@@ -3163,7 +3170,7 @@ const handleWaiterPinSubmitOld = () => {
     if (cartItems.length === 0) return;
     if (!custName.trim()) { showToast("⚠️ Enter Name", 'error'); return; }
     if (!custPhone.trim() || custPhone.length < 10) { showToast("⚠️ Enter valid Phone", 'error'); return; }
-    if (orderType === "parcel" && !custAddress.trim()) { showToast("⚠️ Enter Address", 'error'); return; }
+    if (orderType === "parcel" && (!custAddress.trim() || !custExactAddress.trim() || !custPinCode || custPinCode.length !== 6)) { showToast("⚠️ Location, Exact Address aur 6-digit Pincode zaroori hai!", 'error'); return; }
 
     setIsProcessingPayment(true);
     try {
@@ -3192,7 +3199,7 @@ const handleWaiterPinSubmitOld = () => {
 
       const order = {
         id: orderId, table, orderType,
-        customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "" },
+        customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "", exactAddress: custExactAddress, pincode: custPinCode },
         items: initialItems,
         claimedReward: claimedReward ? claimedReward.item : null,
         rewardUsedCoins: claimedReward ? claimedReward.cost : 0,
@@ -3858,9 +3865,42 @@ const handleWaiterPinSubmitOld = () => {
                   <input type="text" placeholder="Your Name *" value={custName} onChange={(e) => setCustName(e.target.value)} style={inputStyle} />
                   <input type="tel" placeholder="Phone *" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} style={inputStyle} />
                   {orderType === "parcel" && (
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <textarea placeholder="Address *" value={custAddress} onChange={(e) => setCustAddress(e.target.value)} style={{ ...inputStyle, resize: "none", flex: 1 }} rows={2} />
-                      <button onClick={handleGetLocation} style={{ background: COLORS.sage, color: "#fff", border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer" }}>📍</button>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {/* Auto GPS Box */}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input 
+                          type="text" 
+                          placeholder="📍 Click button to fetch GPS Location" 
+                          value={custAddress} 
+                          readOnly
+                          style={{ ...inputStyle, flex: 1, background: COLORS.paper2 }} 
+                        />
+                        <button 
+                          onClick={handleGetLocation} 
+                          style={{ background: COLORS.sage, color: "#fff", border: "none", borderRadius: 12, padding: "0 16px", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" }}
+                        >
+                          📍 Get Location
+                        </button>
+                      </div>
+                      
+                      {/* Exact Address Box */}
+                      <textarea 
+                        placeholder="Exact Address (House No, Building, Landmark, Area) *" 
+                        value={custExactAddress} 
+                        onChange={(e) => setCustExactAddress(e.target.value)} 
+                        style={{ ...inputStyle, resize: "none" }} 
+                        rows={2} 
+                      />
+                      
+                      {/* Pincode Box */}
+                      <input 
+                        type="text" 
+                        placeholder="Pincode (6 digits) *" 
+                        maxLength={6}
+                        value={custPinCode || ""} 
+                        onChange={(e) => setCustPinCode && setCustPinCode(e.target.value.replace(/\D/g, ""))} 
+                        style={{ ...inputStyle }} 
+                      />
                     </div>
                   )}
                 </div>
