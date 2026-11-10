@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef, useContext, createContext,
 import { db, auth } from "./firebase";
 import { assertEditable, resolveVendorId } from "./lib/guards";
 import { PAID_STATUSES, OPEN_WINDOW_MS, isOpenParcel, isOpenDineIn, isActiveOrder, paidOrders, paidRevenue, buildPaidPatch } from "./lib/orderRules";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
 import {
   collection, doc, setDoc, onSnapshot, getDoc, updateDoc, addDoc,
   query, where, runTransaction, deleteDoc, getDocs, orderBy, limit, writeBatch
@@ -945,6 +945,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
     e.preventDefault();
     setLoginError("");
     try {
+      await setPersistence(auth, browserLocalPersistence);
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
       const s = await getDoc(doc(db, "staff", cred.user.uid));
       if (!s.exists() || s.data().active === false) { await signOut(auth); setLoginError("Ye account staff ka nahi hai ya band hai"); }
