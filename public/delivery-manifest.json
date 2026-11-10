@@ -1,0 +1,15 @@
+{
+  "name": "Eat & Park Delivery",
+  "short_name": "Delivery",
+  "start_url": "/delivery",
+  "display": "standalone",
+  "background_color": "#0B111A",
+  "theme_color": "#F59E0B",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2830/2830305.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

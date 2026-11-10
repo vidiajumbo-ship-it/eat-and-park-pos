@@ -4,7 +4,7 @@
     <script src="https://upload-widget.cloudinary.com/global/all.js" async></script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="manifest" href="/manifest.json" />
+    
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
     <meta name="theme-color" content="#E25938" />
     <meta name="description" content="Eat & Park Restaurant — Order food, book tables, track orders live." />
@@ -17,7 +17,29 @@
 
     <!-- ⚠️ Cloudinary Widget — async NAHI lagana, warna window.cloudinary undefined rahega -->
     <script src="https://upload-widget.cloudinary.com/latest/global/all.js"></script>
-  </head>
+  
+    <!-- PWA Dynamic Manifest Setup -->
+    <link id="app-manifest" rel="manifest" href="/manifest.json">
+    <script>
+      (function() {
+        var path = window.location.pathname;
+        var manifestUrl = "/manifest.json";
+        
+        if (path.startsWith("/staff")) {
+          manifestUrl = "/staff-manifest.json";
+          document.title = "Eat & Park Staff";
+        } else if (path.startsWith("/delivery")) {
+          manifestUrl = "/delivery-manifest.json";
+          document.title = "Eat & Park Delivery";
+        } else {
+          document.title = "Eat & Park";
+        }
+        
+        document.getElementById("app-manifest").setAttribute("href", manifestUrl);
+      })();
+    </script>
+  
+</head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

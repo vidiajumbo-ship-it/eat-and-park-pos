@@ -1,0 +1,15 @@
+{
+  "name": "Eat & Park Staff",
+  "short_name": "Staff POS",
+  "start_url": "/staff",
+  "display": "standalone",
+  "background_color": "#161F2F",
+  "theme_color": "#FF5A1F",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3081/3081843.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
