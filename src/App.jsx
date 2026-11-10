@@ -7093,10 +7093,18 @@ const ProgressRing = memo(({ progress, size = 60, strokeWidth = 3 }) => {
   );
 });
 
-const OrderTimer = memo(({ createdAt, estimatedTime }) => {
+const OrderTimer = memo(({ createdAt, servedAt, status, estimatedTime }) => {
   const [elapsed, setElapsed] = useState(0);
-  useEffect(() => { const t = setInterval(() => setElapsed(Math.floor((Date.now() - createdAt) / 1000)), 1000); return () => clearInterval(t); }, [createdAt]);
-  const minutes = Math.floor(elapsed / 60); const seconds = elapsed % 60; const isOvertime = elapsed > (estimatedTime * 60);
+  useEffect(() => {
+    if (status === 'served' || status === 'delivered' || status === 'completed') {
+      if (servedAt) setElapsed(Math.floor((servedAt - createdAt) / 1000));
+      return;
+    }
+    if (status === 'cancelled') return;
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - createdAt) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [createdAt, servedAt, status]);
+  const minutes = Math.floor(elapsed / 60); const seconds = elapsed % 60; const isOvertime = elapsed > (estimatedTime * 60) && status !== 'served' && status !== 'delivered' && status !== 'completed';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: isOvertime ? 'rgba(239, 68, 68, 0.1)' : COLORS.sageLight, borderRadius: 10, borderLeft: `3px solid ${isOvertime ? COLORS.error : COLORS.sage}` }}>
       <span style={{ fontSize: 11, fontWeight: 800, color: isOvertime ? COLORS.error : COLORS.sageDark }}>⏱️ {minutes}:{seconds.toString().padStart(2, '0')}</span>
