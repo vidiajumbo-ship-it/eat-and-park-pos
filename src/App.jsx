@@ -1,4 +1,5 @@
 import { tryRecover } from "./recover";
+import DeliveryApp from "./DeliveryApp";
 
 /* eslint-disable react-hooks/exhaustive-deps, no-unused-vars */
 
@@ -7091,6 +7092,10 @@ async function ensureUser() {
 }
 
 export default function App() {
+    // 👇 Check karo ki user delivery panel par aaya hai ya nahi
+  if (window.location.pathname === "/delivery") {
+    return <DeliveryApp />;
+  }
 
   const [role, setRole] = useState("customer");
   const [authUser, setAuthUser] = useState(null);
