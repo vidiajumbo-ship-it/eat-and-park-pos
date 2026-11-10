@@ -5235,9 +5235,13 @@ ${billNotes ? `<div style="font-size:10px;margin-top:8px;border-top:1px dashed #
                       </div>
 
                       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                        <button onClick={(e) => { e.stopPropagation(); advanceStatus(o.id, status); }} style={{ flex: 1, padding: "10px 8px", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: "pointer", background: status === "ready" ? COLORS.sage : (status === "preparing" ? COLORS.copper : COLORS.ink), color: "#fff" }}>
-                          {status === "new" ? "👨‍🍳 Start Cooking" : status === "preparing" ? "✅ Mark Ready" : "🍽️ Mark Served"}
-                        </button>
+                        {!(o.orderType === "parcel" && o.status === "ready") ? (
+                          <button onClick={(e) => { e.stopPropagation(); advanceStatus(o.id, status); }} style={{ flex: 1, padding: "10px 8px", border: "none", borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: "pointer", background: status === "ready" ? COLORS.sage : (status === "preparing" ? COLORS.copper : COLORS.ink), color: "#fff" }}>
+                            {status === "new" ? "👨‍🍳 Start Cooking" : status === "preparing" ? "✅ Mark Ready" : "🍽️ Mark Served"}
+                          </button>
+                        ) : (
+                          <div style={{ flex: 1, padding: "10px 8px", borderRadius: 12, fontWeight: 800, fontSize: 13, border: "1px dashed " + COLORS.line, color: COLORS.textLight, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center" }}>Rider Pending</div>
+                        )}
                         <button onClick={(e) => { e.stopPropagation(); printKotSlip(o); }} title="Print KOT (Kitchen)" style={{ background: isSelected ? 'rgba(255,255,255,0.25)' : COLORS.paper2, color: isSelected ? '#fff' : COLORS.ink, border: 'none', width: 44, height: 38, borderRadius: 12, fontSize: 18, cursor: 'pointer' }}>🍳</button>
                         <button onClick={(e) => { e.stopPropagation(); openBillEditor(o); }} title="Edit & Print Bill" style={{ background: COLORS.sage, color: '#fff', border: 'none', width: 52, height: 48, borderRadius: 12, fontSize: 18, cursor: 'pointer', fontWeight: 800 }}>🧾</button>
                         <button onClick={(e) => { e.stopPropagation(); if (window.confirm(`Cancel order #${o.id.slice(1, 5)}?`)) { cancelOrderByStaff && cancelOrderByStaff(o.id); } }} style={{ background: 'transparent', color: isSelected ? '#fff' : COLORS.error, border: `1.5px solid ${isSelected ? 'rgba(255,255,255,0.5)' : COLORS.error}`, width: 48, height: 48, borderRadius: 12, fontSize: 18, cursor: 'pointer', fontWeight: 800 }}>✕</button>
@@ -7685,10 +7689,14 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
   };
 
   const advanceStatus = async (orderId, currentStatus) => {
+    const order = orders.find(o => o.id === orderId);
+    if (order && order.orderType === "parcel" && currentStatus === "ready") {
+      alert("Parcel order delivery boy handle karega. Aap ise 'Delivered' mark nahi kar sakte.");
+      return;
+    }
     const idx = STATUS_FLOW.indexOf(currentStatus);
     const nextStatus = STATUS_FLOW[Math.min(idx + 1, STATUS_FLOW.length - 1)];
     if (nextStatus === currentStatus) return;
-    const order = orders.find(o => o.id === orderId);
     const updateData = { status: nextStatus, ...(nextStatus === "served" ? { servedAt: Date.now() } : {}) };
     if (order?.kots?.length) {
       updateData.kots = order.kots.map(k => (k.status === currentStatus ? { ...k, status: nextStatus } : k));

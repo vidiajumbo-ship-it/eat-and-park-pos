@@ -1443,6 +1443,10 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
     : rangeAll.filter(o => o.status === filter);
 
   const advanceOrder = async (order) => {
+    if (order.orderType === "parcel" && order.status === "ready") {
+      toast("Parcel order delivery boy handle karega", "warning");
+      return;
+    }
     const idx = STATUS_FLOW.indexOf(order.status);
     if (idx < 0 || idx >= STATUS_FLOW.length - 1) return;
     const next = STATUS_FLOW[idx + 1];
@@ -1591,7 +1595,13 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
                 {isCancelled && isOwner && (
                   <button onClick={() => restoreOrder(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit", gridColumn: "span 2" }}>Restore Order</button>
                 )}
-                {!isCancelled && o.status !== "served" && <button onClick={() => advanceOrder(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: stColor, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{o.status === "new" ? "Start" : o.status === "preparing" ? "Ready" : "Serve"}</button>}
+                {!isCancelled && o.status !== "served" && (
+                  o.orderType === "parcel" && o.status === "ready" ? (
+                    <div style={{ flex: 1, padding: "9px", border: "1px dashed " + C.gray, borderRadius: 8, textAlign: "center", fontWeight: 800, fontSize: 12, color: C.gray }}>Rider Pending</div>
+                  ) : (
+                    <button onClick={() => advanceOrder(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: stColor, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{o.status === "new" ? "Start" : o.status === "preparing" ? "Ready" : "Serve"}</button>
+                  )
+                )}
                 {!isCancelled && !o.paid && <button onClick={() => setPayFor(o)} style={{ padding: "9px", border: "1.5px solid " + C.green, borderRadius: 8, background: "transparent", color: C.green, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Paid</button>}
                 {!isCancelled && o.paid && isOwner && <button onClick={() => undoPaid(o)} style={{ padding: "9px", border: "1.5px solid " + C.amber, borderRadius: 8, background: "transparent", color: C.amber, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Undo Paid</button>}
                 {!isCancelled && !o.paid && <button onClick={() => onAddMore && onAddMore(o)} style={{ padding: "9px", border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ Add Items</button>}
@@ -1631,6 +1641,10 @@ function KOTView({ C, isMobile, orders, setOrders, readOnly = false }) {
   useEffect(() => { const iv = setInterval(() => setTick(x => x + 1), 15000); return () => clearInterval(iv); }, []);
   const kotOrders = orders.filter(o => (o.status === "new" || o.status === "preparing") && Date.now() - (o.createdAt || 0) < OPEN_WINDOW_MS);
   const advanceOrder = async (order) => {
+    if (order.orderType === "parcel" && order.status === "ready") {
+      toast("Parcel order delivery boy handle karega", "warning");
+      return;
+    }
     const idx = STATUS_FLOW.indexOf(order.status);
     if (idx < 0 || idx >= STATUS_FLOW.length - 1) return;
     const next = STATUS_FLOW[idx + 1];
