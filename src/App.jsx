@@ -2396,6 +2396,15 @@ function WaiterMode({ orders, menu, categories, setMenuState, placeOrder, advanc
 // 16. CUSTOMER VIEW
 // ==
 
+// 🛍️ Parcel timing: roz 11:00 AM - 10:00 PM (India time)
+const PARCEL_OPEN = 11, PARCEL_CLOSE = 22;
+const parcelOpenNow = () => {
+  const ist = new Date(Date.now() + (new Date().getTimezoneOffset() + 330) * 60000);
+  const h = ist.getHours() + ist.getMinutes() / 60;
+  return h >= PARCEL_OPEN && h < PARCEL_CLOSE;
+};
+const PARCEL_MSG = "🛍️ Parcel order roz subah 11 baje se raat 10 baje tak hi liya jata hai. Abhi Dine-in order kar sakte ho.";
+
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState, setLoyaltyRules, advanceStatus }) {
   const [category, setCategory] = useState(categories[0] || "Thali");
   /* ENP-CAT-FIRST */ const [catPickerOpen, setCatPickerOpen] = useState(true);
@@ -2510,7 +2519,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
       try { localStorage.setItem("enp_dob_done_" + p, "1"); } catch (e) {}
       setShowDobModal(false);
       showToast("🎂 Thanks! Birthday pe special offer milega", "success");
-    } catch (e) { setDobErr("Save nahi hua, dobara try karo"); }
+    } catch (e) { console.error("DOB save:", e); setDobErr("Save nahi hua: " + (e.code || e.message)); }
     finally { setDobSaving(false); }
   };
   const skipDob = () => {
@@ -3129,6 +3138,7 @@ const handleWaiterPinSubmitOld = () => {
   const handlePlaceOrder = useCallback(async () => {
     if (isProcessingPayment) return;
     if (isScheduled && (!scheduleDate || !scheduleTime)) { showToast("⚠️ Schedule ki date aur time dono daalo", 'error'); return; }
+    if (orderType === "parcel" && !parcelOpenNow()) { showToast(PARCEL_MSG, 'error'); return; }
     const _gone = cartItems.filter(([id]) => !menu.some((m) => m.id === id && m.available));
     if (_gone.length > 0) { showToast("⚠️ " + _gone.map(([id]) => (menu.find((m) => m.id === id) || {}).name || "Item").join(", ") + " ab available nahi hai — cart se hata do", 'error'); return; }
     if (cartItems.length === 0) return;
@@ -3795,7 +3805,7 @@ const handleWaiterPinSubmitOld = () => {
 
                 <div style={{ display: "flex", gap: 12, marginTop: 20, marginBottom: 16 }}>
                   <button onClick={() => setOrderType("dine_in")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "dine_in" ? COLORS.copper : COLORS.line}`, background: orderType === "dine_in" ? COLORS.copper : "#fff", color: orderType === "dine_in" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer" }}>🍽️ Dine-in</button>
-                  <button onClick={() => setOrderType("parcel")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "parcel" ? COLORS.copper : COLORS.line}`, background: orderType === "parcel" ? COLORS.copper : "#fff", color: orderType === "parcel" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer" }}>🛍️ Parcel</button>
+                  <button onClick={() => { if (!parcelOpenNow()) { showToast(PARCEL_MSG, 'warning'); return; } setOrderType("parcel"); }} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "parcel" ? COLORS.copper : COLORS.line}`, background: orderType === "parcel" ? COLORS.copper : "#fff", color: orderType === "parcel" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer" }}>🛍️ Parcel</button>
                 </div>
 
                 <div style={{ marginBottom: 16 }}>
