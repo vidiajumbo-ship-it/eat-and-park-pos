@@ -4010,48 +4010,91 @@ const handleWaiterPinSubmitOld = () => {
 
             {activeModal === 'track' && (
   <>
-    <ModalHeader title="My Orders" onClose={() => setActiveModal(null)} />
-    {myOrders.length === 0 ? (
-      <div style={{ textAlign: 'center', padding: 50, color: COLORS.textLight }}>No orders yet</div>
+    <ModalHeader title="Track Active Orders" onClose={() => setActiveModal(null)} />
+    {myActiveOrders.length === 0 ? (
+      <div style={{ textAlign: 'center', padding: "50px 20px", color: COLORS.textLight }}>
+        <div style={{ fontSize: 40, marginBottom: 10 }}>😴</div>
+        <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.ink, marginBottom: 6 }}>Koi active order nahi hai</div>
+        <div style={{ fontSize: 13 }}>Aapke purane orders "Order History" me dikhenge.</div>
+      </div>
     ) : (
-      [...myOrders].reverse().map(o => {
-        const estimatedTime = getEstimatedTime(o.items, menu);
-        const isCancelled = o.status === 'cancelled';
-        const isServed = o.status === 'served' || o.status === 'delivered' || o.status === 'completed';
-
-        let statusText = "Order Received";
-        let statusColor = COLORS.copper;
-        if (o.status === 'preparing') { statusText = "Cooking 👨‍🍳"; }
-        else if (o.status === 'ready') { statusText = "Ready for Pickup ✅"; }
-        else if (o.status === 'out_for_delivery') { statusText = "Out for Delivery 🛵"; statusColor = COLORS.info; }
-        else if (isServed) { statusText = "Delivered 🎉"; statusColor = COLORS.success; }
-        else if (isCancelled) { statusText = "Cancelled ❌"; statusColor = COLORS.error; }
+      myActiveOrders.map(o => {
+        const steps = [
+          { id: 'new', label: 'Order Received', icon: '📝', desc: 'Restaurant ne order accept kar liya hai' },
+          { id: 'preparing', label: 'Cooking', icon: '👨‍🍳', desc: 'Aapka khana ban raha hai' },
+          { id: 'ready', label: 'Ready', icon: '✅', desc: 'Khana taiyar hai, pickup ka wait hai' },
+          { id: 'out_for_delivery', label: 'Out for Delivery', icon: '🛵', desc: 'Rider aapke order ke saath nikal chuka hai' },
+          { id: 'served', label: 'Delivered', icon: '🎉', desc: 'Order deliver ho gaya!' }
+        ];
+        
+        const currentIndex = steps.findIndex(s => s.id === o.status);
+        const activeIndex = currentIndex === -1 ? 0 : currentIndex;
 
         return (
-          <div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, marginBottom: 16, opacity: (isServed || isCancelled) ? 0.7 : 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>Order #{o.id.slice(1, 5).toUpperCase()}</div>
-              {o.kots?.length > 1 && <KotBadge kots={o.kots} />}
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: statusColor, textTransform: 'uppercase', marginBottom: 10 }}>{statusText}</div>
-
-            <OrderTimer createdAt={o.createdAt} servedAt={o.servedAt} status={o.status} estimatedTime={estimatedTime} />
-
-            <div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}>
-              <ProgressRing progress={getOrderProgress(o.status)} size={80} />
-            </div>
-
-            <div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 12 }}>
-              {o.items.map(i => `${i.qty}x ${i.name}`).join(", ")}
+          <div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, marginBottom: 20 }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.ink }}>Order #{o.id.slice(1, 5).toUpperCase()}</div>
+                <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>{new Date(o.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+              <div style={{ background: COLORS.paper, padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 700, color: COLORS.copper }}>
+                {inr(getOrderTotal(o))}
+              </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back</button>
-              {!isServed && !isCancelled && (
-                <button onClick={() => setRunningOrderId(o.id)} style={{ padding: "13px 20px", background: COLORS.info, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>➕ Running</button>
-              )}
+            {/* TIMELINE */}
+            <div style={{ margin: "20px 0", paddingLeft: 10 }}>
+              {steps.map((step, idx) => {
+                const isDone = idx < activeIndex;
+                const isCurrent = idx === activeIndex;
+                const isPending = idx > activeIndex;
+                
+                let dotColor = "#E8E6DC";
+                let dotIcon = step.icon;
+                let textColor = "#8A8375";
+
+                if (isDone) {
+                  dotColor = COLORS.sage;
+                  textColor = COLORS.ink;
+                } else if (isCurrent) {
+                  dotColor = COLORS.copper;
+                  textColor = COLORS.copper;
+                }
+
+                return (
+                  <div key={step.id} style={{ display: "flex", gap: 15, position: "relative", paddingBottom: 25 }}>
+                    {/* Connecting Line */}
+                    {idx !== steps.length - 1 && (
+                      <div style={{ position: "absolute", left: 14, top: 30, bottom: 0, width: 2, background: isDone ? COLORS.sage : "#E8E6DC", zIndex: 0 }} />
+                    )}
+                    
+                    {/* Dot */}
+                    <div style={{ 
+                      width: 30, height: 30, borderRadius: 15, 
+                      background: isDone ? COLORS.sageLight : isCurrent ? COLORS.copperLight : "#fff",
+                      border: `2px solid ${dotColor}`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      zIndex: 1, fontSize: 14,
+                      animation: isCurrent ? "pulse 2s infinite" : "none"
+                    }}>
+                      {isDone ? "✓" : step.icon}
+                    </div>
+
+                    {/* Text */}
+                    <div style={{ paddingTop: 2 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: textColor, lineHeight: 1.2 }}>{step.label}</div>
+                      {isCurrent && <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 4, lineHeight: 1.3 }}>{step.desc}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ borderTop: `1px dashed ${COLORS.line}`, paddingTop: 15, display: 'flex', gap: 10 }}>
+              <button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 12, padding: "10px", fontWeight: 800, cursor: 'pointer', fontSize: 13 }}>Close</button>
               {o.status === "new" && (
-                <button onClick={() => cancelOrder(o.id)} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.error, border: `2px solid ${COLORS.error}`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>❌ Cancel</button>
+                <button onClick={() => cancelOrder(o.id)} style={{ flex: 1, background: 'transparent', color: COLORS.error, border: `2px solid ${COLORS.error}`, borderRadius: 12, padding: "10px", fontWeight: 800, cursor: 'pointer', fontSize: 13 }}>Cancel Order</button>
               )}
             </div>
           </div>
@@ -4060,6 +4103,7 @@ const handleWaiterPinSubmitOld = () => {
     )}
   </>
 )}
+
 {activeModal === 'chat' && (<><ModalHeader title="💬 Chat" onClose={() => setActiveModal(null)} /><ChatBox orderId={activeOrderIdForChat || 'general'} customerId={custPhone || 'customer'} /></>)}
           </div>
         </div>
