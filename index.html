@@ -18,8 +18,11 @@
     <!-- ⚠️ Cloudinary Widget — async NAHI lagana, warna window.cloudinary undefined rahega -->
     <script src="https://upload-widget.cloudinary.com/latest/global/all.js"></script>
   
-    <!-- PWA Dynamic Manifest Setup -->
     
+  
+
+    <!-- PWA Dynamic Manifest Setup -->
+    <link id="app-manifest" rel="manifest" href="/manifest.json">
     <script>
       (function() {
         var path = window.location.pathname;
@@ -43,7 +46,7 @@
     <!-- PWA Dynamic Manifest Setup -->
     <link id="app-manifest" rel="manifest" href="/manifest.json">
     <script>
-      (function() {
+      window.addEventListener('DOMContentLoaded', function() {
         var path = window.location.pathname;
         var manifestUrl = "/manifest.json";
         
@@ -57,8 +60,11 @@
           document.title = "Eat & Park";
         }
         
-        document.getElementById("app-manifest").setAttribute("href", manifestUrl);
-      })();
+        var link = document.getElementById("app-manifest");
+        if (link) {
+          link.setAttribute("href", manifestUrl);
+        }
+      });
     </script>
   
 </head>
