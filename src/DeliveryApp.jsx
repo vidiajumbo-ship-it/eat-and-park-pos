@@ -41,19 +41,17 @@ export default function DeliveryApp() {
     if (!user) return;
     // Sirf wo orders jo Parcel hain aur ready hain ya out for delivery hain
     const q = query(
-      collection(db, "orders"),
-      where("orderType", "==", "parcel")
+      collection(db, "orders")
     );
     
     const unsub = onSnapshot(q, (snap) => {
       const allOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       
-      // Filter: Sirf wo orders jo delivery ke liye active hain ya paisa baaki hai
+      // Filter: Sirf Parcel orders jo cancel nahi hue aur deliver nahi hue
       const activeOrders = allOrders.filter(o => 
-        (o.status !== "cancelled") && 
-        (
-          ["new", "preparing", "ready", "out_for_delivery", "served"].includes(o.status) 
-        )
+        o.orderType === "parcel" && 
+        o.status !== "cancelled" && 
+        o.status !== "served"
       );
 
       // Sort by time (purane pehle)
