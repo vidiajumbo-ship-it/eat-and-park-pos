@@ -135,7 +135,7 @@ const COLORS = {
 const RESTAURANT = {
   name: "Eat & Park Restaurant", full: "Eat & Park Restaurant", tagline: "A Premium Family Restaurant",
   address: "Girja More, Ara – Buxar Main Road, Pakri, Ara",
-  phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "heckeyhr@ybl", gstin: import.meta.env.VITE_GSTIN || ""
+  phones: ["7303267750", "8271918062"], whatsapp: "917303267750", upiId: "7303267750-5@ybl", gstin: import.meta.env.VITE_GSTIN || ""
 };
 
 const GOOGLE_PLACE_ID = "ChIJc8jv-j9fjTkRYFQLM7KK1aA";
@@ -2405,6 +2405,21 @@ const parcelOpenNow = () => {
 };
 const PARCEL_MSG = "🛍️ Parcel order roz subah 11 baje se raat 10 baje tak hi liya jata hai. Abhi Dine-in order kar sakte ho.";
 
+const openUpiApp = (amount, ref) => {
+  const am = Math.max(0, Math.round((Number(amount) || 0) * 100) / 100);
+  const note = "Order " + String(ref || "").replace(/^O/i, "").slice(0, 6).toUpperCase();
+  const url = "upi://pay?pa=" + encodeURIComponent(RESTAURANT.upiId) + "&pn=" + encodeURIComponent(RESTAURANT.name) + "&am=" + am + "&cu=INR&tn=" + encodeURIComponent(note);
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+  if (!isMobile) {
+    const qr = "https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=" + encodeURIComponent(url);
+    const w = window.open("", "_blank");
+    if (w) { w.document.write('<h3>Scan karke pay karo</h3><img src="' + qr + '"/>'); w.document.close(); }
+    else alert("UPI ID: " + RESTAURANT.upiId + " Amount: Rs " + am);
+    return;
+  }
+  window.location.href = url;
+};
+
 function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList, table, setTable, requestPinPrompt, settings, isDark, setIsDark, requestWaiter, loyaltyRules, loyaltyUsers, coinHistory, setOrdersState, categories, flashSaleItems, comboOffers, setMenuState, setLoyaltyRules, advanceStatus }) {
   const [category, setCategory] = useState(categories[0] || "Thali");
   /* ENP-CAT-FIRST */ const [catPickerOpen, setCatPickerOpen] = useState(true);
@@ -3010,7 +3025,11 @@ const handleWaiterPinSubmitOld = () => {
     setIsLoggedIn(true); setOtpStep("phone");
     showToast("✅ Phone verify ho gaya", 'success');
     try {
-      const _patch = { phone: p, address: custAddress || "", uid: auth.currentUser.uid, lastLogin: Date.now() };
+      const _cref = doc(db, "customers", p);
+      const _cs = await getDoc(_cref);
+      const _old = _cs.exists() ? _cs.data() : null;
+      const _patch = { phone: p, address: custAddress || "", uid: auth.currentUser.uid, lastLogin: Date.now(), loginCount: (Number(_old && _old.loginCount) || 0) + 1 };
+      if (!_old) _patch.createdAt = Date.now();
       const _nm = String(custName || "").trim();
       if (_nm) _patch.name = _nm;
       await setDoc(doc(db, "customers", p), _patch, { merge: true });
@@ -3153,13 +3172,8 @@ const handleWaiterPinSubmitOld = () => {
       payIdRef.current = null;
       let paymentInfo = { paid: false, status: "pending", paymentId: null };
 
-      if (paymentMethod === "razorpay") {
-        const result = await processRazorpayPayment(finalTotal, orderId, custName, custPhone);
-        if (!result) { showToast("❌ Payment cancel/fail hua. Order place nahi hua.", 'error'); return; }
-        paymentInfo = { paid: true, status: "paid_unverified", paymentId: result.razorpay_payment_id || null };
-        payIdRef.current = paymentInfo.paymentId;
-      } else if (paymentMethod === "phonepe" || paymentMethod === "gpay") {
-        showToast("📱 UPI payment counter par karein — staff paid mark karega", 'info');
+      if (paymentMethod === "upi") {
+        showToast("📱 UPI app khul raha hai — payment ke baad order confirm karein", 'info');
       }
 
       const itemStrings = cartItems.map(([id, entry]) => {
@@ -3220,6 +3234,7 @@ const handleWaiterPinSubmitOld = () => {
         await updateDoc(doc(db, "customers", custPhone), _cPatch);
       } catch (e) { }
 
+      if (paymentMethod === "upi") setTimeout(() => openUpiApp(finalTotal, orderId), 700);
       consumeFlashStock(initialItems);
 
       const claimedText = claimedReward ? `\n🎁 *Free Reward:* ${claimedReward.item}` : "";
@@ -3885,9 +3900,7 @@ const handleWaiterPinSubmitOld = () => {
                   <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.textLight, textTransform: 'uppercase', marginBottom: 10 }}>Payment</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
                     <button onClick={() => setPaymentMethod('cash')} style={{ padding: '10px', borderRadius: 10, border: `2px solid ${paymentMethod === 'cash' ? COLORS.copper : COLORS.line}`, background: paymentMethod === 'cash' ? COLORS.copperLight : 'transparent', fontWeight: 700, cursor: 'pointer' }}>💵 Cash</button>
-                    <button onClick={() => setPaymentMethod('razorpay')} style={{ padding: '10px', borderRadius: 10, border: `2px solid ${paymentMethod === 'razorpay' ? COLORS.copper : COLORS.line}`, background: paymentMethod === 'razorpay' ? COLORS.copperLight : 'transparent', fontWeight: 700, cursor: 'pointer' }}>💳 Razorpay</button>
-                    <button onClick={() => setPaymentMethod('phonepe')} style={{ padding: '10px', borderRadius: 10, border: `2px solid ${paymentMethod === 'phonepe' ? COLORS.copper : COLORS.line}`, background: paymentMethod === 'phonepe' ? COLORS.copperLight : 'transparent', fontWeight: 700, cursor: 'pointer' }}>📱 PhonePe</button>
-                    <button onClick={() => setPaymentMethod('gpay')} style={{ padding: '10px', borderRadius: 10, border: `2px solid ${paymentMethod === 'gpay' ? COLORS.copper : COLORS.line}`, background: paymentMethod === 'gpay' ? COLORS.copperLight : 'transparent', fontWeight: 700, cursor: 'pointer' }}>🟢 GPay</button>
+                    <button onClick={() => setPaymentMethod('upi')} style={{ padding: '10px', borderRadius: 10, border: '2px solid ' + (paymentMethod === 'upi' ? COLORS.copper : COLORS.line), background: paymentMethod === 'upi' ? COLORS.copperLight : 'transparent', fontWeight: 700, cursor: 'pointer' }}>📱 UPI (PhonePe / GPay)</button>
                   </div>
                 </div>
 

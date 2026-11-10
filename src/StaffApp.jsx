@@ -138,7 +138,7 @@ const RESTAURANT = {
   address: "Girja More, Ara - Buxar Main Road, Pakri, Ara",
   phones: ["7303267750", "8271918062"],
   gstin: "",
-  upi: "heckeyhr@ybl",
+  upi: "7303267750-5@ybl",
 };
 
 const FRESH_MS = 30 * 60 * 1000;
@@ -1831,6 +1831,19 @@ function printHtml(title, bodyHtml, opts = {}) {
 }
 
 const upiUri = (total, billNo) => `upi://pay?pa=${RESTAURANT.upi}&pn=${encodeURIComponent(RESTAURANT.name)}&am=${total}&cu=INR&tn=${encodeURIComponent("Bill " + billNo)}`;
+
+const openUpiApp = (total, billNo) => {
+  const url = upiUri(total, billNo);
+  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+  if (!isMobile) {
+    const qr = "https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=" + encodeURIComponent(url);
+    const w = window.open("", "_blank");
+    if (w) { w.document.write('<h2>Scan & Pay Rs ' + total + '</h2><img src="' + qr + '"/>'); w.document.close(); }
+    else alert("UPI ID: " + RESTAURANT.upi);
+    return;
+  }
+  window.location.href = url;
+};
 
 function printBill(order) {
   try {
@@ -4841,11 +4854,13 @@ function CustomersView({ C, isMobile, isOwner, waiterName, orders = [], loyaltyU
     } catch (e) { toast(e.message, "error"); }
   };
 
-  const header = ["Name", "Phone", "DOB", "Address", "Paid Orders", "Paid Spent", "Coins", "Last Login"];
+  const header = ["Name", "Phone", "DOB", "Address", "Paid Orders", "Paid Spent", "Coins", "Last Login", "First Login", "Login Count"];
   const dataRows = (arr) => arr.map((c) => [
     String(c.name || ""), String(c.phone || ""), String(c.dob || ""), String(c.address || ""),
     Number(c.paidOrders) || 0, Number(c.paidSpent) || 0, Number(c.coins) || 0,
     c.lastLogin ? new Date(Number(c.lastLogin)).toLocaleString("en-IN") : "",
+    c.createdAt ? new Date(Number(c.createdAt)).toLocaleString("en-IN") : "",
+    Number(c.loginCount) || 0,
   ]);
   const downloadExcel = () => {
     if (!shown.length) { toast("Download ke liye koi customer nahi", "warning"); return; }
@@ -4947,6 +4962,8 @@ function CustomersView({ C, isMobile, isOwner, waiterName, orders = [], loyaltyU
                 <span>Orders {Number(c.paidOrders) || 0} · {inr(c.paidSpent || 0)}</span>
                 <span style={{ background: "rgba(245,158,11,0.15)", color: "#F59E0B", padding: "2px 8px", borderRadius: 10, fontSize: 10, fontWeight: 800 }}>🪙 {Number(c.coins) || 0} coins</span>
                 {c.lastLogin && <span>· login {new Date(Number(c.lastLogin)).toLocaleDateString("en-IN")}</span>}
+                {c.createdAt && <span>· pehli baar {new Date(Number(c.createdAt)).toLocaleDateString("en-IN")}</span>}
+                {Number(c.loginCount) > 0 && <span>· {c.loginCount} baar login</span>}
                 {wished && <span style={{ color: C.green, fontWeight: 800 }}>· ✅ Wish bheji</span>}
               </div>
               <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
