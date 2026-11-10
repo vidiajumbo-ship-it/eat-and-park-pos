@@ -4028,7 +4028,7 @@ const handleWaiterPinSubmitOld = () => {
         else if (isCancelled) { statusText = "Cancelled ❌"; statusColor = COLORS.error; }
 
         return (
-          <div key={o.id} style={{ background: '#fff', border: \`1px solid \${COLORS.line}\`, borderRadius: 16, padding: 20, marginBottom: 16, opacity: (isServed || isCancelled) ? 0.7 : 1 }}>
+          <div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, marginBottom: 16, opacity: (isServed || isCancelled) ? 0.7 : 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
               <div style={{ fontSize: 20, fontWeight: 700 }}>Order #{o.id.slice(1, 5).toUpperCase()}</div>
               {o.kots?.length > 1 && <KotBadge kots={o.kots} />}
@@ -4042,16 +4042,16 @@ const handleWaiterPinSubmitOld = () => {
             </div>
 
             <div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 12 }}>
-              {o.items.map(i => \`\${i.qty}x \${i.name}\`).join(", ")}
+              {o.items.map(i => `${i.qty}x ${i.name}`).join(", ")}
             </div>
 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: \`2px solid \${COLORS.copper}\`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back</button>
+              <button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back</button>
               {!isServed && !isCancelled && (
                 <button onClick={() => setRunningOrderId(o.id)} style={{ padding: "13px 20px", background: COLORS.info, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>➕ Running</button>
               )}
               {o.status === "new" && (
-                <button onClick={() => cancelOrder(o.id)} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.error, border: \`2px solid \${COLORS.error}\`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>❌ Cancel</button>
+                <button onClick={() => cancelOrder(o.id)} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.error, border: `2px solid ${COLORS.error}`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>❌ Cancel</button>
               )}
             </div>
           </div>
