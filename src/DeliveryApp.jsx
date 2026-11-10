@@ -16,6 +16,10 @@ const timeAgo = (ts) => {
 
 const formatDate = (ts) => new Date(ts).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
+
+const alertAudio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
+alertAudio.volume = 1.0;
+
 export default function DeliveryApp() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -28,8 +32,30 @@ export default function DeliveryApp() {
   
   const [page, setPage] = useState("orders"); // orders | dashboard | history
   const [menuOpen, setMenuOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState(null);
   
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const prevOrdersRef = useRef([]);
+  const isFirstLoad = useRef(true);
+  
+  
+  // Unlock audio on first user interaction
+  useEffect(() => {
+    const unlock = () => {
+      alertAudio.play().then(() => {
+        alertAudio.pause();
+        alertAudio.currentTime = 0;
+      }).catch(() => {});
+      document.removeEventListener("click", unlock);
+      document.removeEventListener("touchstart", unlock);
+    };
+    document.addEventListener("click", unlock);
+    document.addEventListener("touchstart", unlock);
+    return () => {
+      document.removeEventListener("click", unlock);
+      document.removeEventListener("touchstart", unlock);
+    };
+  }, []);
+
   // Auth Check
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
@@ -67,6 +93,22 @@ export default function DeliveryApp() {
       const active = validOrders
         .filter(o => o.status !== "served")
         .sort((a, b) => b.createdAt - a.createdAt);
+      
+      // 🔔 Notification Alert Logic
+      if (!isFirstLoad.current) {
+        const newOrders = active.filter(o => !prevOrdersRef.current.includes(o.id));
+        if (newOrders.length > 0) {
+          try {
+            alertAudio.currentTime = 0;
+            alertAudio.play().catch(e => console.log("Audio blocked", e));
+            if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
+          } catch (e) {}
+        }
+      }
+      
+      prevOrdersRef.current = active.map(o => o.id);
+      isFirstLoad.current = false;
+      
       setActiveOrders(active);
 
       const hist = validOrders
