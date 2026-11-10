@@ -1279,7 +1279,7 @@ function ParcelView({ C, isMobile, orders, onNew, onBill, onAdd }) {
                 <span style={{ background: stBg, color: stColor, padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 800 }}>{st.label}</span>
               </div>
               <div style={{ fontSize: 11, color: C.gray, marginBottom: 8, fontWeight: 700 }}>
-                {timeAgo(o.createdAt)} ago{cname ? " - " + cname : ""}{cphone ? " - " + cphone : ""}{o.waiter ? " - " + o.waiter : ""}
+                {timeAgo(o.createdAt)} ago {cname ? " · 👤 " + cname : ""}{cphone ? " · 📞 " + cphone : ""}{o.waiter ? " · 🧑‍🍳 " + o.waiter : ""}
               </div>
               <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.6, marginBottom: 8 }}>
                 {(o.items || []).map((it, i) => (
