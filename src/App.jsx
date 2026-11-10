@@ -2606,7 +2606,6 @@ const loyaltyDiscount = activeUser && appliedDiscount === 0 ? Math.round(loyalty
 
 // Final Total (isme vipDiscount minus ho raha hai)
 const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDiscount - vipDiscount) + deliveryFee;
-const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDiscount - vipDiscount) + deliveryFee;
 const newEarnedCoins = Math.floor(finalTotal / (Number(loyaltyRules?.rate) || 10));
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served" && o.status !== "cancelled");
   const [pastOrders, setPastOrders] = useState([]);
