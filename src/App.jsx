@@ -2583,8 +2583,8 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   const deliveryFee = orderType === "parcel" ? 40 : 0;
   useEffect(() => { if (appliedDiscount > 0 && subtotal < couponMin) setAppliedDiscount(0); }, [appliedDiscount, couponMin, subtotal]);
   const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
-  const isVip = activeUser?.isVip === true;
-const vipDiscount = isVip ? Math.round(subtotal * 0.20) : 0; // 20% VIP Discount
+
+
   const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
   const [myLoyalty, setMyLoyalty] = useState(null);
   useEffect(() => {
