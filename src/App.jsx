@@ -2583,6 +2583,8 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   const deliveryFee = orderType === "parcel" ? 40 : 0;
   useEffect(() => { if (appliedDiscount > 0 && subtotal < couponMin) setAppliedDiscount(0); }, [appliedDiscount, couponMin, subtotal]);
   const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
+  const isVip = activeUser?.isVip === true;
+const vipDiscount = isVip ? Math.round(subtotal * 0.20) : 0; // 20% VIP Discount
   const cartTotal = Math.max(0, subtotal - discountAmount) + deliveryFee;
   const [myLoyalty, setMyLoyalty] = useState(null);
   useEffect(() => {
@@ -2597,7 +2599,7 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   const currentCoins = activeUser ? activeUser.coins : 0;
   const loyaltyTier = getLoyaltyTier(currentCoins);
   const loyaltyDiscount = activeUser && appliedDiscount === 0 ? Math.round(loyaltyTier.discount * subtotal) : 0;
-  const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDiscount) + deliveryFee;
+const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDiscount - vipDiscount) + deliveryFee;
 const newEarnedCoins = Math.floor(finalTotal / (Number(loyaltyRules?.rate) || 10));
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served" && o.status !== "cancelled");
   const [pastOrders, setPastOrders] = useState([]);
@@ -3965,6 +3967,7 @@ const handleWaiterPinSubmitOld = () => {
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.textLight }}><span>Subtotal</span><span>{inr(subtotal)}</span></div>
                   {appliedDiscount > 0 && (<div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.success }}><span>Coupon ({appliedDiscount}%)</span><span>-{inr(discountAmount)}</span></div>)}
                   {loyaltyDiscount > 0 && (<div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.gold }}><span>Loyalty</span><span>-{inr(loyaltyDiscount)}</span></div>)}
+                  {vipDiscount > 0 && (<div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.gold }}><span>👑 VIP Elite (20%)</span><span>-{inr(vipDiscount)}</span></div>)}
                   {orderType === "parcel" && (<div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.copper }}><span>Delivery</span><span>+{inr(deliveryFee)}</span></div>)}
                   <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 18, borderTop: `1px solid ${COLORS.line}`, paddingTop: 8, marginTop: 4 }}>
                     <span>Total</span><span style={{ color: COLORS.copper, fontFamily: "'JetBrains Mono', monospace" }}>{inr(finalTotal)}</span>
