@@ -267,8 +267,12 @@ function getEstimatedTime(items, menu = []) {
 }
 
 function getOrderProgress(status) {
-  const map = { new: 15, preparing: 40, ready: 70, out_for_delivery: 90, served: 100 };
-  return map[status] || 0;
+  if (status === 'served' || status === 'delivered' || status === 'completed') return 100;
+  if (status === 'out_for_delivery') return 90;
+  if (status === 'ready') return 70;
+  if (status === 'preparing') return 40;
+  if (status === 'new') return 15;
+  return 0;
 }
 
 // Cart helpers — Flash sale / Combo price override handle karte hain
@@ -4004,9 +4008,59 @@ const handleWaiterPinSubmitOld = () => {
 
             {activeModal === 'booking' && (<><ModalHeader title={bookType === "party" ? "Party Booking 🎉" : "Table Booking 🍽️"} onClose={() => { setActiveModal(null); setConfirmedBooking(null); }} />{confirmedBooking ? (<div style={{ textAlign: "center", padding: "30px 0" }}><div style={{ fontSize: 56, marginBottom: 16 }}>✅</div><h3 style={{ fontSize: 28, fontWeight: 800, marginBottom: 10 }}>Request Sent!</h3><button onClick={() => { setActiveModal(null); setConfirmedBooking(null); }} style={{ background: COLORS.paper2, border: 'none', padding: '12px', borderRadius: 12, width: '100%', fontWeight: 800, cursor: 'pointer' }}>Close</button></div>) : (<div style={{ display: "flex", flexDirection: "column", gap: 14 }}><input type="text" placeholder="Name" value={bookData.name} onChange={(e) => setBookData({ ...bookData, name: e.target.value })} style={inputStyle} /><input type="tel" placeholder="Phone" value={bookData.phone} onChange={(e) => setBookData({ ...bookData, phone: e.target.value })} style={inputStyle} /><div style={{ display: "flex", gap: 14 }}><input type="date" value={bookData.date} onChange={(e) => setBookData({ ...bookData, date: e.target.value })} style={inputStyle} /><input type="time" value={bookData.time} onChange={(e) => setBookData({ ...bookData, time: e.target.value })} style={inputStyle} /></div><input type="number" placeholder="Guests" value={bookData.guests} onChange={(e) => setBookData({ ...bookData, guests: e.target.value })} style={inputStyle} /><button onClick={handleBooking} style={{ background: COLORS.copper, color: '#fff', border: 'none', borderRadius: 14, padding: '13px 20px', fontWeight: 800, cursor: 'pointer' }}>Send Request</button></div>)}</>)}
 
-            {activeModal === 'track' && (<><ModalHeader title="My Orders" onClose={() => setActiveModal(null)} />{myOrders.length === 0 ? (<div style={{ textAlign: 'center', padding: 50, color: COLORS.textLight }}>No orders yet</div>) : [...myOrders].reverse().map(o => { const estimatedTime = getEstimatedTime(o.items, menu); const isCancellable = o.status === "new"; const statusText = o.status === 'new' ? 'Order Received' : o.status === 'preparing' ? 'Cooking' : o.status === 'ready' ? 'Ready' : o.status === 'out_for_delivery' ? 'Out for Delivery 🛵' : 'Delivered 🎉'; const statusColor = o.status === 'served' ? COLORS.success : o.status === 'out_for_delivery' ? COLORS.info : COLORS.copper; return (<div key={o.id} style={{ background: '#fff', border: `1px solid ${COLORS.line}`, borderRadius: 16, padding: 20, marginBottom: 16, opacity: o.status === 'served' ? 0.7 : 1 }}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}><div style={{ fontSize: 20, fontWeight: 700 }}>Order #{o.id.slice(1, 5).toUpperCase()}</div>{o.kots?.length > 1 && <KotBadge kots={o.kots} />}</div><div style={{ fontSize: 13, fontWeight: 800, color: statusColor, textTransform: 'uppercase', marginBottom: 10 }}>{statusText}</div><OrderTimer createdAt={o.createdAt} estimatedTime={estimatedTime} /><div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}><ProgressRing progress={getOrderProgress(o.status)} size={80} /></div><div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 12 }}>{o.items.map(i => `${i.qty}x ${i.name}`).join(", ")}</div><div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}><button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: `2px solid ${COLORS.copper}`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back</button>{o.status !== 'served' && <button onClick={() => setRunningOrderId(o.id)} style={{ padding: "13px 20px", background: COLORS.info, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>➕ Running</button>}{isCancellable && (<button onClick={() => cancelOrder(o.id)} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.error, border: `2px solid ${COLORS.error}`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>❌ Cancel</button>)}</div></div>); })}</>)}
+            {activeModal === 'track' && (
+  <>
+    <ModalHeader title="My Orders" onClose={() => setActiveModal(null)} />
+    {myOrders.length === 0 ? (
+      <div style={{ textAlign: 'center', padding: 50, color: COLORS.textLight }}>No orders yet</div>
+    ) : (
+      [...myOrders].reverse().map(o => {
+        const estimatedTime = getEstimatedTime(o.items, menu);
+        const isCancelled = o.status === 'cancelled';
+        const isServed = o.status === 'served' || o.status === 'delivered' || o.status === 'completed';
 
-            {activeModal === 'chat' && (<><ModalHeader title="💬 Chat" onClose={() => setActiveModal(null)} /><ChatBox orderId={activeOrderIdForChat || 'general'} customerId={custPhone || 'customer'} /></>)}
+        let statusText = "Order Received";
+        let statusColor = COLORS.copper;
+        if (o.status === 'preparing') { statusText = "Cooking 👨‍🍳"; }
+        else if (o.status === 'ready') { statusText = "Ready for Pickup ✅"; }
+        else if (o.status === 'out_for_delivery') { statusText = "Out for Delivery 🛵"; statusColor = COLORS.info; }
+        else if (isServed) { statusText = "Delivered 🎉"; statusColor = COLORS.success; }
+        else if (isCancelled) { statusText = "Cancelled ❌"; statusColor = COLORS.error; }
+
+        return (
+          <div key={o.id} style={{ background: '#fff', border: \`1px solid \${COLORS.line}\`, borderRadius: 16, padding: 20, marginBottom: 16, opacity: (isServed || isCancelled) ? 0.7 : 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>Order #{o.id.slice(1, 5).toUpperCase()}</div>
+              {o.kots?.length > 1 && <KotBadge kots={o.kots} />}
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: statusColor, textTransform: 'uppercase', marginBottom: 10 }}>{statusText}</div>
+
+            <OrderTimer createdAt={o.createdAt} servedAt={o.servedAt} status={o.status} estimatedTime={estimatedTime} />
+
+            <div style={{ display: "flex", justifyContent: "center", margin: "20px 0" }}>
+              <ProgressRing progress={getOrderProgress(o.status)} size={80} />
+            </div>
+
+            <div style={{ fontSize: 14, color: COLORS.textLight, marginBottom: 12 }}>
+              {o.items.map(i => \`\${i.qty}x \${i.name}\`).join(", ")}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <button onClick={() => setActiveModal(null)} style={{ flex: 1, background: "transparent", color: COLORS.copper, border: \`2px solid \${COLORS.copper}\`, borderRadius: 14, padding: "13px 20px", fontWeight: 800, cursor: 'pointer' }}>Back</button>
+              {!isServed && !isCancelled && (
+                <button onClick={() => setRunningOrderId(o.id)} style={{ padding: "13px 20px", background: COLORS.info, color: '#fff', border: 'none', borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>➕ Running</button>
+              )}
+              {o.status === "new" && (
+                <button onClick={() => cancelOrder(o.id)} style={{ padding: "13px 20px", background: 'transparent', color: COLORS.error, border: \`2px solid \${COLORS.error}\`, borderRadius: 14, fontWeight: 800, cursor: 'pointer' }}>❌ Cancel</button>
+              )}
+            </div>
+          </div>
+        );
+      })
+    )}
+  </>
+)}
+{activeModal === 'chat' && (<><ModalHeader title="💬 Chat" onClose={() => setActiveModal(null)} /><ChatBox orderId={activeOrderIdForChat || 'general'} customerId={custPhone || 'customer'} /></>)}
           </div>
         </div>
       )}
