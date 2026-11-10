@@ -4888,6 +4888,15 @@ function CustomersView({ C, isMobile, isOwner, waiterName, orders = [], loyaltyU
       logAudit("birthday_wished", { reason: (c.name || "") + " " + c.phone });
     } catch (e) { toast("Wish bhej di, par 'sent' mark save nahi hua: " + e.message, "warning"); }
   };
+  const toggleVip = async (c) => {
+  const isVip = !!c.isVip;
+  if (!window.confirm(isVip ? "VIP status hatana hai?" : "Kya inka ₹999 payment mil gaya hai? Inhe VIP banayein?")) return;
+  try {
+    await setDoc(doc(db, "customers", c.id), { isVip: !isVip, vipSince: Date.now() }, { merge: true });
+    setList((prev) => prev.map((x) => (x.id === c.id ? { ...x, isVip: !isVip } : x)));
+    toast(isVip ? "VIP Status hataya gaya" : "👑 Customer ab VIP hai!", "success");
+  } catch (e) { toast(e.message, "error"); }
+};
   const editDob = async (c) => {
     const v = window.prompt((c.name || c.phone) + " ki DOB (YYYY-MM-DD), jaise 1995-03-21", c.dob || "");
     if (v === null) return;
@@ -5016,6 +5025,9 @@ function CustomersView({ C, isMobile, isOwner, waiterName, orders = [], loyaltyU
                 <button onClick={() => sendWish(c)} disabled={!c.dob || c.phone.length !== 10} style={{ flex: 1, padding: 9, border: "none", borderRadius: 8, background: c.dob ? "#25D366" : C.line, color: c.dob ? "#fff" : C.gray, fontWeight: 800, fontSize: 12, cursor: c.dob ? "pointer" : "not-allowed", fontFamily: "inherit" }}>🎂 WhatsApp Wish</button>
                 <a href={"tel:" + c.phone} style={{ padding: "9px 12px", border: "1.5px solid " + C.blue, borderRadius: 8, color: C.blue, fontWeight: 800, fontSize: 12, textDecoration: "none" }}>📞</a>
                 <button onClick={() => editDob(c)} style={{ padding: "9px 12px", border: "1.5px solid " + C.line, borderRadius: 8, background: "transparent", color: C.gray, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>✎ DOB</button>
+                <button onClick={() => toggleVip(c)} style={{ padding: "9px 12px", border: "1.5px solid " + (c.isVip ? C.gold : C.line), borderRadius: 8, background: c.isVip ? C.goldLight : "transparent", color: c.isVip ? C.goldText : C.gray, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+  {c.isVip ? "👑 Remove VIP" : "👑 Make VIP"}
+</button>
               </div>
             </div>
           );
