@@ -1,4 +1,5 @@
 {
+  "id": "/staff-app",
   "name": "Eat & Park Staff",
   "short_name": "Staff POS",
   "start_url": "/staff",

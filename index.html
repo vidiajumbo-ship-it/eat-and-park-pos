@@ -19,6 +19,28 @@
     <script src="https://upload-widget.cloudinary.com/latest/global/all.js"></script>
   
     <!-- PWA Dynamic Manifest Setup -->
+    
+    <script>
+      (function() {
+        var path = window.location.pathname;
+        var manifestUrl = "/manifest.json";
+        
+        if (path.startsWith("/staff")) {
+          manifestUrl = "/staff-manifest.json";
+          document.title = "Eat & Park Staff";
+        } else if (path.startsWith("/delivery")) {
+          manifestUrl = "/delivery-manifest.json";
+          document.title = "Eat & Park Delivery";
+        } else {
+          document.title = "Eat & Park";
+        }
+        
+        document.getElementById("app-manifest").setAttribute("href", manifestUrl);
+      })();
+    </script>
+  
+
+    <!-- PWA Dynamic Manifest Setup -->
     <link id="app-manifest" rel="manifest" href="/manifest.json">
     <script>
       (function() {

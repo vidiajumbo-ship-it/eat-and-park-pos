@@ -1,4 +1,5 @@
 {
+  "id": "/delivery-app",
   "name": "Eat & Park Delivery",
   "short_name": "Delivery",
   "start_url": "/delivery",
