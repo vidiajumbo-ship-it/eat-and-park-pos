@@ -2441,7 +2441,6 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [custAddress, setCustAddress] = useState("");
   const [custPinCode, setCustPinCode] = useState("");
   const [custExactAddress, setCustExactAddress] = useState("");
-  const [custExactAddress, setCustExactAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [vegOnly, setVegOnly] = useState(false);
