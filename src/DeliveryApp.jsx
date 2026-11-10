@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { db, auth } from "./firebase";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { collection, query, where, onSnapshot, doc, updateDoc, getDoc } from "firebase/firestore";
 
 const timeAgo = (ts) => {
@@ -13,9 +13,6 @@ const timeAgo = (ts) => {
   if (h < 24) return h + "h ago";
   return Math.floor(h / 24) + "d ago";
 };
-
-const formatDate = (ts) => new Date(ts).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-
 
 const alertAudio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
 alertAudio.volume = 1.0;
@@ -32,12 +29,11 @@ export default function DeliveryApp() {
   
   const [page, setPage] = useState("orders"); // orders | dashboard | history
   const [menuOpen, setMenuOpen] = useState(false);
-  
   const [selectedOrder, setSelectedOrder] = useState(null);
+
   const prevOrdersRef = useRef([]);
   const isFirstLoad = useRef(true);
-  
-  
+
   // Unlock audio on first user interaction
   useEffect(() => {
     const unlock = () => {
@@ -131,7 +127,10 @@ export default function DeliveryApp() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError("");
-    try { await signInWithEmailAndPassword(auth, email.trim(), password); }
+    try { 
+      await setPersistence(auth, browserLocalPersistence);
+      await signInWithEmailAndPassword(auth, email.trim(), password); 
+    }
     catch (err) { setLoginError("Email ya password galat hai."); }
   };
 
@@ -271,7 +270,9 @@ export default function DeliveryApp() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                       <span style={{ fontWeight: 900, color: "#F59E0B", fontSize: 15 }}>#{o.id.slice(1,5).toUpperCase()}</span>
-                      <span style={{ fontSize: 10, color: "#8B9BB4", background: "#273449", padding: "2px 6px", borderRadius: 4 }}>{o.status === "out_for_delivery" ? "ON THE WAY" : "READY"}</span>
+                      <span style={{ fontSize: 10, color: "#8B9BB4", background: "#273449", padding: "2px 6px", borderRadius: 4 }}>
+                        {o.status === "out_for_delivery" ? "ON THE WAY" : o.status === "ready" ? "READY TO PICK" : o.status === "preparing" ? "COOKING" : "NEW ORDER"}
+                      </span>
                       <span style={{ fontSize: 10, color: "#8B9BB4" }}>{timeAgo(o.createdAt)}</span>
                     </div>
                     <div style={{ fontWeight: 700, fontSize: 15, color: "#fff", marginBottom: 4 }}>{o.customer?.name}</div>
@@ -343,15 +344,25 @@ export default function DeliveryApp() {
             {/* ACTION BUTTONS */}
             {selectedOrder.status !== "served" ? (
               <>
-                {selectedOrder.status !== "out_for_delivery" && (
+                {/* STATUS: READY - Pickup Button */}
+                {selectedOrder.status === "ready" && (
                   <button onClick={() => markOutForDelivery(selectedOrder.id)} style={{ width: "100%", padding: 16, background: "#F59E0B", color: "#fff", border: "none", borderRadius: 12, fontWeight: 900, fontSize: 16, cursor: "pointer", marginBottom: 10, boxShadow: "0 4px 12px rgba(245,158,11,0.3)" }}>
                     🛵 Mark Out for Delivery
                   </button>
                 )}
+
+                {/* STATUS: OUT FOR DELIVERY - Deliver Button */}
                 {selectedOrder.status === "out_for_delivery" && (
                   <button onClick={() => markDelivered(selectedOrder.id)} style={{ width: "100%", padding: 16, background: "#10B981", color: "#fff", border: "none", borderRadius: 12, fontWeight: 900, fontSize: 16, cursor: "pointer", boxShadow: "0 4px 12px rgba(16,185,129,0.3)" }}>
                     ✅ Delivered & Collected ₹{selectedOrder.finalTotal}
                   </button>
+                )}
+
+                {/* STATUS: NEW OR PREPARING - Wait Message */}
+                {(selectedOrder.status === "new" || selectedOrder.status === "preparing") && (
+                  <div style={{ textAlign: "center", padding: 16, background: "rgba(245, 158, 11, 0.1)", border: "1px dashed #F59E0B", color: "#F59E0B", borderRadius: 12, fontWeight: 800, fontSize: 14 }}>
+                    👨‍🍳 Kitchen me khana ban raha hai... Ready hone ka wait karein.
+                  </div>
                 )}
               </>
             ) : (
