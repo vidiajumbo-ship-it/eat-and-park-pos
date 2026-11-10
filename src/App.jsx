@@ -2596,9 +2596,16 @@ const vipDiscount = isVip ? Math.round(subtotal * 0.20) : 0; // 20% VIP Discount
   }, [custPhone]);
   const activeUser = isLoggedIn ? (loyaltyUsers.find(u => u.phone === custPhone) || myLoyalty) : null;
 
-  const currentCoins = activeUser ? activeUser.coins : 0;
-  const loyaltyTier = getLoyaltyTier(currentCoins);
-  const loyaltyDiscount = activeUser && appliedDiscount === 0 ? Math.round(loyaltyTier.discount * subtotal) : 0;
+// 👇 VIP wala code yahan aayega 👇
+const isVip = activeUser?.isVip === true;
+const vipDiscount = isVip ? Math.round(subtotal * 0.20) : 0; 
+
+const currentCoins = activeUser ? activeUser.coins : 0;
+const loyaltyTier = getLoyaltyTier(currentCoins);
+const loyaltyDiscount = activeUser && appliedDiscount === 0 ? Math.round(loyaltyTier.discount * subtotal) : 0;
+
+// Final Total (isme vipDiscount minus ho raha hai)
+const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDiscount - vipDiscount) + deliveryFee;
 const finalTotal = Math.max(0, subtotal - discountAmount - loyaltyDiscount - vipDiscount) + deliveryFee;
 const newEarnedCoins = Math.floor(finalTotal / (Number(loyaltyRules?.rate) || 10));
   const myActiveOrders = orders.filter(o => myOrderIds.includes(o.id) && o.status !== "served" && o.status !== "cancelled");
