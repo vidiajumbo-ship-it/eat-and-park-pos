@@ -5,7 +5,7 @@ import { db } from "./firebase";
 
 /* ───────────── 1. Input / data normalisation ───────────── */
 export const MAX_QTY = 99;
-export const TABLE_COUNT = 12; // use everywhere instead of hardcoded 12
+export const TABLE_COUNT = 20; // use everywhere instead of hardcoded 12
 
 export const num = (v, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
 export const clampQty = (q) => Math.min(MAX_QTY, Math.max(0, Math.round(num(q) * 100) / 100));
