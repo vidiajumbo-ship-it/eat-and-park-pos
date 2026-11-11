@@ -2743,7 +2743,8 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
                 </div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                   <span style={{ fontSize: 10, color: C.gray, fontWeight: 800, minWidth: 38 }}>PAY</span>
-                  {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["due", "Due"], ["split", "Split"]].map(([id, label]) => (
+                  {/* FEATURE-SPLIT-PROMINENT */}
+                  {[["cash", "Cash"], ["upi", "UPI"], ["card", "Card"], ["due", "Due"], ["split", "Split ⚡"]].map(([id, label]) => (
                     <button key={id} onClick={() => setPayMode(id)} style={{ padding: "3px 9px", borderRadius: 4, border: `1px solid ${payMode === id ? C.gold : C.line}`, background: payMode === id ? C.gold : C.card, color: payMode === id ? "#fff" : C.ink, fontWeight: 700, fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>{label}</button>
                   ))}
                 </div>
