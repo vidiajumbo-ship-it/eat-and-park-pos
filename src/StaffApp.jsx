@@ -9,7 +9,10 @@ import {
   collection, doc, setDoc, onSnapshot, getDoc, updateDoc, addDoc,
   query, where, runTransaction, deleteDoc, getDocs, orderBy, limit, writeBatch
 } from "firebase/firestore";
-
+const csvCellSafe = (c) => {
+  const s = String(c ?? "");
+  return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+};
 // ============ SAFE HELPERS ============
 function getErrorMessage(error) {
   if (error instanceof Error && error.message) return error.message;
@@ -2885,7 +2888,7 @@ function ReportsExtra({ C, isMobile, orders, rangeLabel }) {
   const exportCsv = () => {
     const rows = [["Bill","Date","Type","Table","Waiter","Items","Subtotal","Discount","GST","Total","Payment","Paid"]];
     orders.forEach(o => rows.push([(o.id || "").slice(1,9).toUpperCase(), new Date(o.createdAt).toLocaleString("en-IN"), o.orderType || "", o.table || "", o.waiter || "", (o.items || []).map(it => `${it.qty}x ${it.name}`).join("; "), o.subtotal || 0, o.billDiscount || 0, o.gstAmount || 0, o.finalTotal || 0, o.payment || "", o.paid ? "Yes" : "No"]));
-    const csv = rows.map(r => r.map(c => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+const csv = rows.map(r => r.map(c => `"${String(csvCellSafe(c)).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -5109,7 +5112,7 @@ function CustomersView({ C, isMobile, isOwner, waiterName, orders = [], loyaltyU
   };
   const downloadCsv = () => {
     if (!shown.length) { toast("Download ke liye koi customer nahi", "warning"); return; }
-    const csv = [header, ...dataRows(shown)].map((r) => r.map((x) => '"' + String(x ?? "").replace(/"/g, '""') + '"').join(",")).join("\n");
+const csv = [header, ...dataRows(shown)].map((r) => r.map((x) => '"' + String(csvCellSafe(x)).replace(/"/g, '""') + '"').join(",")).join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" }));
     a.download = "EatPark-Customers-" + invDateKey() + ".csv";
