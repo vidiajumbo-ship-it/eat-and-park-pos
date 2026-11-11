@@ -1640,6 +1640,30 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
 function KOTView({ C, isMobile, orders, setOrders, readOnly = false }) {
   const toast = useToast();
   const haptic = useHaptic();
+  // FEATURE-KITCHEN-AUTO
+  const prevKotIds = useRef(null);
+  useEffect(() => {
+    if (readOnly) return;
+    const activeKots = orders.filter(o => (o.status === "new" || o.status === "preparing") && Date.now() - (o.createdAt || 0) < OPEN_WINDOW_MS);
+    const ids = activeKots.map(o => o.id).sort().join(",");
+    if (prevKotIds.current === null) { prevKotIds.current = ids; return; }
+    if (prevKotIds.current !== ids) {
+      const prev = new Set((prevKotIds.current || "").split(",").filter(Boolean));
+      const fresh = activeKots.filter(o => !prev.has(o.id));
+      if (fresh.length > 0) {
+        try {
+          const a = new Audio("https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3");
+          a.volume = 0.8;
+          a.play().catch(() => {});
+          setTimeout(() => a.play().catch(() => {}), 400);
+          setTimeout(() => a.play().catch(() => {}), 800);
+        } catch (e) {}
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        fresh.forEach(o => { setTimeout(() => { try { printKOT(o); } catch(e) {} }, 500); });
+      }
+    }
+    prevKotIds.current = ids;
+  }, [orders, readOnly]);
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(x => x + 1), 15000); return () => clearInterval(iv); }, []);
   const kotOrders = orders.filter(o => (o.status === "new" || o.status === "preparing") && Date.now() - (o.createdAt || 0) < OPEN_WINDOW_MS);

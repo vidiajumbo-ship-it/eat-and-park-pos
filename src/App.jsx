@@ -5997,20 +5997,28 @@ function AdminView({ dussehraMenu = [], saveDussehraMenu, menu, unavail = [], to
     const targets = menu.filter((m) => !isOwn(m.image));
     if (!targets.length) { alert("Sab items ki photo pehle se set hai"); return; }
     if (!window.confirm(targets.length + " items ki photo auto lagani hain? (Cloudinary / apni upload ki hui photo nahi badlegi)")) return;
+    // FEATURE-PHOTO-BATCH — parallel + progress
     const cache = {};
     const found = {};
     let calls = 0;
-    for (let i = 0; i < targets.length; i++) {
-      const m = targets[i];
-      const key = String(m.name || "").replace(/\(.*?\)/g, "").replace(/chilly/gi, "chilli").trim().toLowerCase();
-      if (!(key in cache)) {
-        if (calls >= 150) { alert("150 request ho gayi (Pexels limit 200/ghanta). Thodi der baad dobara dabao, baaki items ho jayenge."); break; }
+    const BATCH = 5;
+    for (let i = 0; i < targets.length; i += BATCH) {
+      const batch = targets.slice(i, i + BATCH);
+      await Promise.all(batch.map(async (m) => {
+        const key = String(m.name || "").replace(/\(.*?\)/g, "").replace(/chilly/gi, "chilli").trim().toLowerCase();
+        if (calls >= 150) return;
         calls++;
-        setAutoImgMsg("⏳ " + (i + 1) + "/" + targets.length + " — " + m.name);
-        try { const r = await fetch("/api/image?q=" + encodeURIComponent(key)); const d = await r.json(); cache[key] = d.url || ""; } catch (e) { cache[key] = ""; }
-        await new Promise((r) => setTimeout(r, 400));
-      }
-      if (cache[key]) found[m.id] = cache[key];
+        if (!(key in cache)) {
+          try {
+            const r = await fetch("/api/image?q=" + encodeURIComponent(key));
+            const d = await r.json();
+            cache[key] = d.url || "";
+          } catch (e) { cache[key] = ""; }
+        }
+        if (cache[key]) found[m.id] = cache[key];
+      }));
+      setAutoImgMsg("⏳ " + Math.min(i + BATCH, targets.length) + "/" + targets.length + " — batch " + (Math.floor(i / BATCH) + 1));
+      await new Promise(r => setTimeout(r, 100));
     }
     const n = Object.keys(found).length;
     if (n > 0) {
