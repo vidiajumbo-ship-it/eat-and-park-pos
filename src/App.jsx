@@ -7786,81 +7786,19 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
 
  const markPaid = async (orderId, paid) => {
   try {
-    await runTransaction(db, async (tx) => {
-      const orderRef = doc(db, "orders", orderId);
-      const orderSnap = await tx.get(orderRef);
-      if (!orderSnap.exists()) throw new Error("Order not found");
-      if (orderSnap.data().status === "cancelled") throw new Error("Order cancelled hai");
-
-      const order = orderSnap.data();
-
-      // Agar already paid mark ho chuka hai toh skip
-      if (paid && order.coinsClaimed) {
-        tx.update(orderRef, { paid: true });
-        return;
-      }
-
-      if (paid) {
-const earned = Math.floor(getOrderTotal(order) / (Number(loyaltyRules?.rate) || 10));
-
-        const used = Math.max(0, Number(order.rewardUsedCoins) || 0);
-        const phone = order.customer?.phone;
-
-        if (phone && phone.length >= 10) {
-          const userRef = doc(db, "loyaltyUsers", phone);
-          const userSnap = await tx.get(userRef);
-          const curCoins = userSnap.exists() ? (userSnap.data().coins || 0) : 0;
-          if (used > curCoins) throw new Error("Customer ke paas itne coins nahi - reward claim galat hai");
-          const newCoins = Math.max(0, curCoins + earned - used);
-
-          if (userSnap.exists()) {
-            tx.update(userRef, { coins: newCoins });
-          } else {
-            tx.set(userRef, { phone, name: order.customer?.name || "Guest", coins: newCoins });
-          }
-        }
-        tx.update(orderRef, { paid: true, coinsClaimed: true });
-      } else {
-        tx.update(orderRef, { paid: false });
-      }
-    });
-
-    // Transaction ke baad history alag se likho (idempotent check)
-    // Note: yahan hum fresh data use kar rahe hain, aur agar `coinHistory` mein
-    // duplicate add ho raha ho to coinsClaimed flag ke through ruk jayega
-    const order = orders.find(o => o.id === orderId);
-    const alreadyClaimed = order && order.coinsClaimed;
-    if (paid && order && !alreadyClaimed) {
-      const phone = order.customer?.phone;
-      const earned = order.earnedCoins || 0;
-      const used = order.rewardUsedCoins || 0;
-      if (phone && phone.length >= 10) {
-        if (earned > 0) {
-          await addDoc(collection(db, "coinHistory"), {
-            phone, coins: earned,
-            reason: `Order #${order.id.slice(1, 5).toUpperCase()}`,
-            timestamp: Date.now()
-          });
-        }
-        if (used > 0) {
-          await addDoc(collection(db, "coinHistory"), {
-            phone, coins: -used,
-            reason: `Redeemed #${order.id.slice(1, 5).toUpperCase()}`,
-            timestamp: Date.now()
-          });
-        }
-        setLoyaltyUsers(prev => {
-          const ex = prev.find(u => u.phone === phone);
-          const newCoins = Math.max(0, (ex?.coins || 0) + earned - used);
-          if (ex) return prev.map(u => u.phone === phone ? { ...u, coins: newCoins } : u);
-          return [...prev, { phone, name: order.customer?.name || "Guest", coins: newCoins }];
-        });
-      }
+    if (paid) {
+      // Ye function hardening.js me hai, jo coins ko transaction ke andar hi save karta hai
+      await HX.markPaidSafe(orderId, true, loyaltyRules?.rate, getOrderTotal);
+      
+      setOrdersState(prev => prev.map(o =>
+        o.id === orderId ? { ...o, paid: true, coinsClaimed: true } : o
+      ));
+    } else {
+      await updateDoc(doc(db, "orders", orderId), { paid: false });
+      setOrdersState(prev => prev.map(o =>
+        o.id === orderId ? { ...o, paid: false } : o
+      ));
     }
-
-    setOrdersState(prev => prev.map(o =>
-      o.id === orderId ? { ...o, paid, coinsClaimed: paid ? true : o.coinsClaimed } : o
-    ));
   } catch (e) {
     console.error("markPaid error:", e);
     alert("⚠️ Payment update failed: " + (e.message || "unknown"));
