@@ -3833,6 +3833,21 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
       toast("Category add ho gayi", "success");
     } catch (e) { toast(e.message, "error"); }
   };
+  // FEATURE-EXPENSE-REMOVE-CAT
+  const removeCat = async (catToRemove) => {
+    if (EXP_CATS.includes(catToRemove)) {
+      toast("Default category delete nahi ho sakti", "warning");
+      return;
+    }
+    if (!window.confirm("Category \"" + catToRemove + "\" delete karein? Is category ke purane kharchay rahenge.")) return;
+    const newList = cats.filter((c) => c !== catToRemove);
+    try {
+      await saveCustomCats(newList);
+      setCats(newList);
+      if (cat === catToRemove) setCat(newList[0] || EXP_CATS[0]);
+      toast("Category delete ho gayi", "success");
+    } catch (e) { toast(e.message, "error"); }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -3895,7 +3910,27 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
         <div style={lbl}>Amount (Rs)</div>
         <input type="number" inputMode="decimal" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" style={{ ...field, fontSize: 22, fontWeight: 900, fontFamily: "monospace", marginBottom: 12 }} />
         <div style={lbl}>Category</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>{cats.map((c) => chip(cat === c, c, () => { haptic(); setCat(c); }))}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          {cats.map((c) => {
+            const isDefault = EXP_CATS.includes(c);
+            return (
+              <div key={c} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                {chip(cat === c, c, () => { haptic(); setCat(c); })}
+                {!isDefault && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeCat(c); }}
+                    title={"Delete: " + c}
+                    style={{
+                      width: 18, height: 18, borderRadius: "50%",
+                      border: "none", background: C.red, color: "#fff",
+                      fontSize: 11, fontWeight: 900, cursor: "pointer",
+                      padding: 0, lineHeight: 1, marginLeft: -4
+                    }}
+                  >×</button>
+                )}
+              </div>
+            );
+          })}
           <button onClick={() => setShowNewCat((v) => !v)} style={{ padding: "7px 13px", borderRadius: 20, border: "1px dashed " + C.gray, background: "transparent", color: C.gray, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>+ Naya</button>
         </div>
         {showNewCat && (
