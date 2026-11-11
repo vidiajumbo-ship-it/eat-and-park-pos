@@ -3285,7 +3285,7 @@ if (submitLockRef.current) return;
       console.error("Order error:", e);
       if (payIdRef.current) alert("⚠️ Payment ho gaya hai par order save nahi hua.\nPayment ID: " + payIdRef.current + "\nYe ID staff ko dikhao.");
       else showToast("⚠️ " + authMsg(e), 'error');
-    } finally} finally {
+    } finally {
       setIsProcessingPayment(false);
       submitLockRef.current = false;
     }
