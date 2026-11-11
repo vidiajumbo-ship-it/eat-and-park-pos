@@ -2469,6 +2469,7 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [isScheduled, setIsScheduled] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const submitLockRef = useRef(false);
   const [activeOrderIdForChat, setActiveOrderIdForChat] = useState(null);
   const [runningOrderId, setRunningOrderId] = useState(null);
   const [otpSending, setOtpSending] = useState(false);
@@ -3187,7 +3188,9 @@ const handleWaiterPinSubmitOld = () => {
   }, [flashSaleItems]);
 
   const handlePlaceOrder = useCallback(async () => {
-    if (isProcessingPayment) return;
+if (submitLockRef.current) return;
+  submitLockRef.current = true;
+  setIsProcessingPayment(true);
     if (isScheduled && (!scheduleDate || !scheduleTime)) { showToast("⚠️ Schedule ki date aur time dono daalo", 'error'); return; }
     if (orderType === "parcel" && !parcelOpenNow()) { showToast(PARCEL_MSG, 'error'); return; }
     const _gone = cartItems.filter(([id]) => !menu.some((m) => m.id === id && m.available));
@@ -3287,7 +3290,10 @@ const handleWaiterPinSubmitOld = () => {
       console.error("Order error:", e);
       if (payIdRef.current) alert("⚠️ Payment ho gaya hai par order save nahi hua.\nPayment ID: " + payIdRef.current + "\nYe ID staff ko dikhao.");
       else showToast("⚠️ " + authMsg(e), 'error');
-    } finally { setIsProcessingPayment(false); }
+    } finally} finally {
+      setIsProcessingPayment(false);
+      submitLockRef.current = false;
+    }
   }, [isProcessingPayment, cartItems, custName, custPhone, custAddress, orderType, table, paymentMethod, finalTotal, subtotal, discountAmount, deliveryFee, claimedReward, newEarnedCoins, isScheduled, scheduleDate, scheduleTime, appliedDiscount, loyaltyDiscount, loyaltyTier, notes, menu, placeOrder, sendPushNotification, consumeFlashStock, showToast]);
 
   const handlePlaceOrderOld = useCallback(async () => {
