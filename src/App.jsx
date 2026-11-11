@@ -394,7 +394,7 @@ class ErrorBoundary extends React.Component {
           </pre>
           <button onClick={() => { try { localStorage.removeItem('eatpark_cart'); } catch (e) {} window.location.reload(); }} style={{ background: COLORS.copper, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer' }}>Clear Cache & Refresh</button>
           <button onClick={() => this.setState({ hasError: false, error: null, errorInfo: null })} style={{ background: COLORS.ink, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', marginTop: 10 }}>🔄 Try Again</button>
-          <button onClick={() => this.setState({ hasError: false, error: null, errorInfo: null })} style={{ background: COLORS.ink, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 'bold', cursor: 'pointer', marginTop: 10 }}>🔄 Try Again</button>
+          {/* ERRBOUNDARY-DEDUP-FIXED */}
         </div>
       );
     }
@@ -3806,12 +3806,7 @@ const handleWaiterPinSubmitOld = () => {
                 </div>
               )}
               <SidebarBtn icon="🚪" text="Logout" onClick={handleLogout} />
-              {isLoggedIn && (
-                <div style={{ marginTop: 8, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: "center", fontSize: 12, color: COLORS.textLight, fontWeight: 600 }}>
-                  👤 {custName || "Guest"} · {custPhone}
-                </div>
-              )}
-              <SidebarBtn icon="🚪" text="Logout" onClick={handleLogout} />
+              {/* SIDEBAR-DEDUP-FIXED */}
               <div style={{ marginTop: 16, padding: 12, background: COLORS.paper, borderRadius: 12, textAlign: 'center' }}>
                 <QRCodeSVG value={window.location.href} size={100} />
                 <p style={{ fontSize: 11, color: COLORS.textLight, marginTop: 6 }}>📲 Scan to order</p>
@@ -7502,13 +7497,17 @@ export default function App() {
 
   const fetchAllData = async () => {
     try {
-      const lq = { docs: [] };
-      const users = lq.docs.map(d => d.data());
-      if (users.length > 0) setLoyaltyUsers(users);
-      /* inventory ab sirf staff login ke baad load hoti hai */
-      const hq = { docs: [] };
-      const hist = hq.docs.map(d => d.data());
-      if (hist.length > 0) setCoinHistory(hist);
+      // FIX-LOYALTY-LOAD
+      try {
+        const [lq, hq] = await Promise.all([
+          getDocs(query(collection(db, "loyaltyUsers"), orderBy("coins", "desc"), limit(300))),
+          getDocs(query(collection(db, "coinHistory"), orderBy("timestamp", "desc"), limit(300))),
+        ]);
+        setLoyaltyUsers(lq.docs.map(d => d.data()));
+        setCoinHistory(hq.docs.map(d => d.data()));
+      } catch (e) {
+        console.warn("Loyalty/coin history load failed:", e.code, e.message);
+      }
       
       const ms = (await Promise.all(
         ["menu", "categories", "gallery", "offers", "loyaltyRules", "appSettings", "promotions"].map((n) => getDoc(doc(db, "settings", n)).catch(() => null))

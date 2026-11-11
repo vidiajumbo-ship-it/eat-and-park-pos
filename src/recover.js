@@ -4,7 +4,8 @@ const FS_ERROR_PATTERN = /INTERNAL ASSERTION FAILED|isCorePipeline|getTargetData
 
 function isFirestoreCrash(err) {
   if (!err) return false;
-  const msg = String(err.message || (err.reason && err.reason.message) || err);
+  const reasonMsg = err.reason && typeof err.reason === "object" && err.reason.message;
+  const msg = String(err.message || reasonMsg || err.reason || err);
   return FS_ERROR_PATTERN.test(msg);
 }
 

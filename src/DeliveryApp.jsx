@@ -55,6 +55,7 @@ export default function DeliveryApp() {
   // Auth Check
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
+      try {
       if (u) {
         try {
           const s = await getDoc(doc(db, "staff", u.uid));
@@ -67,6 +68,9 @@ export default function DeliveryApp() {
         } catch (e) { console.error(e); }
       } else { setUser(null); }
       setLoading(false);
+      } finally {
+        setLoading(false); // FIX-LOADING-ALWAYS
+      }
     });
     return () => unsub();
   }, []);
@@ -131,7 +135,14 @@ export default function DeliveryApp() {
       await setPersistence(auth, browserLocalPersistence);
       await signInWithEmailAndPassword(auth, email.trim(), password); 
     }
-    catch (err) { setLoginError("Email ya password galat hai."); }
+    catch (err) {
+      const msg =
+        err.code === "auth/network-request-failed" ? "Internet check karo" :
+        err.code === "auth/too-many-requests" ? "Bahut try ho gaye, thodi der baad" :
+        err.code === "auth/invalid-email" ? "Email format galat hai" :
+        "Email ya password galat hai."; // FIX-LOGIN-ERRORS
+      setLoginError(msg);
+    }
   };
 
   const markOutForDelivery = async (orderId) => {
