@@ -1352,8 +1352,18 @@ function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, 
       const t = Number(o.table);
       if (map[t]) map[t].order = o;
     });
-    return Object.values(map);
-  }, [orders]);
+    // FEATURE-HEATMAP: compute age for each table
+    return Object.values(map).map(t => {
+      if (!t.order) return { ...t, ageMin: 0, heatColor: C.line, heatBg: C.card };
+      const ageMin = (Date.now() - (t.order.createdAt || Date.now())) / 60000;
+      let heatColor, heatBg;
+      if (ageMin < 15) { heatColor = "#10B981"; heatBg = C.card; }
+      else if (ageMin < 30) { heatColor = "#F59E0B"; heatBg = C.amberLight; }
+      else if (ageMin < 45) { heatColor = "#F97316"; heatBg = C.amberLight; }
+      else { heatColor = "#EF4444"; heatBg = C.redLight; }
+      return { ...t, ageMin, heatColor, heatBg };
+    });
+  }, [orders, C.card, C.line, C.amberLight, C.redLight]);
 
   const filteredTables = search.trim() ? tableData.filter(t => String(t.table).includes(search.trim())) : tableData;
 
@@ -1380,8 +1390,8 @@ function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill, minmax(160px, 1fr))", gap: isMobile ? 8 : 12 }}>
         {filteredTables.map(t => (
           <div key={t.table} style={{
-            background: t.order ? C.redLight : C.card,
-            border: `2px solid ${t.order ? C.red : C.line}`,
+            background: t.heatBg,
+            border: `2px solid ${t.heatColor}`,
             borderRadius: 12, padding: isMobile ? 10 : 14,
             minHeight: isMobile ? 120 : 130,
             display: "flex", flexDirection: "column", justifyContent: "space-between",
