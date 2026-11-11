@@ -2141,6 +2141,35 @@ function listen(makeQuery, onData, label) {
   return () => { dead = true; clearTimeout(timer); unsub(); };
 }
 
+// [PATCH half-qty] qty input: local text, valid number (>0) par hi cart me commit
+function QtyInput({ value, onCommit, style }) {
+  const [text, setText] = useState(String(value));
+  const focused = useRef(false);
+  useEffect(() => { if (!focused.current) setText(String(value)); }, [value]);
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={text}
+      style={style}
+      onFocus={(e) => { focused.current = true; e.target.select(); }}
+      onChange={(e) => {
+        const t = e.target.value.replace(",", ".");
+        if (!/^\d*\.?\d{0,2}$/.test(t)) return;
+        setText(t);
+        const n = parseFloat(t);
+        if (!isNaN(n) && n > 0) onCommit(n);
+      }}
+      onBlur={() => {
+        focused.current = false;
+        const n = parseFloat(text);
+        if (isNaN(n) || n <= 0) setText(String(value));
+        else { onCommit(n); setText(String(n)); }
+      }}
+    />
+  );
+}
+
 function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCart, waiterName, existingOrder, addMoreMode, onBack, isOwner, onPaidSuccess, onSwitchAdd }) {
   const toast = useToast();
   const haptic = useHaptic();
@@ -2307,10 +2336,11 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
   const resolveItem = (id) => { const m = menu.find(x => x.id === id); const ex = existingItems.find(e => e.itemId === id); if (ex && !addMoreMode) return ex; return m || ex || null; };
   // NOTE: cart me sirf CURRENT edit ki qty hoti hai (addMoreMode me sirf naye items).
   // Isliye subtotal = sum(cart qty x price). Purani qty yahan add NAHI karni.
-  const cartSubtotal = cartItems.reduce((s, [id, q]) => { 
+  const cartSubtotalRaw = cartItems.reduce((s, [id, q]) => { 
     const m = resolveItem(id); 
-    return s + (rates[id] ?? m?.price ?? 0) * q; 
+    return s + (rates[id] ?? m?.price ?? 0) * (Number(q) || 0); 
   }, 0);
+  const cartSubtotal = Math.round(cartSubtotalRaw);
   const grossSub = cartSubtotal;
   const discAmt = Math.round(grossSub * discount / 100);
   const gstAmt = Math.round((grossSub - discAmt) * gstRate / 100);
@@ -2364,7 +2394,7 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
       .filter(id => (Number(cart[id]) || 0) < oldQty[id])
       .map(id => ({ ...oldFirst[id], qty: oldQty[id] - (Number(cart[id]) || 0) }));
 
-    const sub = finalItems.reduce((s, it) => s + it.price * it.qty, 0);
+    const sub = Math.round(finalItems.reduce((s, it) => s + it.price * it.qty, 0));
     const d = Math.round((sub * discount) / 100);
     const g = Math.round(((sub - d) * gstRate) / 100);
     const finalTotal = Math.max(0, sub - d + g - Number(cashDiscount || 0));
@@ -2410,7 +2440,7 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
         const baseKots = base.kots?.length ? base.kots : [{ id: uid("kot"), kotNumber: 1, items: base.items || [], createdAt: base.createdAt, status: base.status }];
         const nextNo = Math.max(1, ...baseKots.map(k => k.kotNumber || 1)) + 1;
         const newItems = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: rates[id] ?? m.price, qty, kotNumber: nextNo }; });
-        const addedTotal = newItems.reduce((s, it) => s + it.price * it.qty, 0);
+        const addedTotal = Math.round(newItems.reduce((s, it) => s + it.price * it.qty, 0));
         const runKot = { id: uid("kot"), kotNumber: nextNo, items: newItems, createdAt: Date.now(), status: "new", isRunning: true };
         await runTransaction(db, async (tx) => {
           const oref = doc(db, "orders", base.id);
@@ -2454,7 +2484,7 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
     }
     setPlacing(true);
     try {
-      const items = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: rates[id] ?? m.price, qty, kotNumber: 1 }; });
+      const items = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: rates[id] ?? m.price, qty: parseFloat(qty) || 0, kotNumber: 1 }; });
       const orderId = uid("o");
       const sub = cartSubtotal;
       const d = Math.round((sub * discount) / 100);
@@ -2542,7 +2572,7 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
       const baseKots = baseOrder.kots?.length ? baseOrder.kots : [{ id: uid("kot"), kotNumber: 1, items: baseOrder.items || [], createdAt: baseOrder.createdAt, status: baseOrder.status }];
       const nextNo = Math.max(1, ...baseKots.map(k => k.kotNumber || 1)) + 1;
       const newItems = cartItems.map(([id, qty]) => { const m = menu.find(x => x.id === id); return { itemId: id, name: m.name, portion: m.portion || "", price: rates[id] ?? m.price, qty, kotNumber: nextNo }; });
-      const addedTotal = newItems.reduce((s, it) => s + it.price * it.qty, 0);
+      const addedTotal = Math.round(newItems.reduce((s, it) => s + it.price * it.qty, 0));
       const runKot = { id: uid("kot"), kotNumber: nextNo, items: newItems, createdAt: Date.now(), status: "new", isRunning: true };
       await runTransaction(db, async (tx) => { // live-total txn (running)
         const oref = doc(db, "orders", orderId);
@@ -2654,10 +2684,10 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
                   </div>
                   <div style={{ display: "flex", alignItems: "center", width: 84, justifyContent: "center", border: "1px solid " + C.line, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
                     <button onClick={() => setQty(id, q - 1)} style={{ width: 26, height: 26, border: "none", background: C.cardAlt, color: C.ink, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>-</button>
-                    <input type="text" inputMode="decimal" value={q} onChange={(e) => setQty(id, e.target.value)} style={{ flex: 1, width: "100%", minWidth: 30, textAlign: "center", fontWeight: 900, fontSize: 13, color: C.ink, border: "none", background: "transparent", outline: "none", fontFamily: "monospace" }} />
+                    <QtyInput value={q} onCommit={(v) => setQty(id, v)} style={{ flex: 1, width: "100%", minWidth: 30, textAlign: "center", fontWeight: 900, fontSize: 13, color: C.ink, border: "none", background: "transparent", outline: "none", fontFamily: "monospace" }} />
                     <button onClick={() => setQty(id, q + 1)} style={{ width: 26, height: 26, border: "none", background: C.goldLight, color: C.goldText, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
                   </div>
-                  <div style={{ width: 64, textAlign: "right", fontWeight: 800, fontSize: 13, color: C.ink, fontFamily: "monospace", flexShrink: 0 }}>{inr((rates[id] ?? m.price) * q)}</div>
+                  <div style={{ width: 64, textAlign: "right", fontWeight: 800, fontSize: 13, color: C.ink, fontFamily: "monospace", flexShrink: 0 }}>{inr((rates[id] ?? m.price) * (Number(q) || 0))}</div>
                   <button onClick={() => setQty(id, 0)} style={{ width: 16, background: "transparent", border: "none", color: C.gray, fontSize: 13, cursor: "pointer", padding: 0, flexShrink: 0 }}>x</button>
                 </div>
               );
