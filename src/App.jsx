@@ -4271,7 +4271,7 @@ function BillPOSScreenInner(p) {
     if (i >= 0) return prev.map((it, k) => (k === i ? { ...it, qty: it.qty + 1 } : it));
     return [...prev, { _new: true, itemId: m.id, name: m.name, portion: m.portion || "", price: m.price, qty: 1, _rowId: Date.now() + "_" + Math.random().toString(36).slice(2, 6) }];
   });
-  const changeQty = (rowId, d) => setItems((prev) => prev.flatMap((it) => (it._rowId !== rowId ? [it] : (it.qty + d <= 0 ? [] : [{ ...it, qty: Math.round((it.qty + d) * 100) / 100 }]))));
+  const changeQty = (rowId, d) => setItems((prev) => prev.flatMap((it) => (it._rowId !== rowId ? [it] : (Number(it.qty) + Number(d) <= 0 ? [] : [{ ...it, qty: Math.max(0.01, Math.round((Number(it.qty) + Number(d)) * 100) / 100) }]))));
   const [showNew, setShowNew] = useState(false);
     const [savingItem, setSavingItem] = useState(false);
 
@@ -4420,9 +4420,11 @@ function BillPOSScreenInner(p) {
   };
 
   const commitQty = (rowId, raw) => {
-    const v = parseFloat(String(raw).replace(",", "."));
+    const cleaned = String(raw).replace(",", ".").trim();
+    if (cleaned === "" || cleaned === ".") return false;
+    const v = parseFloat(cleaned);
     if (!Number.isFinite(v) || v <= 0) return false;
-    setItems((prev) => prev.map((it) => (it._rowId === rowId ? { ...it, qty: Math.round(v * 100) / 100 } : it)));
+    setItems((prev) => prev.map((it) => (it._rowId === rowId ? { ...it, qty: Math.max(0.01, Math.round(v * 100) / 100) } : it)));
     return true;
   };
   const commitPrice = (rowId, raw) => {
@@ -4604,10 +4606,10 @@ function BillPOSScreenInner(p) {
             </div>
             <div style={{ display: "flex", alignItems: "center", border: `1.5px solid #DC2626`, borderRadius: 6, background: isDark ? "#161F2F" : "#fff", overflow: "hidden", height: 30 }}>
               <button type="button" onClick={() => changeQty(it._rowId, -1)} style={{ width: 26, height: 30, border: "none", background: "#FEF2F2", color: "#DC2626", fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-              <input key={it._rowId + "_q_" + it.qty} type="number" inputMode="decimal" min={0} step="any" defaultValue={it.qty}
+              <input key={it._rowId + "_q_" + it.qty} type="text" inputMode="decimal" defaultValue={it.qty}
                 onBlur={(e) => { if (!commitQty(it._rowId, e.target.value)) e.target.value = it.qty; }}
                 onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }}
-                style={{ width: 32, height: 30, textAlign: "center", border: "none", background: isDark ? "#161F2F" : "#fff", fontWeight: 900, fontSize: 14, color: "#DC2626", padding: 0, outline: "none" }} />
+                style={{ width: 44, height: 30, textAlign: "center", border: "none", background: isDark ? "#161F2F" : "#fff", fontWeight: 900, fontSize: 14, color: "#DC2626", padding: 0, outline: "none" }} />
               <button type="button" onClick={() => changeQty(it._rowId, 1)} style={{ width: 26, height: 30, border: "none", background: "#DC2626", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
             </div>
             <div style={{ width: 58, textAlign: "right", fontWeight: 900, fontSize: 13, fontFamily: "'JetBrains Mono', monospace", color: "#DC2626" }}>₹{Math.round(it.price * it.qty * 100) / 100}</div>
