@@ -3612,6 +3612,41 @@ const handleWaiterPinSubmitOld = () => {
         </div>
       )}
 
+      {/* FEATURE-REORDER-PROMINENT */}
+      {isLoggedIn && myOrders.length > 0 && (
+        <div style={{ padding: "12px 14px 0" }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", marginBottom: 8, fontFamily: "'Outfit', sans-serif" }}>🔄 Order Again</div>
+          <div className="enp-hs" style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+            {[...myOrders].reverse().slice(0, 5).map(o => (
+              <button
+                key={o.id}
+                onClick={() => reorderOrder(o)}
+                style={{
+                  flexShrink: 0,
+                  minWidth: 160,
+                  background: "#161F2F",
+                  border: "1px solid #273449",
+                  borderRadius: 12,
+                  padding: 10,
+                  textAlign: "left",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {(o.items || []).slice(0, 2).map(i => i.name).join(", ")}
+                  {(o.items || []).length > 2 ? " +" + ((o.items || []).length - 2) : ""}
+                </div>
+                <div style={{ fontSize: 10, color: "#8B9BB4", marginTop: 4, display: "flex", justifyContent: "space-between" }}>
+                  <span>#{o.id.slice(1, 5).toUpperCase()}</span>
+                  <span>{inr(o.finalTotal || 0)}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {!searchQuery.trim() && comboOffers && comboOffers.filter((c) => c.active).length > 0 && (
         <div style={{ paddingTop: 18 }}>
           <div style={{ padding: "0 14px 10px", fontFamily: "'Outfit', sans-serif", fontSize: 17, fontWeight: 800, color: "#fff" }}>🎯 Combo Offers</div>
