@@ -499,10 +499,12 @@ function EstimatePanel({ C, menu, orders, isMobile, items, setItems, persons, se
 
   const setQty = (m, q) => {
     haptic(6);
+    const parsed = (q === "" || q === "." || q === "-") ? 0 : parseFloat(q);
+    const finalQty = isNaN(parsed) ? 0 : Math.round(parsed * 100) / 100;
     setItems((prev) => {
-      if (q <= 0) return prev.filter((p) => p.id !== m.id);
-      if (prev.some((p) => p.id === m.id)) return prev.map((p) => (p.id === m.id ? { ...p, qty: q } : p));
-      return [...prev, { id: m.id, name: m.name, price: Number(m.price) || 0, qty: q }];
+      if (finalQty <= 0) return prev.filter((p) => p.id !== m.id);
+      if (prev.some((p) => p.id === m.id)) return prev.map((p) => (p.id === m.id ? { ...p, qty: finalQty } : p));
+      return [...prev, { id: m.id, name: m.name, price: Number(m.price) || 0, qty: finalQty }];
     });
   };
   const removeId = (id) => setItems((prev) => prev.filter((p) => p.id !== id));
