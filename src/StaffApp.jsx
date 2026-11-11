@@ -2451,7 +2451,15 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
       const g = Math.round(((sub - d) * gstRate) / 100);
       const finalTotal = Math.max(0, sub - d) + g;
       const order = { id: orderId, table: table === "parcel" ? "" : table, orderType: table === "parcel" ? "parcel" : "dine_in", customer: { name: custName || "Walk-in", phone: custPhone || "", address: custAddress || "" }, cashDiscount: Number(cashDiscount || 0), paymentSplit: payMode === "split" ? { cash: Number(splitCash), online: Number(splitUpi) } : null, items, waiter: waiterName || "Staff", kots: [{ id: uid("kot"), kotNumber: 1, items, createdAt: Date.now(), status: "new", isRunning: false }], status: "new", paid: false, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, createdAt: Date.now(), createdBy: auth.currentUser?.uid };
-      await setDoc(doc(db, "orders", orderId), order);
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, "orders", orderId);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) {
+          tx.set(ref, order);
+        } else {
+          throw new Error("Ye order pehle se hai, dobara create nahi hoga.");
+        }
+      });
       if (setOrders) setOrders(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]);
       printKOT(order);
       try { localStorage.removeItem(`staff_draft_${table}`); } catch (e) {}
@@ -5041,7 +5049,7 @@ class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { err: null }; }
   static getDerivedStateFromError(err) { return { err }; }
   componentDidCatch(err, info) {
-    tryRecover(arguments[0]); console.error("Staff app crash:", err, info); }
+    tryRecover(error); console.error("Staff app crash:", err, info); }
   render() {
     if (!this.state.err) return this.props.children;
     return (

@@ -27,7 +27,7 @@ function ImageUploadButton({ currentImage, onUploaded, label }) {
       if (window.cloudinary) {
         widgetRef.current = window.cloudinary.createUploadWidget(
           {
-            cloudName: "nnddxvcn",
+            cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "nnddxvcn",
             uploadPreset: "eatpark_uploads",
             sources: ["local", "camera", "url"],
             multiple: false,
@@ -365,7 +365,7 @@ class ErrorBoundary extends React.Component {
     return { hasError: true, error };
   }
   componentDidCatch(error, info) {
-    tryRecover(arguments[0]);
+    tryRecover(error);
     console.error('🔴 ErrorBoundary caught:', error);
     console.error('🔴 Component Stack:', info.componentStack);
     this.setState({ error, errorInfo: info });
