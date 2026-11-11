@@ -4744,7 +4744,8 @@ OUTPUT:
                   <input
                     value={p.amount}
                     onChange={(e) => editField(p._idx, "amount", e.target.value)}
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     placeholder="Amount"
                     style={{ ...field, padding: "6px 8px", fontSize: 13, width: 100, fontFamily: "monospace", fontWeight: 900 }}
                   />
