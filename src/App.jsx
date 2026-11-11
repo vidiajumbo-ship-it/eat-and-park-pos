@@ -7275,6 +7275,8 @@ export default function App() {
   const [staffRole, setStaffRole] = useState(null); // admin | staff | waiter
   const [emailInput, setEmailInput] = useState("");
   const hadUserRef = useRef(false);
+  // Pre-warm anonymous auth so API calls (AI, orders) always have a token
+  useEffect(() => { ensureUser().catch(() => {}); }, []);
   useEffect(() => onAuthStateChanged(auth, async (u) => {
     setAuthUser(u);
     if (u) hadUserRef.current = true;
