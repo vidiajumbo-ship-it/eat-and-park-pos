@@ -4402,7 +4402,7 @@ function BillPOSScreenInner(p) {
     if (isDraft) {
       const t = Number(aiRes.table);
       if (aiRes.orderType === "parcel") p.setOrderType("parcel");
-      else if (t >= 1 && t <= 12) { p.setOrderType("dine_in"); p.setTable(t); }
+      else if (t >= 1 && t <= 20) { p.setOrderType("dine_in"); p.setTable(t); }
     }
     if (aiRes.notes) p.setNotes(p.notes ? p.notes + ", " + aiRes.notes : aiRes.notes);
     closeAi(); setAiText(""); setAiRes(null); setTab("bill");
