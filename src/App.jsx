@@ -111,11 +111,11 @@ const FONTS = `
 .fade-scale { animation: fadeInScale 0.3s ease-out; }
 .pulse { animation: pulse 2s ease-in-out infinite; }
 .notification-pulse { animation: notificationPulse 2s ease-in-out infinite; }
-.dark-theme { filter: invert(0.92) hue-rotate(180deg); background: #111; min-height: 100vh; }
+
 .desktop-menu { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); column-gap: 24px; }
 .desktop-menu > * { grid-column: 1 / -1; }
 .desktop-menu > .smooth-slide-up { grid-column: auto; }
-.dark-theme img, .dark-theme .keep-color { filter: invert(1) hue-rotate(180deg); }
+
 @media print {
   .app-content { display: none !important; }
   .print-area { display: block !important; color: #000; font-family: 'JetBrains Mono', monospace; filter: none !important; }
@@ -3825,7 +3825,7 @@ const handleWaiterPinSubmitOld = () => {
               <button onClick={() => setShowSidebar(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer" }}>✕</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
-              <SidebarBtn icon={isDark ? "☀️" : "🌙"} text={isDark ? "Light Mode" : "Dark Mode"} onClick={() => { setIsDark(!isDark); setShowSidebar(false); }} highlight />
+
               <SidebarBtn icon={viewMode === "desktop" ? "📱" : "🖥️"} text={viewMode === "desktop" ? "App Mode" : "Desktop Mode"} onClick={() => { setViewMode(viewMode === "desktop" ? "app" : "desktop"); setShowSidebar(false); }} highlight />
               <SidebarBtn icon="🖼️" text="Photo Gallery" onClick={() => { setShowSidebar(false); setActiveModal('gallery'); }} />
               <SidebarBtn icon="📜" text="Order History" onClick={() => { setShowSidebar(false); setActiveModal('orderHistory'); }} />
@@ -7817,7 +7817,7 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
 
   return (
     <ErrorBoundary>
-      <div className={isDark ? "dark-theme" : ""} style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      <div className="" style={{ minHeight: "100vh", background: "var(--bg-color, #FAFAF8)", color: COLORS.ink, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
         <style>{FONTS}</style>
         {!online && (<div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999, background: COLORS.error, color: "#fff", textAlign: "center", padding: "6px 8px", fontWeight: 800, fontSize: 13 }}>📵 Internet nahi hai — order / KOT abhi nahi jayega</div>)}
         <div className="app-content">
