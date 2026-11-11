@@ -39,6 +39,19 @@ export const buildPaidPatch = (order, mode, by) => {
     paidBy: by || "Staff",
     payment: mode,
   };
+  
+  // Check karo ki ye delivery wala parcel hai ya nahi
+  const isDelivery =
+    order.orderType === "parcel" &&
+    !!(order.customer?.exactAddress || order.customer?.address);
+    
+  // Sirf ready orders ko served karo, aur wo bhi tab jab delivery nahi hai
+  if (order.status === "ready" && !isDelivery) {
+    patch.status = "served";
+    patch.servedAt = Date.now();
+  }
+  return patch;
+};
   if (order.orderType === "parcel" || order.status === "ready") patch.status = "served";
   return patch;
 };
