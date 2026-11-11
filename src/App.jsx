@@ -2767,27 +2767,22 @@ if (savedCart) {
   }, []);
 
   const cancelOrder = useCallback(async (orderId) => {
-    // 🆕 Check karo ki order abhi bhi "new" status me hai ya nahi
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-    
-    if (order.status !== 'new') {
-      showToast("⚠️ Khana ban chuka hai (Cooking shuru), ab cancel nahi ho sakta. Restaurant se baat karein.", 'error');
-      return;
-    }
-
     if (!window.confirm("Kya aap sach me ye order cancel karna chahte hain?")) return;
-    
     try {
-      await updateDoc(doc(db, "orders", orderId), { status: "cancelled", cancelledAt: Date.now() });
-      setOrdersState(prev => prev.map(o => o.id === orderId ? { ...o, status: "cancelled" } : o));
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, "orders", orderId);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error("Order not found");
+        if (snap.data().status !== "new") throw new Error("Kitchen ne khana banana shuru kar diya hai. Ab cancel nahi ho sakta.");
+        tx.update(ref, { status: "cancelled", cancelledAt: Date.now(), cancelledBy: "customer" });
+      });
+      setOrdersState(prev => prev.map(o => o.id === orderId ? { ...o, status: "cancelled", cancelledBy: "customer" } : o));
       showToast("❌ Order cancelled", 'warning');
     } catch (e) { 
       console.error(e);
-      showToast("⚠️ Failed to cancel. Server rules ne block kiya.", 'error'); 
+      showToast("⚠️ " + (e.message || "Cancel fail"), 'error'); 
     }
-  }, [orders, setOrdersState, showToast]);
-
+  }, [setOrdersState, showToast]);
   const reorderOrder = useCallback((order) => {
     const newCart = {};
     order.items.forEach(item => {
