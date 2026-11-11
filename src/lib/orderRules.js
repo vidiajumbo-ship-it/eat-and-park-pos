@@ -1,7 +1,5 @@
 // Eat & Park - order ke saare business rules yahin hain.
 // Rule badalna ho to sirf yahan badlo; Tables, Dashboard, Orders sab yahi use karte hain.
-// NOTE: ye functions .filter(isOpenParcel) jaise seedhe pass hote hain,
-// isliye inme sirf 1 argument (order) rakho. Doosra argument mat jodna.
 
 export const OPEN_WINDOW_MS = 18 * 3600 * 1000;
 export const PAID_STATUSES = ["paid"];
@@ -28,9 +26,7 @@ export const paidOrders = (orders) => orders.filter((o) => o.paid && !isCancelle
 export const paidRevenue = (orders) =>
   paidOrders(orders).reduce((s, o) => s + (Number(o.finalTotal) || 0), 0);
 
-// "Paid" karte waqt Firestore me jo fields likhni hain (Orders tab + Billing dono yahi use karte hain).
-// Parcel ya ready order paid hote hi "served" ho jata hai; preparing/new ka status nahi chhedte
-// (warna kitchen se order beech me gayab ho jayega).
+// "Paid" karte waqt Firestore me jo fields likhni hain.
 export const buildPaidPatch = (order, mode, by) => {
   const patch = {
     paid: true,
@@ -40,18 +36,15 @@ export const buildPaidPatch = (order, mode, by) => {
     payment: mode,
   };
   
-  // Check karo ki ye delivery wala parcel hai ya nahi
+  // Delivery parcel (jiska address ho) ka status rider hi badlega.
+  // Sirf ready + non-delivery order ko yahan auto-serve karo.
   const isDelivery =
     order.orderType === "parcel" &&
     !!(order.customer?.exactAddress || order.customer?.address);
     
-  // Sirf ready orders ko served karo, aur wo bhi tab jab delivery nahi hai
   if (order.status === "ready" && !isDelivery) {
     patch.status = "served";
     patch.servedAt = Date.now();
   }
-  return patch;
-};
-  if (order.orderType === "parcel" || order.status === "ready") patch.status = "served";
   return patch;
 };
