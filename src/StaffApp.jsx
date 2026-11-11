@@ -2321,7 +2321,15 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
 
   const setQty = (id, q) => {
     haptic(5);
-    setCart(prev => { const next = { ...prev }; if (q <= 0) delete next[id]; else next[id] = q; return next; });
+    // String se decimal support karne ke liye safely parse karo
+    const parsed = q === "" || q === "." ? 0 : parseFloat(q);
+    const finalQty = isNaN(parsed) ? 0 : Math.round(parsed * 100) / 100;
+    setCart(prev => { 
+      const next = { ...prev }; 
+      if (finalQty <= 0) delete next[id]; 
+      else next[id] = finalQty; 
+      return next; 
+    });
   };
 
   const applyCartChanges = async () => {
@@ -2644,7 +2652,7 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
                   </div>
                   <div style={{ display: "flex", alignItems: "center", width: 84, justifyContent: "center", border: "1px solid " + C.line, borderRadius: 6, overflow: "hidden", flexShrink: 0 }}>
                     <button onClick={() => setQty(id, q - 1)} style={{ width: 26, height: 26, border: "none", background: C.cardAlt, color: C.ink, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>-</button>
-                    <input type="number" value={q} onChange={(e) => setQty(id, parseInt(e.target.value) || 0)} style={{ flex: 1, width: "100%", minWidth: 30, textAlign: "center", fontWeight: 900, fontSize: 13, color: C.ink, border: "none", background: "transparent", outline: "none", fontFamily: "monospace" }} />
+                    <input type="text" inputMode="decimal" value={q} onChange={(e) => setQty(id, e.target.value)} style={{ flex: 1, width: "100%", minWidth: 30, textAlign: "center", fontWeight: 900, fontSize: 13, color: C.ink, border: "none", background: "transparent", outline: "none", fontFamily: "monospace" }} />
                     <button onClick={() => setQty(id, q + 1)} style={{ width: 26, height: 26, border: "none", background: C.goldLight, color: C.goldText, fontSize: 15, fontWeight: 900, cursor: "pointer", padding: 0 }}>+</button>
                   </div>
                   <div style={{ width: 64, textAlign: "right", fontWeight: 800, fontSize: 13, color: C.ink, fontFamily: "monospace", flexShrink: 0 }}>{inr((rates[id] ?? m.price) * q)}</div>
