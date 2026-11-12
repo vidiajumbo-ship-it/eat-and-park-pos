@@ -3542,9 +3542,9 @@ function HistoryView({ C, isMobile, isOwner }) {
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
         <span style={{ fontSize: 11, fontWeight: 800, color: C.gray }}>FROM</span>
-        <input type="date" value={from} max={invDateKey()} onChange={(e) => e.target.value && setFrom(e.target.value)} style={dateInput} />
+        <input type="date" value={from} max={invDateKey()} onChange={(e) => { if (e.target.value) { setFrom(e.target.value); if (e.target.value > to) setTo(e.target.value); } }} style={dateInput} />
         <span style={{ fontSize: 11, fontWeight: 800, color: C.gray }}>TO</span>
-        <input type="date" value={to} max={invDateKey()} onChange={(e) => e.target.value && setTo(e.target.value)} style={dateInput} />
+        <input type="date" value={to} max={invDateKey()} onChange={(e) => { if (e.target.value) { setTo(e.target.value); if (e.target.value < from) setFrom(e.target.value); } }} style={dateInput} />
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
         {chip("all", "All")}{chip("active", "Active")}{chip("paid", "Paid")}{chip("due", "Due")}{chip("cancelled", "Cancelled")}
@@ -3812,6 +3812,7 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
   const GT = goldTextOf(C);
   const [from, setFrom] = useState(() => { const d = new Date(); d.setDate(1); return invDateKey(d); });
   const [to, setTo] = useState(invDateKey());
+  // PATCH-DATE-FIX: Jab from change ho toh to ko automatically update karo
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState("");
