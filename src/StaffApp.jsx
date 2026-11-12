@@ -3826,6 +3826,10 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
   const [vendorId, setVendorId] = useState("");
   const [newCat, setNewCat] = useState("");
   const [showNewCat, setShowNewCat] = useState(false);
+  // FEATURE-BULK-EXPENSE
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
   // FEATURE-EXPENSE-DETAILS
   const [detailCat, setDetailCat] = useState(null);
   const catExpenses = detailCat ? list.filter(e => (e.category || "Anya") === detailCat) : [];
@@ -3898,6 +3902,42 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
       toast("Kharcha save ho gaya: " + inr(amt), "success");
       setAmount(""); setNote(""); setVendorId("");
     } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
+  };
+
+  // FEATURE-BULK-EXPENSE: Bulk import function
+  const handleBulkSave = async () => {
+    if (!bulkText.trim()) { toast("Text khali hai", "warning"); return; }
+    setBulkLoading(true);
+    try {
+      const lines = bulkText.split("\n").filter(l => l.trim());
+      const batch = writeBatch(db);
+      let count = 0;
+      for (const line of lines) {
+        // Format: Date, Amount, Category, Note (comma separated)
+        const parts = line.split(",").map(s => s.trim());
+        if (parts.length < 2) continue;
+        const bDate = parts[0] || invDateKey();
+        const bAmt = Number(parts[1]);
+        const bCat = parts[2] || cats[0];
+        const bNote = parts.slice(3).join(", ") || "";
+        if (isNaN(bAmt) || bAmt <= 0) continue;
+        
+        const ref = doc(collection(db, "expenses"));
+        batch.set(ref, {
+          date: bDate, amount: bAmt, category: bCat, mode: "cash",
+          note: bNote, by: waiterName || "Staff", createdAt: Date.now()
+        });
+        count++;
+      }
+      if (count === 0) throw new Error("Koi valid line nahi mili. Format check karo.");
+      await batch.commit();
+      toast(`✅ ${count} kharchay ek saath add ho gaye!`, "success");
+      setBulkOpen(false); setBulkText("");
+    } catch (e) {
+      toast(e.message || "Bulk import fail", "error");
+    } finally {
+      setBulkLoading(false);
+    }
   };
 
   const remove = async (e) => {
@@ -3985,9 +4025,29 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
         </ModalShell>
       )}
       <div style={{ marginBottom: 14 }}>
-        <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Kharcha</h2>
-        <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 2 }}>Roz ka kharcha yahan likho - P&amp;L report isi se banti hai</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 22, fontWeight: 800, color: C.ink }}>Kharcha</h2>
+            <div style={{ fontSize: 12, color: C.gray, fontWeight: 700, marginTop: 2 }}>Roz ka kharcha yahan likho - P&amp;L report isi se banti hai</div>
+          </div>
+          <button onClick={() => setBulkOpen(true)} style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid " + G, background: C.card, color: GT, fontWeight: 800, fontSize: 12, cursor: "pointer" }}>📥 Bulk Import</button>
+        </div>
       </div>
+
+      {/* FEATURE-BULK-EXPENSE MODAL */}
+      {bulkOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setBulkOpen(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 20, width: "100%", maxWidth: 500 }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.ink, marginBottom: 8 }}>📥 Bulk Import Kharcha</div>
+            <div style={{ fontSize: 12, color: C.gray, marginBottom: 12 }}>Ek line mein ek kharcha likho. Format:<br/><b>Date (YYYY-MM-DD), Amount, Category, Note</b></div>
+            <textarea rows={6} value={bulkText} onChange={e => setBulkText(e.target.value)} placeholder="2026-11-01, 500, Salary, Ramesh ki salary&#10;2026-11-02, 200, Packing, Parcel boxes" style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid " + C.line, background: C.bg, color: C.ink, fontFamily: "monospace", fontSize: 12, boxSizing: "border-box", marginBottom: 14 }} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setBulkOpen(false)} style={{ flex: 1, padding: 12, borderRadius: 10, border: "1px solid " + C.line, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+              <button onClick={handleBulkSave} disabled={bulkLoading} style={{ flex: 1, padding: 12, borderRadius: 10, border: "none", background: G, color: "#fff", fontWeight: 800, cursor: bulkLoading ? "not-allowed" : "pointer" }}>{bulkLoading ? "⏳ Saving..." : "Import All"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{ background: C.card, border: "1px solid " + C.line, borderRadius: 14, padding: isMobile ? 12 : 18, marginBottom: 16 }}>
         <div style={lbl}>Amount (Rs)</div>
