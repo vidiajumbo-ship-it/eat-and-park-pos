@@ -3904,41 +3904,62 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
     } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
   };
 
-  // FEATURE-BULK-EXPENSE: Bulk import function
+    // FEATURE-BULK-EXPENSE: Smart Bulk import (JSON + CSV)
   const handleBulkSave = async () => {
     if (!bulkText.trim()) { toast("Text khali hai", "warning"); return; }
     setBulkLoading(true);
     try {
-      const lines = bulkText.split("\n").filter(l => l.trim());
+      let itemsToSave = [];
+      
+      // Check if JSON format
+      if (bulkText.trim().startsWith("[") || bulkText.trim().startsWith("{")) {
+        const parsed = JSON.parse(bulkText);
+        const arr = Array.isArray(parsed) ? parsed : [parsed];
+        itemsToSave = arr.map(b => ({
+          date: b.date || invDateKey(),
+          amount: Number(b.amount || b.value || 0),
+          category: b.category || b.cat || cats[0],
+          mode: b.mode || "cash",
+          note: b.note || b.description || "",
+        }));
+      } else {
+        // Treat as CSV
+        const lines = bulkText.split("\n").filter(l => l.trim());
+        itemsToSave = lines.map(line => {
+          const parts = line.split(",").map(s => s.trim());
+          if (parts.length < 2) return null;
+          return {
+            date: parts[0] || invDateKey(),
+            amount: Number(parts[1]),
+            category: parts[2] || cats[0],
+            mode: "cash",
+            note: parts.slice(3).join(", ") || "",
+          };
+        }).filter(Boolean);
+      }
+
+      const validItems = itemsToSave.filter(i => i.amount > 0);
+      if (validItems.length === 0) throw new Error("Koi valid amount nahi mila. JSON ya CSV check karo.");
+
       const batch = writeBatch(db);
-      let count = 0;
-      for (const line of lines) {
-        // Format: Date, Amount, Category, Note (comma separated)
-        const parts = line.split(",").map(s => s.trim());
-        if (parts.length < 2) continue;
-        const bDate = parts[0] || invDateKey();
-        const bAmt = Number(parts[1]);
-        const bCat = parts[2] || cats[0];
-        const bNote = parts.slice(3).join(", ") || "";
-        if (isNaN(bAmt) || bAmt <= 0) continue;
-        
+      validItems.forEach(item => {
         const ref = doc(collection(db, "expenses"));
         batch.set(ref, {
-          date: bDate, amount: bAmt, category: bCat, mode: "cash",
-          note: bNote, by: waiterName || "Staff", createdAt: Date.now()
+          date: item.date, amount: item.amount, category: item.category,
+          mode: item.mode, note: item.note, by: waiterName || "Staff", createdAt: Date.now()
         });
-        count++;
-      }
-      if (count === 0) throw new Error("Koi valid line nahi mili. Format check karo.");
+      });
+      
       await batch.commit();
-      toast(`✅ ${count} kharchay ek saath add ho gaye!`, "success");
+      toast(`✅ ${validItems.length} kharchay ek saath add ho gaye!`, "success");
       setBulkOpen(false); setBulkText("");
     } catch (e) {
-      toast(e.message || "Bulk import fail", "error");
+      toast(e.message || "Bulk import fail. Format check karo.", "error");
     } finally {
       setBulkLoading(false);
     }
   };
+
 
   const remove = async (e) => {
     if (!isOwner) { toast("Sirf owner kharcha delete kar sakta hai", "warning"); return; }
@@ -4039,7 +4060,7 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setBulkOpen(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: C.card, borderRadius: 16, padding: 20, width: "100%", maxWidth: 500 }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: C.ink, marginBottom: 8 }}>📥 Bulk Import Kharcha</div>
-            <div style={{ fontSize: 12, color: C.gray, marginBottom: 12 }}>Ek line mein ek kharcha likho. Format:<br/><b>Date (YYYY-MM-DD), Amount, Category, Note</b></div>
+            <div style={{ fontSize: 12, color: C.gray, marginBottom: 12 }}>CSV Format: <b>Date, Amount, Category, Note</b><br/>Ya JSON format (Gemini output) paste karo.</div>
             <textarea rows={6} value={bulkText} onChange={e => setBulkText(e.target.value)} placeholder="2026-11-01, 500, Salary, Ramesh ki salary&#10;2026-11-02, 200, Packing, Parcel boxes" style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid " + C.line, background: C.bg, color: C.ink, fontFamily: "monospace", fontSize: 12, boxSizing: "border-box", marginBottom: 14 }} />
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setBulkOpen(false)} style={{ flex: 1, padding: 12, borderRadius: 10, border: "1px solid " + C.line, background: "transparent", color: C.ink, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
