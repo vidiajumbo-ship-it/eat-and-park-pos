@@ -1446,6 +1446,9 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
   const start = rangeStart ?? defaultStart;
   const end = rangeEnd ?? Date.now();
   const rangeAll = orders.filter(o => {
+    // FIX: 12 ghante se purane orders staff ko mat dikhao (Dashboard/Orders tab me)
+    const age = Date.now() - (o.createdAt || 0);
+    if (age > 12 * 60 * 60 * 1000) return false; 
     if (o.createdAt < start || o.createdAt >= end) return false;
     if (filter === "cancelled") return o.status === "cancelled";
     return o.status !== "cancelled";
@@ -1679,7 +1682,12 @@ function KOTView({ C, isMobile, orders, setOrders, readOnly = false }) {
   }, [orders, readOnly]);
   const [, setTick] = useState(0);
   useEffect(() => { const iv = setInterval(() => setTick(x => x + 1), 15000); return () => clearInterval(iv); }, []);
-  const kotOrders = orders.filter(o => (o.status === "new" || o.status === "preparing") && Date.now() - (o.createdAt || 0) < OPEN_WINDOW_MS);
+  // FIX: Sirf 12 ghante ke andar ke orders dikhao
+  const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+  const kotOrders = orders.filter(o => {
+    if (o.status !== "new" && o.status !== "preparing") return false;
+    return Date.now() - (o.createdAt || 0) < TWELVE_HOURS;
+  });
   const advanceOrder = async (order) => {
     if (order.orderType === "parcel" && order.status === "ready") {
       toast("Parcel order delivery boy handle karega", "warning");
