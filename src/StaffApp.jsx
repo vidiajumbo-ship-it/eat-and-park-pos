@@ -3904,33 +3904,37 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
     } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
   };
 
-    // FEATURE-BULK-EXPENSE: Smart Bulk import (JSON + CSV)
+      // FEATURE-BULK-EXPENSE: Line-by-line JSON extractor (Error proof)
   const handleBulkSave = async () => {
     if (!bulkText.trim()) { toast("Text khali hai", "warning"); return; }
     setBulkLoading(true);
     try {
       let itemsToSave = [];
-      
-      // Check if JSON format
-      if (bulkText.trim().startsWith("[") || bulkText.trim().startsWith("{")) {
-        let cleanJson = bulkText.trim();
-        // Remove markdown backticks if any
-        cleanJson = cleanJson.replace(/```json/gi, "").replace(/```/g, "").trim();
-        // Fix trailing commas (common Gemini error)
-        cleanJson = cleanJson.replace(/,\s*([\]}])/g, "$1");
+      const text = bulkText.trim();
+
+      if (text.startsWith("[") || text.startsWith("{")) {
+        // Regex se line by line data nikalo (JSON.parse use nahi karenge)
+        // Ye format dhundhega: "key": "value" ya "key": 123
+        const itemBlocks = text.split(/\},\s*\{/); // Objects ko alag karo
         
-        const parsed = JSON.parse(cleanJson);
-        const arr = Array.isArray(parsed) ? parsed : [parsed];
-        itemsToSave = arr.map(b => ({
-          date: b.date || invDateKey(),
-          amount: Number(b.amount || b.value || 0),
-          category: b.category || b.cat || cats[0],
-          mode: b.mode || "cash",
-          note: b.note || b.description || "",
-        }));
+        itemsToSave = itemBlocks.map(block => {
+          const getVal = (key) => {
+            const match = block.match(new RegExp('"' + key + '"\\s*:\\s*"?([^",\\n\\}]+)"?'));
+            return match ? match[1].trim() : null;
+          };
+          
+          const amtStr = getVal("amount") || getVal("value");
+          return {
+            date: getVal("date") || invDateKey(),
+            amount: Number(amtStr) || 0,
+            category: getVal("category") || getVal("cat") || cats[0],
+            mode: getVal("mode") || "cash",
+            note: getVal("note") || getVal("description") || getVal("vendorName") || "",
+          };
+        });
       } else {
-        // Treat as CSV
-        const lines = bulkText.split("\n").filter(l => l.trim());
+        // CSV Format
+        const lines = text.split("\n").filter(l => l.trim());
         itemsToSave = lines.map(line => {
           const parts = line.split(",").map(s => s.trim());
           if (parts.length < 2) return null;
@@ -3960,11 +3964,12 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
       toast(`✅ ${validItems.length} kharchay ek saath add ho gaye!`, "success");
       setBulkOpen(false); setBulkText("");
     } catch (e) {
-      toast(e.message || "Bulk import fail. Format check karo.", "error");
+      toast(e.message || "Bulk import fail", "error");
     } finally {
       setBulkLoading(false);
     }
   };
+
 
 
   const remove = async (e) => {
