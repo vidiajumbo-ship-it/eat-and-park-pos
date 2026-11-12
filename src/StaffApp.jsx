@@ -3913,7 +3913,13 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
       
       // Check if JSON format
       if (bulkText.trim().startsWith("[") || bulkText.trim().startsWith("{")) {
-        const parsed = JSON.parse(bulkText);
+        let cleanJson = bulkText.trim();
+        // Remove markdown backticks if any
+        cleanJson = cleanJson.replace(/```json/gi, "").replace(/```/g, "").trim();
+        // Fix trailing commas (common Gemini error)
+        cleanJson = cleanJson.replace(/,\s*([\]}])/g, "$1");
+        
+        const parsed = JSON.parse(cleanJson);
         const arr = Array.isArray(parsed) ? parsed : [parsed];
         itemsToSave = arr.map(b => ({
           date: b.date || invDateKey(),
