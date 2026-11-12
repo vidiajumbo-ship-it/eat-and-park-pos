@@ -3904,37 +3904,49 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
     } catch (e) { toast(e.message, "error"); } finally { setSaving(false); }
   };
 
-      // FEATURE-BULK-EXPENSE: Line-by-line JSON extractor (Error proof)
+        // FEATURE-BULK-EXPENSE: Smart JSON/CSV Bulk Import (Import Tab logic)
   const handleBulkSave = async () => {
     if (!bulkText.trim()) { toast("Text khali hai", "warning"); return; }
     setBulkLoading(true);
     try {
       let itemsToSave = [];
-      const text = bulkText.trim();
-
-      if (text.startsWith("[") || text.startsWith("{")) {
-        // Regex se line by line data nikalo (JSON.parse use nahi karenge)
-        // Ye format dhundhega: "key": "value" ya "key": 123
-        const itemBlocks = text.split(/\},\s*\{/); // Objects ko alag karo
+      const rawText = bulkText.trim();
+      
+      if (rawText.startsWith("[") || rawText.startsWith("{")) {
+        // JSON Line-by-line parser (Gemini ke gande format se bachne ke liye)
+        let cleanJson = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
         
-        itemsToSave = itemBlocks.map(block => {
-          const getVal = (key) => {
-            const match = block.match(new RegExp('"' + key + '"\\s*:\\s*"?([^",\\n\\}]+)"?'));
-            return match ? match[1].trim() : null;
-          };
-          
-          const amtStr = getVal("amount") || getVal("value");
-          return {
-            date: getVal("date") || invDateKey(),
-            amount: Number(amtStr) || 0,
-            category: getVal("category") || getVal("cat") || cats[0],
-            mode: getVal("mode") || "cash",
-            note: getVal("note") || getVal("description") || getVal("vendorName") || "",
-          };
-        });
+        try {
+          // Pehle normal parse try karo
+          const parsed = JSON.parse(cleanJson);
+          const arr = Array.isArray(parsed) ? parsed : [parsed];
+          itemsToSave = arr.map(b => ({
+            date: b.date || invDateKey(),
+            amount: Number(b.amount || b.value || 0),
+            category: b.category || b.cat || cats[0],
+            mode: b.mode || "cash",
+            note: b.note || b.description || b.vendorName || "",
+          }));
+        } catch (jsonErr) {
+          // Agar normal parse fail ho jaye (syntax error), toh line-by-line padho
+          const blocks = cleanJson.split(/\},\s*\{/);
+          itemsToSave = blocks.map(block => {
+            const getVal = (key) => {
+              const m = block.match(new RegExp('"' + key + '"\\s*:\\s*"?([^",\\n\\}]+)"?'));
+              return m ? m[1].trim() : null;
+            };
+            return {
+              date: getVal("date") || invDateKey(),
+              amount: Number(getVal("amount") || getVal("value")) || 0,
+              category: getVal("category") || getVal("cat") || cats[0],
+              mode: getVal("mode") || "cash",
+              note: getVal("note") || getVal("description") || getVal("vendorName") || "",
+            };
+          });
+        }
       } else {
         // CSV Format
-        const lines = text.split("\n").filter(l => l.trim());
+        const lines = rawText.split("\n").filter(l => l.trim());
         itemsToSave = lines.map(line => {
           const parts = line.split(",").map(s => s.trim());
           if (parts.length < 2) return null;
@@ -3964,11 +3976,12 @@ function ExpensesView({ C, isMobile, isOwner, waiterName }) {
       toast(`✅ ${validItems.length} kharchay ek saath add ho gaye!`, "success");
       setBulkOpen(false); setBulkText("");
     } catch (e) {
-      toast(e.message || "Bulk import fail", "error");
+      toast(e.message || "Bulk import fail. Format check karo.", "error");
     } finally {
       setBulkLoading(false);
     }
   };
+
 
 
 
