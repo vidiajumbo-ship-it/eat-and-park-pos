@@ -1,0 +1,190 @@
+import React, { useState } from "react";
+import { QRCodeCanvas } from "qrcode.react";
+
+export default function QRGenerator() {
+  const [tableCount, setTableCount] = useState(20);
+  const BASE_URL = window.location.origin;
+
+  const tables = Array.from({ length: tableCount }, (_, i) => i + 1);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="qr-page" style={{ padding: 30, background: "#FAFAF8", minHeight: "100vh", fontFamily: "system-ui" }}>
+      
+      {/* Screen-only controls */}
+      <div className="no-print" style={{ textAlign: "center", marginBottom: 30 }}>
+        <h1 style={{ margin: 0, color: "#FF5A1F", fontSize: 28, fontWeight: 900 }}>
+          🍽️ Table QR Codes
+        </h1>
+        <p style={{ color: "#666", marginTop: 8, fontSize: 14 }}>
+          Print karein aur har table par chipkayein
+        </p>
+      </div>
+
+      {/* Controls — hide on print */}
+      <div className="no-print" style={{ 
+        background: "#fff", padding: 20, borderRadius: 12, 
+        maxWidth: 500, margin: "0 auto 30px", 
+        boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+        display: "flex", gap: 12, alignItems: "center", justifyContent: "center", flexWrap: "wrap"
+      }}>
+        <label style={{ fontWeight: 700, fontSize: 14 }}>Total Tables:</label>
+        <input
+          type="number" min="1" max="100"
+          value={tableCount}
+          onChange={(e) => setTableCount(Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))}
+          style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", fontSize: 16, fontWeight: 700, width: 80, textAlign: "center" }}
+        />
+        <button onClick={handlePrint} style={{ padding: "10px 24px", background: "#FF5A1F", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+          🖨️ Print All QR Codes
+        </button>
+      </div>
+
+      {/* Print container — QR cards */}
+      <div className="qr-grid" style={{ 
+        display: "grid", 
+        gridTemplateColumns: "repeat(2, 1fr)", 
+        gap: 16, 
+        maxWidth: 800, 
+        margin: "0 auto" 
+      }}>
+        {tables.map((num) => {
+          const tableUrl = `${BASE_URL}/?table=${num}`;
+          return (
+            <div
+              key={num}
+              className="qr-card"
+              style={{
+                background: "#fff",
+                padding: 20,
+                borderRadius: 12,
+                textAlign: "center",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                border: "2px solid #FF5A1F",
+                pageBreakInside: "avoid",
+                pageBreakAfter: "auto"
+              }}
+            >
+              {/* Restaurant Name — Header */}
+              <div style={{ 
+                fontSize: 20, 
+                fontWeight: 900, 
+                color: "#FF5A1F", 
+                marginBottom: 4,
+                fontFamily: "system-ui, sans-serif",
+                letterSpacing: 0.5
+              }}>
+                🍽️ Eat & Park Restaurant
+              </div>
+              
+              {/* Table Badge */}
+              <div style={{ 
+                fontSize: 16, 
+                fontWeight: 800, 
+                color: "#333", 
+                marginBottom: 12,
+                padding: "4px 16px",
+                background: "#FFF5EF",
+                borderRadius: 20,
+                display: "inline-block"
+              }}>
+                Table {num}
+              </div>
+
+              {/* QR Code */}
+              <div style={{ margin: "12px auto" }}>
+                <QRCodeCanvas 
+                  value={tableUrl} 
+                  size={180}
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+              
+              {/* Scan Instructions */}
+              <div style={{ 
+                marginTop: 8, 
+                fontSize: 14, 
+                fontWeight: 800, 
+                color: "#FF5A1F",
+                letterSpacing: 1
+              }}>
+                📱 SCAN TO ORDER
+              </div>
+              
+              <div style={{ 
+                fontSize: 11, 
+                color: "#666", 
+                marginTop: 4,
+                fontWeight: 500
+              }}>
+                Table par baith kar apna khana order karein
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Print Styles — professional receipt format */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4;
+            margin: 10mm;
+          }
+          
+          body { 
+            margin: 0; 
+            padding: 0; 
+            background: #fff !important;
+          }
+          
+          .no-print { 
+            display: none !important; 
+          }
+          
+          .qr-page {
+            padding: 0 !important;
+            background: #fff !important;
+          }
+          
+          .qr-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 12mm !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+          }
+          
+          .qr-card {
+            border: 2px dashed #FF5A1F !important;
+            box-shadow: none !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            padding: 15mm !important;
+            background: #fff !important;
+            border-radius: 8px !important;
+          }
+          
+          .qr-card canvas {
+            display: block !important;
+            margin: 0 auto !important;
+          }
+          
+          h1, p, button, input, label {
+            display: none !important;
+          }
+        }
+        
+        @media print and (max-width: 600px) {
+          .qr-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      }`}</style>
+    </div>
+  );
+}

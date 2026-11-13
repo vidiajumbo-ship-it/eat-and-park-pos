@@ -4,6 +4,7 @@ import DeliveryApp from "./DeliveryApp";
 /* eslint-disable react-hooks/exhaustive-deps, no-unused-vars */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
+import QRGenerator from './QRGenerator';
 import { db, auth, authReady } from "./firebase";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, signInAnonymously, RecaptchaVerifier, linkWithPhoneNumber, PhoneAuthProvider, signInWithCredential, setPersistence, browserLocalPersistence } from "firebase/auth";
 import {
@@ -7320,6 +7321,12 @@ async function ensureUser() {
 }
 
 export default function App() {
+  // === QR GENERATOR ROUTE ===
+  if (typeof window !== "undefined" && window.location.search.includes("view=qr")) {
+    return <QRGenerator />;
+  }
+  // === END QR ROUTE ===
+
     // 👇 Check karo ki user delivery panel par aaya hai ya nahi
   if (window.location.pathname === "/delivery") {
     return <DeliveryApp />;
