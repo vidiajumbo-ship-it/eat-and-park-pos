@@ -1,4 +1,5 @@
 import { tryRecover } from "./recover";
+import PartyBookingFAB from "./PartyBookingFAB";
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, useRef, useContext, createContext, useCallback } from "react";
 import { db, auth } from "./firebase";
@@ -1248,6 +1249,7 @@ const isOwner = ["owner", "admin", "manager"].includes(String(staffData?.role ||
           onSwitchAdd={() => { setCart({}); setAddMoreMode(true); }} onPaidSuccess={() => { haptic(60); setConfetti(true); setTimeout(() => setConfetti(false), 1800); }} />
       )}
      </div> </div>
+
   );
 }
 
@@ -5353,6 +5355,8 @@ class ErrorBoundary extends React.Component {
           <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 16, wordBreak: "break-word" }}>{String(this.state.err?.message || this.state.err)}</div>
           <button onClick={() => window.location.reload()} style={{ width: "100%", padding: 13, border: "none", borderRadius: 10, background: "#DC2626", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>Reload</button>
         </div>
+      
+        
       </div>
     );
   }
@@ -5363,6 +5367,8 @@ export default function StaffApp() {
     <ErrorBoundary>
       <ToastProvider>
         <StaffAppInner />
+        <PartyBookingFAB />
+        
       </ToastProvider>
     </ErrorBoundary>
   );
