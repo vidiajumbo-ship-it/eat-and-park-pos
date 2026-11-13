@@ -1,5 +1,4 @@
 import { tryRecover } from "./recover";
-import PartyBookingFAB from "./PartyBookingFAB";
 /* eslint-disable */
 import React, { useState, useEffect, useMemo, useRef, useContext, createContext, useCallback } from "react";
 import { db, auth } from "./firebase";
@@ -490,6 +489,47 @@ function EstimatePanel({ C, menu, orders, isMobile, items, setItems, persons, se
   const [showSel, setShowSel] = React.useState(false);
   const [level, setLevel] = React.useState(() => { try { return localStorage.getItem("staff_estimate_level") || "normal"; } catch (e) { return "normal"; } });
 
+  // === PARTY MODE ===
+  const [partyMode, setPartyMode] = React.useState(false);
+  const [partyForm, setPartyForm] = React.useState({ name: "", date: "", time: "", phone: "" });
+  const [partyBookings, setPartyBookings] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem("party_bookings_v1") || "[]"); } catch (e) { return []; }
+  });
+  React.useEffect(() => {
+    try { localStorage.setItem("party_bookings_v1", JSON.stringify(partyBookings)); } catch (e) {}
+  }, [partyBookings]);
+
+  const savePartyBooking = () => {
+    if (!partyForm.name || !partyForm.date || !partyForm.phone) {
+      toast("Name, Date, Phone zaroori hai", "warning");
+      return;
+    }
+    if (!items.length) {
+      toast("Kam se kam ek item select karo", "warning");
+      return;
+    }
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+    const nb = {
+      id: Date.now().toString(),
+      ...partyForm,
+      persons: pax,
+      level,
+      items: items.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty })),
+      estimate: total,
+      status: "active",
+      createdAt: new Date().toISOString(),
+    };
+    setPartyBookings(prev => [nb, ...prev]);
+    haptic(20);
+    toast("✅ Party Booking saved! Total ₹" + total, "success");
+    setPartyForm({ name: "", date: "", time: "", phone: "" });
+    setItems([]);
+    setPartyMode(false);
+    onClose();
+  };
+
   const lv = EST_LEVELS.find((l) => l.id === level) || EST_LEVELS[1];
   const pax = Math.max(1, Number(persons) || 1);
   const total = items.reduce((s, i) => s + i.price * i.qty, 0);
@@ -573,9 +613,29 @@ function EstimatePanel({ C, menu, orders, isMobile, items, setItems, persons, se
         {/* HEADER */}
         <div style={{ padding: "14px 16px 10px", borderBottom: "1px solid " + C.line, flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontSize: 19, fontWeight: 900 }}>📋 Estimate</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 19, fontWeight: 900 }}>📋 Estimate</div>
+              <button
+                onClick={() => setPartyMode(v => !v)}
+                style={{
+                  padding: "4px 12px", borderRadius: 14, border: "none",
+                  background: partyMode ? "linear-gradient(135deg, " + C.gold + ", " + C.goldDark + ")" : C.cardAlt,
+                  color: partyMode ? "#fff" : C.goldText,
+                  fontSize: 12, fontWeight: 800, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >{partyMode ? "🎉 Party" : "🎉 Party?"}</button>
+            </div>
             <button onClick={onClose} style={{ background: C.cardAlt, border: "none", borderRadius: "50%", width: 34, height: 34, fontSize: 15, cursor: "pointer", color: C.ink }}>✕</button>
           </div>
+          {partyMode && (
+            <div style={{ background: C.cardAlt, borderRadius: 12, padding: "10px 12px", marginBottom: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <input placeholder="Customer Name" value={partyForm.name} onChange={(e) => setPartyForm({ ...partyForm, name: e.target.value })} style={{ padding: "8px 10px", borderRadius: 8, border: "1.5px solid " + C.line, background: C.card, color: C.ink, fontSize: 13, outline: "none" }} />
+              <input placeholder="Phone Number" value={partyForm.phone} onChange={(e) => setPartyForm({ ...partyForm, phone: e.target.value })} style={{ padding: "8px 10px", borderRadius: 8, border: "1.5px solid " + C.line, background: C.card, color: C.ink, fontSize: 13, outline: "none" }} />
+              <input type="date" value={partyForm.date} onChange={(e) => setPartyForm({ ...partyForm, date: e.target.value })} style={{ padding: "8px 10px", borderRadius: 8, border: "1.5px solid " + C.line, background: C.card, color: C.ink, fontSize: 13, outline: "none" }} />
+              <input type="time" value={partyForm.time} onChange={(e) => setPartyForm({ ...partyForm, time: e.target.value })} style={{ padding: "8px 10px", borderRadius: 8, border: "1.5px solid " + C.line, background: C.card, color: C.ink, fontSize: 13, outline: "none" }} />
+            </div>
+          )}
+
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: C.cardAlt, borderRadius: 12, padding: "8px 12px", marginBottom: 8 }}>
             <span style={{ fontWeight: 800, fontSize: 13 }}>👥 Kitne log?</span>
             <div style={{ display: "flex", alignItems: "center", border: "1.5px solid " + C.gold, borderRadius: 10, overflow: "hidden", background: C.card }}>
@@ -674,7 +734,22 @@ function EstimatePanel({ C, menu, orders, isMobile, items, setItems, persons, se
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={clearAll} disabled={!items.length} style={{ padding: "13px 16px", border: "1.5px solid " + (items.length ? C.red : C.line), borderRadius: 12, background: "transparent", color: items.length ? C.red : C.gray, fontWeight: 800, fontSize: 13, cursor: items.length ? "pointer" : "not-allowed", fontFamily: "inherit" }}>Clear</button>
-            <button disabled={!items.length} onClick={() => onMoveToCart(items)} style={{ flex: 1, padding: 13, border: "none", borderRadius: 12, background: items.length ? "linear-gradient(135deg, " + C.green + " 0%, #15803D 100%)" : C.line, color: items.length ? "#fff" : C.gray, fontSize: 15, fontWeight: 900, cursor: items.length ? "pointer" : "not-allowed", fontFamily: "inherit" }}>✅ Cart me bhejo</button>
+            {partyMode ? (
+              <button
+                disabled={!items.length || !partyForm.name || !partyForm.date || !partyForm.phone}
+                onClick={savePartyBooking}
+                style={{
+                  flex: 1, padding: 13, border: "none", borderRadius: 12,
+                  background: (items.length && partyForm.name && partyForm.date && partyForm.phone) ? "linear-gradient(135deg, " + C.gold + " 0%, " + C.goldDark + " 100%)" : C.line,
+                  color: (items.length && partyForm.name && partyForm.date && partyForm.phone) ? "#fff" : C.gray,
+                  fontSize: 15, fontWeight: 900,
+                  cursor: (items.length && partyForm.name && partyForm.date && partyForm.phone) ? "pointer" : "not-allowed",
+                  fontFamily: "inherit"
+                }}
+              >🎉 Save Party Booking</button>
+            ) : (
+              <button disabled={!items.length} onClick={() => onMoveToCart(items)} style={{ flex: 1, padding: 13, border: "none", borderRadius: 12, background: items.length ? "linear-gradient(135deg, " + C.green + " 0%, #15803D 100%)" : C.line, color: items.length ? "#fff" : C.gray, fontSize: 15, fontWeight: 900, cursor: items.length ? "pointer" : "not-allowed", fontFamily: "inherit" }}>✅ Cart me bhejo</button>
+            )}
           </div>
         </div>
       </div>
@@ -5367,8 +5442,7 @@ export default function StaffApp() {
     <ErrorBoundary>
       <ToastProvider>
         <StaffAppInner />
-        <PartyBookingFAB />
-        
+
       </ToastProvider>
     </ErrorBoundary>
   );
