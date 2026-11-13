@@ -2474,6 +2474,8 @@ function CustomerView({ menu, orders, placeOrder, bookEvent, gallery, offersList
   const [runningOrderId, setRunningOrderId] = useState(null);
   const [otpSending, setOtpSending] = useState(false);
   const [resendIn, setResendIn] = useState(0);
+  const [showGuestChoice, setShowGuestChoice] = useState(false);
+  const [guestMode, setGuestMode] = useState(false);
   useEffect(() => {
     if (resendIn <= 0) return;
     const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
@@ -3516,7 +3518,7 @@ if (submitLockRef.current) return;
       {toast && <Toast message={toast} type={toastType} />}
 
       {/* ENP-DARK-LOGIN */}
-      {!isLoggedIn && !waiterUnlocked && (
+      {!isLoggedIn && !waiterUnlocked && !guestMode && (
         <div style={{ position: "fixed", inset: 0, zIndex: 150, background: "#0B111A", overflowY: "auto", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ width: "100%", maxWidth: 400, background: "#161F2F", borderRadius: 24, padding: 32, border: "1px solid #273449", boxShadow: "0 24px 70px rgba(0,0,0,0.55)" }}>
             <div style={{ textAlign: "center", marginBottom: 28 }}>
@@ -3549,6 +3551,16 @@ if (submitLockRef.current) return;
                 <button onClick={() => { setOtpStep("phone"); setOtpCode(""); }} style={{ width: "100%", padding: 10, background: "none", border: "none", color: "#8B9BB4", fontWeight: 700, cursor: "pointer" }}>← Change Number</button>
               </div>
             )}
+            
+            <div style={{ textAlign: "center", color: "#8B9BB4", fontSize: 12, fontWeight: 700, margin: "20px 0 12px 0" }}>─── OR ───</div>
+            
+            <button
+              onClick={() => setShowGuestChoice(true)}
+              style={{ width: "100%", padding: 14, background: "transparent", border: "2px solid #FF5A1F", borderRadius: 12, color: "#FF5A1F", fontSize: 15, fontWeight: 800, cursor: "pointer", marginBottom: 8 }}
+            >
+              👤 Continue as Guest
+            </button>
+
             <div style={{ display: "flex", gap: 8, marginTop: 26 }}>
               <button onClick={() => requestPinPrompt("staff")} style={{ flex: 1, padding: "10px 0", background: "transparent", border: "1px solid #273449", borderRadius: 12, color: "#8B9BB4", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Staff</button>
               <button onClick={() => setShowWaiterPinModal(true)} style={{ flex: 1, padding: "10px 0", background: "transparent", border: "1px solid #273449", borderRadius: 12, color: "#8B9BB4", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Waiter</button>
@@ -3557,6 +3569,48 @@ if (submitLockRef.current) return;
           </div>
         </div>
       )}
+
+      {/* === GUEST CHOICE MODAL === */}
+      {showGuestChoice && !isLoggedIn && !guestMode && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ width: "100%", maxWidth: 400, background: "#161F2F", borderRadius: 24, padding: 28, border: "1px solid #273449" }}>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 6 }}>How would you like to order?</div>
+              <div style={{ fontSize: 13, color: "#8B9BB4" }}>Apna order mode choose karein</div>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#8B9BB4", textTransform: "uppercase", marginBottom: 6 }}>Table number</label>
+              <select value={table} onChange={(e) => setTable(Number(e.target.value))} style={{ width: "100%", padding: 12, background: "#0B111A", color: "#fff", border: "1px solid #273449", borderRadius: 12, fontSize: 15, fontWeight: 700 }}>
+                {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (<option key={n} value={n}>Table {n}</option>))}
+              </select>
+            </div>
+
+            <button
+              onClick={() => { setOrderType("dine_in"); setGuestMode(true); setShowGuestChoice(false); }}
+              style={{ width: "100%", padding: 16, marginBottom: 12, background: "#FF5A1F", border: "none", borderRadius: 14, color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer" }}
+            >
+              🍽️ Dine-in (Table {table})
+            </button>
+
+            <button
+              onClick={() => { setOrderType("parcel"); setGuestMode(true); setShowGuestChoice(false); }}
+              style={{ width: "100%", padding: 16, marginBottom: 12, background: "#10B981", border: "none", borderRadius: 14, color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer" }}
+            >
+              🛍️ Takeaway / Parcel
+            </button>
+
+            <button
+              onClick={() => setShowGuestChoice(false)}
+              style={{ width: "100%", padding: 12, background: "transparent", border: "none", color: "#8B9BB4", fontWeight: 700, cursor: "pointer" }}
+            >
+              ← Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      
 
       {/* 🎂 DOB POPUP */}
       {showDobModal && isLoggedIn && (
@@ -3882,8 +3936,8 @@ if (submitLockRef.current) return;
 })}
 
                 <div style={{ display: "flex", gap: 12, marginTop: 20, marginBottom: 16 }}>
-                  <button onClick={() => setOrderType("dine_in")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "dine_in" ? COLORS.copper : COLORS.line}`, background: orderType === "dine_in" ? COLORS.copper : "#fff", color: orderType === "dine_in" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer" }}>🍽️ Dine-in</button>
-                  <button onClick={() => { if (!parcelOpenNow()) { showToast(PARCEL_MSG, 'warning'); return; } setOrderType("parcel"); }} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "parcel" ? COLORS.copper : COLORS.line}`, background: orderType === "parcel" ? COLORS.copper : "#fff", color: orderType === "parcel" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer" }}>🛍️ Parcel</button>
+                  {!guestMode && <button onClick={() => setOrderType("dine_in")} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "dine_in" ? COLORS.copper : COLORS.line}`, background: orderType === "dine_in" ? COLORS.copper : "#fff", color: orderType === "dine_in" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer" }}>🍽️ Dine-in</button>}
+                  {!guestMode && <button onClick={() => { if (!parcelOpenNow()) { showToast(PARCEL_MSG, 'warning'); return; } setOrderType("parcel"); }} style={{ flex: 1, padding: "12px", border: `2px solid ${orderType === "parcel" ? COLORS.copper : COLORS.line}`, background: orderType === "parcel" ? COLORS.copper : "#fff", color: orderType === "parcel" ? "#fff" : COLORS.ink, borderRadius: 12, fontWeight: 800, cursor: "pointer" }}>🛍️ Parcel</button>}
                 </div>
 
                 <div style={{ marginBottom: 16 }}>
