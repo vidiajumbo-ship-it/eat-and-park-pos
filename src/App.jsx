@@ -1128,7 +1128,7 @@ const RunningOrderModal = memo(({ order, menu, onConfirm, onClose }) => {
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
             <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 800 }}>➕ Add Running Items</div>
-            <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>Order #{(o && o.id).slice(1, 5).toUpperCase()} · New KOT #{Math.max(1, ...(order.kots || [{ kotNumber: 1 }]).map(k => k.kotNumber || 1)) + 1}</div>
+            <div style={{ fontSize: 12, color: COLORS.textLight, marginTop: 2 }}>Order #{(order && order.id || "").slice(1, 5).toUpperCase()} · New KOT #{Math.max(1, ...(order.kots || [{ kotNumber: 1 }]).map(k => k.kotNumber || 1)) + 1}</div>
           </div>
           <button onClick={onClose} style={{ background: "rgba(0,0,0,0.05)", border: "none", borderRadius: "50%", width: 36, height: 36, fontSize: 18, cursor: "pointer" }}>✕</button>
         </div>
@@ -1543,7 +1543,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
       .row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed #000}</style></head><body>
       <h2>${escapeHtml(RESTAURANT.name)}</h2>
       <h4>WAITER ORDER — TABLE ${escapeHtml((o && o.table))}</h4>
-      <p>Order: #${escapeHtml((o && o.id).toUpperCase())}<br/>Waiter: ${escapeHtml(order.waiter || "-")}<br/>Customer: ${escapeHtml(order.customer.name)}</p>
+      <p>Order: #${escapeHtml((order && order.id).toUpperCase())}<br/>Waiter: ${escapeHtml(order.waiter || "-")}<br/>Customer: ${escapeHtml(order.customer.name)}</p>
       <div style="margin-top:10px">
         ${order.items.map(it => `<div class="row"><span>${it.qty}x ${escapeHtml(it.name)}</span><span>₹${it.price * it.qty}</span></div>`).join('')}
       </div>
@@ -1561,7 +1561,7 @@ const WaiterOrderPanel = memo(({ menu, table, setTable, onSubmit, onClose, onAdd
       h2,h4{text-align:center;margin:4px 0}
       .row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed #000}</style></head><body>
       <h2>${RESTAURANT.name}</h2>
-      <h4>WAITER ORDER — TABLE ${(o && o.table)}</h4>
+      <h4>WAITER ORDER — TABLE ${(order && order.table)}</h4>
       <p>Order: #${(o && o.id).toUpperCase()}<br/>Waiter: ${order.waiter || "-"}<br/>Customer: ${order.customer.name}</p>
       <div style="margin-top:10px">
         ${order.items.map(it => `<div class="row"><span>${it.qty}x ${it.name}</span><span>₹${it.price * it.qty}</span></div>`).join('')}
@@ -2048,7 +2048,7 @@ function printKotSlipGlobal(order) {
     const w = iframe.contentWindow;
     setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) {} }, 60000);
     w.document.open();
-    w.document.write(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:8px;font-weight:700}h2,h3{text-align:center;margin:3px 0}.r{font-size:17px;padding:4px 0;border-bottom:1px dashed #000}.c{text-align:center;font-size:12px}</style></head><body><h2>KOT #${kot.kotNumber || 1}${kot.isRunning ? " (RUNNING)" : ""}</h2><h3>${(o && o.orderType) === "parcel" ? "PARCEL" : "TABLE " + escapeHtml(String((o && o.table)))}</h3><div class="c">${escapeHtml(now)} · #${escapeHtml((o && o.id).slice(1, 5).toUpperCase())}${order.waiter ? " · " + escapeHtml(order.waiter) : ""}</div><div style="margin-top:8px">${rows}</div>${order.notes ? `<div class="c" style="margin-top:8px">Note: ${escapeHtml(order.notes)}</div>` : ""}</body></html>`);
+    w.document.write(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:8px;font-weight:700}h2,h3{text-align:center;margin:3px 0}.r{font-size:17px;padding:4px 0;border-bottom:1px dashed #000}.c{text-align:center;font-size:12px}</style></head><body><h2>KOT #${kot.kotNumber || 1}${kot.isRunning ? " (RUNNING)" : ""}</h2><h3>${(order && order.orderType) === "parcel" ? "PARCEL" : "TABLE " + escapeHtml(String((o && o.table)))}</h3><div class="c">${escapeHtml(now)} · #${escapeHtml((o && o.id).slice(1, 5).toUpperCase())}${order.waiter ? " · " + escapeHtml(order.waiter) : ""}</div><div style="margin-top:8px">${rows}</div>${order.notes ? `<div class="c" style="margin-top:8px">Note: ${escapeHtml(order.notes)}</div>` : ""}</body></html>`);
     w.document.close();
     setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("⚠️ KOT print nahi ho paya: " + e.message); } }, 400);
   } catch (e) { console.error("KOT print error:", e); }
@@ -2870,7 +2870,7 @@ if (savedCart) {
       const updatedItems = [...order.items, ...taggedItems];
       const addedTotal = taggedItems.reduce((s, it) => s + it.price * it.qty, 0);
       await updateDoc(doc(db, "orders", orderId), { kots: updatedKots, items: updatedItems, status: "new", lastKotAt: Date.now() });
-      const waText = `🍳 *RUNNING KOT* — Order #${orderId.slice(1, 5).toUpperCase()}\nTable ${(o && o.table)}\n` + taggedItems.map(i => `• ${i.qty}x ${i.name}`).join("\n") + `\n\nAdditional: ₹${addedTotal}`;
+      const waText = `🍳 *RUNNING KOT* — Order #${orderId.slice(1, 5).toUpperCase()}\nTable ${tableNo}\n` + taggedItems.map(i => `• ${i.qty}x ${i.name}`).join("\n") + `\n\nAdditional: ₹${addedTotal}`;
 /* WhatsApp band */      setRunningOrderId(null);
       showToast("🍳 New KOT sent to kitchen!", "success");
     } catch (e) { console.error(e); showToast("⚠️ Failed to add items", "error"); }
@@ -2886,9 +2886,9 @@ if (savedCart) {
       const updatedItems = [...order.items, ...taggedItems];
       const addedTotal = taggedItems.reduce((s, it) => s + it.price * it.qty, 0);
       await updateDoc(doc(db, "orders", orderId), { kots: updatedKots, items: updatedItems, status: "new", lastKotAt: Date.now() });
-      const waText = `🍳 *RUNNING KOT* — Order #${orderId.slice(1, 5).toUpperCase()}\nTable ${(o && o.table)}\n` + taggedItems.map(i => `• ${i.qty}x ${i.name}`).join("\n") + `\n\nAdditional: ₹${addedTotal}`;
-      window.open(`https://wa.me/${RESTAURANT.whatsapp}?text=${encodeURIComponent(waText)}`, "_blank");
-      setRunningOrderId(null);
+      const waText = `🍳 *RUNNING KOT* — Order #${orderId.slice(1, 5).toUpperCase()}\nTable ${tableNo}\n` + taggedItems.map(i => `• ${i.qty}x ${i.name}`).join("\n") + `\n\nAdditional: ₹${addedTotal}`;
+     // WhatsApp notification band
+         return order; setRunningOrderId(null);
       showToast("🍳 New KOT sent to kitchen!", "success");
     } catch (e) { showToast("⚠️ Failed to add items", "error"); }
   }, [orders, showToast]);
@@ -3215,7 +3215,7 @@ if (submitLockRef.current) return;
     if (cartItems.length === 0) return;
     if (!custName.trim()) { showToast("⚠️ Enter Name", 'error'); return; }
     if (!custPhone.trim() || custPhone.length < 10) { showToast("⚠️ Enter valid Phone", 'error'); return; }
-    if (orderType === "parcel" && (!custAddress.trim() || !custExactAddress.trim() || !custPinCode || custPinCode.length !== 6)) { showToast("⚠️ Location, Exact Address aur 6-digit Pincode zaroori hai!", 'error'); return; }
+    if (orderType === "parcel" && !guestMode && (!custAddress.trim() || !custExactAddress.trim() || !custPinCode || custPinCode.length !== 6)) { showToast("⚠️ Location, Exact Address aur 6-digit Pincode zaroori hai!", 'error'); return; }
 
     setIsProcessingPayment(true);
     try {
@@ -3298,7 +3298,7 @@ if (submitLockRef.current) return;
 
       playNotificationSound();
       sendPushNotification("🛎️ New Order", `Order #${orderId.slice(1, 5)} - ₹${finalTotal}`);
-      setMyOrderIds(prev => [...prev, (o && o.id)]);
+      setMyOrderIds(prev => [...prev, orderId]);
       setCart({});
       setNotes(""); setClaimedReward(null); setCartOpen(false); setActiveModal('track');
       setIsScheduled(false); setScheduleDate(""); setScheduleTime("");
@@ -3607,14 +3607,14 @@ if (submitLockRef.current) return;
             </div>
 
             <button
-              onClick={() => { setOrderType("dine_in"); setGuestMode(true); setShowGuestChoice(false); }}
+              onClick={() => { setOrderType("dine_in"); setGuestMode(true); setShowGuestChoice(false); setCustAddress(""); setCustExactAddress(""); setCustPinCode(""); }}
               style={{ width: "100%", padding: 16, marginBottom: 12, background: "#FF5A1F", border: "none", borderRadius: 14, color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer" }}
             >
               🍽️ Dine-in (Table {table})
             </button>
 
             <button
-              onClick={() => { setOrderType("parcel"); setGuestMode(true); setShowGuestChoice(false); }}
+              onClick={() => { setOrderType("parcel"); setGuestMode(true); setShowGuestChoice(false); setCustAddress(""); setCustExactAddress(""); setCustPinCode(""); }}
               style={{ width: "100%", padding: 16, marginBottom: 12, background: "#10B981", border: "none", borderRadius: 14, color: "#fff", fontSize: 16, fontWeight: 800, cursor: "pointer" }}
             >
               🛍️ Takeaway / Parcel
@@ -4677,7 +4677,7 @@ function BillPOSScreenInner(p) {
           </>
         ) : (
           <div style={{ fontWeight: 800, fontSize: 13 }}>
-            {(o && o.orderType) === "parcel" ? "🛍️ Parcel" : `🍽️ Table ${(o && o.table)}`} · #{(o && o.id).slice(1, 9).toUpperCase()}{order.waiter ? ` · 🧑‍🍳 ${order.waiter}` : ""}
+            {(o && o.orderType) === "parcel" ? "🛍️ Parcel" : `🍽️ Table ${(o && o.table)}`} · #{(order && order.id).slice(1, 9).toUpperCase()}{order.waiter ? ` · 🧑‍🍳 ${order.waiter}` : ""}
           </div>
         )}
       </div>
@@ -7309,7 +7309,7 @@ const OrderTimer = memo(({ createdAt, servedAt, status, estimatedTime }) => {
 // ==
 
 async function setOrderOnce(order) {
-  const ref = doc(db, "orders", (o && o.id));
+  const ref = doc(db, "orders", order.id);
   try { const ex = await getDoc(ref); if (ex.exists()) return; } catch (e) {}
   await setDoc(ref, order);
 }
@@ -7822,7 +7822,7 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
     try { if (order.coinsClaimed === undefined) order.coinsClaimed = false; const _u = await ensureUser(); order.createdBy = _u.uid;
  await Promise.race([setOrderOnce(order), new Promise((_, rej) => setTimeout(() => rej(new Error("Internet slow hai, order confirm nahi hua. Dobara try karo")), 15000))
 ]);
-    setOrdersState(prev => prev.some(x => x.id === (o && o.id)) ? prev : [...prev, order]); } catch (e) {
+    setOrdersState(prev => prev.some(x => x.id === order.id) ? prev : [...prev, order]); } catch (e) {
       console.error("placeOrder failed:", e.code, e.message);
       if (e.code === "Please contact to billing counter.") {
         throw new Error("Firestore rules 'orders' collection block kar rahi hain. Firebase Console → Rules check karo.");
@@ -7832,7 +7832,7 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
   };
 
   const advanceStatus = async (orderId, currentStatus) => {
-    const order = orders.find(o => o.id === orderId);
+    const order = orders.find(o => order.id === orderId);
     if (order && (o && o.orderType) === "parcel" && currentStatus === "ready") {
       alert("Parcel order delivery boy handle karega. Aap ise 'Delivered' mark nahi kar sakte.");
       return;
@@ -7859,7 +7859,7 @@ const unsubBookings = !staffRole ? () => {} : onSnapshot(collection(db, "booking
       });
     } catch (e) {
       console.error(e);
-      setOrdersState(prev => prev.map(o => (o.id === orderId ? { ...o, status: currentStatus, ...(order?.kots ? { kots: order.kots } : {}) } : o)));
+      setOrdersState(prev => prev.map(o => (order.id === orderId ? { ...o, status: currentStatus, ...(order?.kots ? { kots: order.kots } : {}) } : o)));
       alert(String(e && e.message).includes("STALE_STATUS") ? "⚠️ Ye order kisi aur screen se pehle hi aage badh chuka hai." : "⚠️ Status update fail hua. Dobara try karo.");
     }
   };
