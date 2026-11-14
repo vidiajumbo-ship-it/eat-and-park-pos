@@ -215,6 +215,74 @@ function inr(n) {
   return "₹" + num.toLocaleString("en-IN");
 }
 const isWalkIn = (s) => /^walk-?in$/i.test(String(s || "").trim());
+
+// ===== SMART MENU SEARCH =====
+const SEARCH_STOP = new Set(["ka","ki","ke","ko","me","mein","chahiye","chaiye","dena","do","dikhao","wala","wali","hai","aur","with","and","the","of","plate"]);
+const SEARCH_SYN = {
+  chilly: ["chilli"], chili: ["chilli"], mirchi: ["chilli"],
+  panir: ["paneer"], "पनीर": ["paneer"],
+  murgh: ["chicken"], murga: ["chicken"], murg: ["chicken"], murgi: ["chicken"], kukkad: ["chicken"], "चिकन": ["chicken"],
+  gosht: ["mutton"], goat: ["mutton"], bakra: ["mutton"], "मटन": ["mutton"],
+  anda: ["egg"], ande: ["egg"], "अंडा": ["egg"],
+  machhli: ["fish"], machli: ["fish"], macchi: ["fish"], machhi: ["fish"], "मछली": ["fish"],
+  briyani: ["biryani"], biriyani: ["biryani"], biriani: ["biryani"], "बिरयानी": ["biryani"],
+  chawal: ["rice"], "चावल": ["rice"], pulav: ["pulao"], pilaf: ["pulao"],
+  chapati: ["roti"], chapatti: ["roti"], phulka: ["roti"], "रोटी": ["roti"],
+  nan: ["naan"], "नान": ["naan"],
+  momo: ["momos"], "मोमो": ["momos"], "मोमोज": ["momos"],
+  chap: ["chaap"], chaop: ["chaap"], "चाप": ["chaap"],
+  chowmein: ["noodles"], chow: ["noodles"], hakka: ["noodles"], "नूडल्स": ["noodles"],
+  sezwan: ["schezwan"], shezwan: ["schezwan"], szechuan: ["schezwan"],
+  sheik: ["shake"], sheikh: ["shake"], shaik: ["shake"], milkshake: ["shake"],
+  chai: ["tea"], tea: ["tea", "chai"], "चाय": ["tea"],
+  nimbu: ["lime", "lemon"], "नींबू": ["lime", "lemon"], pani: ["water"],
+  coke: ["cold", "drinks"], cola: ["cold", "drinks"], sprite: ["cold", "drinks"], pepsi: ["cold", "drinks"],
+  kebab: ["kabab"], chips: ["fries"], finger: ["fries"],
+  mithai: ["desserts"], sweet: ["desserts"], meetha: ["desserts"],
+  dahi: ["raita"]
+};
+const searchNorm = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, " ").replace(/\s+/g, " ").trim();
+function searchLev(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+function searchTokenHit(w, a) {
+  if (!w || !a) return false;
+  if (w.startsWith(a)) return true;
+  if (a.length >= 4 && w.includes(a)) return true;
+  if (a.length < 4) return false;
+  const tol = a.length >= 8 ? 2 : 1;
+  if (searchLev(w, a, tol) <= tol) return true;
+  return w.length > a.length && searchLev(w.slice(0, a.length), a, tol) <= tol;
+}
+// 0 = match nahi, jitna zyada utna better match
+function smartSearchScore(item, rawQuery) {
+  const q = searchNorm(rawQuery);
+  if (!q) return 1;
+  const nameN = searchNorm(item.name);
+  const qCompact = q.replace(/ /g, "");
+  let bonus = 0;
+  if (qCompact.length >= 3 && nameN.replace(/ /g, "").includes(qCompact)) bonus = nameN.startsWith(q) ? 120 : 100;
+  const all = q.split(" ").filter(Boolean);
+  const words = all.filter((t) => !SEARCH_STOP.has(t));
+  const qWords = words.length ? words : all;
+  const nameTokens = nameN.split(" ").filter(Boolean);
+  const metaTokens = searchNorm([item.category, (item.alsoIn || []).join(" "), item.portion, item.desc].join(" ")).split(" ").filter(Boolean);
+  let total = 0;
+  for (const t of qWords) {
+    const alts = [t, ...(SEARCH_SYN[t] || [])];
+    if (nameTokens.some((w) => alts.some((a) => searchTokenHit(w, a)))) { total += 10; continue; }
+    if (metaTokens.some((w) => alts.some((a) => searchTokenHit(w, a)))) { total += 3; continue; }
+    return bonus;
+  }
+  return total + bonus;
+}
 const getBaseKots = (o) => (o.kots?.length ? o.kots : [{ id: uid("kot"), kotNumber: 1, items: o.items || [], createdAt: o.createdAt, status: o.status }])
   .map(k => (k.status === "new" && o.status !== "new" ? { ...k, status: o.status } : k));
 const getNextKotNo = (o) => Math.max(...getBaseKots(o).map(k => k.kotNumber || 1)) + 1;
@@ -1355,7 +1423,10 @@ const itemCount = o ? (t.all || [o]).reduce((n, x) => n + x.items.reduce((sum, i
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
                     <div>
-                      <div style={{ fontSize: 9, color: COLORS.textLight, fontWeight: 800, textTransform: 'uppercase' }}>Total</div>
+                      {((o.customer?.name && !isWalkIn(o.customer.name)) || (o.customer?.phone && !isWalkIn(o.customer.phone))) && (
+  <div style={{ fontSize: 11, color: COLORS.ink, fontWeight: 800, marginBottom: 4 }}>👤 {[o.customer?.name, o.customer?.phone].filter((x) => x && !isWalkIn(x)).join(' · ')}</div>
+)}
+<div style={{ fontSize: 9, color: COLORS.textLight, fontWeight: 800, textTransform: 'uppercase' }}>Total</div>
                       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 15, fontWeight: 800, color: COLORS.copper }}>
                         {inr(total)}
                       </div>
@@ -2130,6 +2201,7 @@ const deriveBill = (o) => ({
 
 // Staff wale POS ka hi logic — waiter ke liye
 function POSController({ initialOrder, orders, menu, categories, viewMode, placeOrder, advanceStatus, setMenuState, onClose, waiterMode, onDraftChange }) {
+  console.log("CUSTOMER (waiter):", initialOrder.customer);
   const [init] = useState(() => deriveBill(initialOrder));
   const [billOrder, setBillOrder] = useState(initialOrder);
   const [items, setItems] = useState(init.items);
@@ -2586,8 +2658,9 @@ useEffect(() => {
     let items = (searchQuery.trim() ? menu : menu.filter((m) => m.category === category || (m.alsoIn || []).includes(category))).filter(_vis);
     items = items.filter((m) => {
       if (vegOnly && !m.veg) return false;
-if (searchQuery.trim()) { const q = searchQuery.toLowerCase(); return (m.name || "").toLowerCase().includes(q) || (m.desc || "").toLowerCase().includes(q); }      return true;
+if (searchQuery.trim() && smartSearchScore(m, searchQuery) <= 0) return false;      return true;
     });
+    if (searchQuery.trim()) items = [...items].sort((a, b) => smartSearchScore(b, searchQuery) - smartSearchScore(a, searchQuery));
     return items;
   }, [menu, category, searchQuery, vegOnly, settings]);
 
@@ -3205,8 +3278,6 @@ const handleWaiterPinSubmitOld = () => {
 
   const handlePlaceOrder = useCallback(async () => {
 if (submitLockRef.current) return;
-  submitLockRef.current = true;
-  // Processing lock handled in try/catch
   
     if (isScheduled && (!scheduleDate || !scheduleTime)) { showToast("⚠️ Schedule ki date aur time dono daalo", 'error'); return; }
     if (orderType === "parcel" && !parcelOpenNow()) { showToast(PARCEL_MSG, 'error'); return; }
@@ -3214,11 +3285,12 @@ if (submitLockRef.current) return;
     if (_gone.length > 0) { showToast("⚠️ " + _gone.map(([id]) => (menu.find((m) => m.id === id) || {}).name || "Item").join(", ") + " ab available nahi hai — cart se hata do", 'error'); return; }
     if (cartItems.length === 0) return;
     if (!custName.trim()) { showToast("⚠️ Enter Name", 'error'); return; }
-    if (!custPhone.trim() || custPhone.length < 10) { showToast("⚠️ Enter valid Phone", 'error'); return; }
+   if (guestMode ? (custPhone.trim() && custPhone.trim().length < 10) : (!custPhone.trim() || custPhone.length < 10)) { showToast(guestMode ? "⚠️ Phone 10 digit ka daalo ya khali chhod do" : "⚠️ Enter valid Phone", 'error'); return; }
     if (orderType === "parcel" && !guestMode && (!custAddress.trim() || !custExactAddress.trim() || !custPinCode || custPinCode.length !== 6)) { showToast("⚠️ Location, Exact Address aur 6-digit Pincode zaroori hai!", 'error'); return; }
 
     setIsProcessingPayment(true);
     try {
+      submitLockRef.current = true;
       if (!pendingOrderIdRef.current) pendingOrderIdRef.current = uid("o");
       const orderId = pendingOrderIdRef.current;
       payIdRef.current = null;
@@ -3244,7 +3316,7 @@ if (submitLockRef.current) return;
 
       const order = {
         id: orderId, table, orderType,
-        customer: { name: custName, phone: custPhone, address: orderType === "parcel" ? custAddress : "", exactAddress: custExactAddress, pincode: custPinCode },
+        customer: { name: custName, phone: custPhone.trim() || "WALK-IN", address: orderType === "parcel" ? custAddress : "", exactAddress: custExactAddress, pincode: custPinCode },
         items: initialItems,
         claimedReward: claimedReward ? claimedReward.item : null,
         rewardUsedCoins: claimedReward ? claimedReward.cost : 0,
@@ -3266,6 +3338,7 @@ if (submitLockRef.current) return;
       await placeOrder(order);
 
       pendingOrderIdRef.current = null;
+      console.log("SENDING CUSTOMER:", order.customer);
       const orderHistory = safeJSON('eatpark_orders', []);
       orderHistory.push(order);
       safeSet('eatpark_orders', orderHistory.slice(-30));
@@ -3283,7 +3356,7 @@ if (submitLockRef.current) return;
           _cPatch.totalOrders = customerData.totalOrders;
           _cPatch.totalSpent = customerData.totalSpent;
         }
-        await updateDoc(doc(db, "customers", custPhone), _cPatch);
+        if (custPhone.trim().length >= 10) await updateDoc(doc(db, "customers", custPhone), _cPatch);
       } catch (e) { }
 
       if (paymentMethod === "upi") setTimeout(() => openUpiApp(finalTotal, orderId), 700);
@@ -3971,7 +4044,7 @@ if (submitLockRef.current) return;
                   </div>)}
                 </div>
 
-                <div style={{ background: COLORS.paper2, padding: 16, borderRadius: 16, marginBottom: 16 }}>
+                <div style={{ display: guestMode ? "none" : "block", background: COLORS.paper2, padding: 16, borderRadius: 16, marginBottom: 16 }}>
                   <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>🔐 Quick OTP</div>
                   <div id="otp-recaptcha"></div>
                   {!isLoggedIn ? (
@@ -3993,7 +4066,7 @@ if (submitLockRef.current) return;
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 20 }}>
                   <input type="text" placeholder="Your Name *" value={custName} onChange={(e) => setCustName(e.target.value)} style={inputStyle} />
-                  <input type="tel" placeholder="Phone *" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} style={inputStyle} />
+                  <input type="tel" placeholder={guestMode ? "Phone (optional)" : "Phone *"} value={custPhone} onChange={(e) => setCustPhone(e.target.value.replace(/\D/g, "").slice(0, 10))} style={inputStyle} />
                   {orderType === "parcel" && !guestMode && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {/* Auto GPS Box */}
@@ -4951,6 +5024,7 @@ function StaffView({ menu = [], orders, advanceStatus, requestPinPrompt, calls, 
 
   // 🧾 OPEN BILL EDITOR
   const openBillEditor = (order) => {
+    console.log("CUSTOMER:", order.customer);
     setBillOrder(order);
     setBillEditItems(
       order.items.map((it, i) => ({

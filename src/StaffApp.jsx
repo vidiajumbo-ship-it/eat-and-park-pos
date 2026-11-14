@@ -126,6 +126,14 @@ const timeAgo = (ts) => {
   return Math.floor(h / 24) + "d";
 };
 const TABLE_COUNT = 20;
+;
+const isWalkInStr = (s) => /^walk-?in$/i.test(String(s || "").trim());
+const custLabel = (o) => {
+  const c = (o && o.customer) || {};
+  const n = c.name && !isWalkInStr(c.name) ? String(c.name).trim() : "";
+  const p = c.phone && !isWalkInStr(c.phone) ? String(c.phone).trim() : "";
+  return [n, p].filter(Boolean).join(" · ");
+};
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 const STATUS = {
@@ -1422,6 +1430,7 @@ function TablesView({ C, isMobile, orders, onTableClick, onEditBill, onAddMore, 
                 <div style={{ marginTop: 6 }}>
                   <div style={{ fontSize: isMobile ? 10 : 11, color: (Date.now() - (t.order.createdAt || 0)) > 3600000 ? C.amber : C.gray, fontWeight: 700 }}>{(Date.now() - (t.order.createdAt || 0)) > 3600000 ? "⏱ " : ""}#{t.order.id?.slice(1,5).toUpperCase()} - {timeAgo(t.order.createdAt)}</div>
                   <div style={{ fontSize: isMobile ? 10 : 11, color: C.gray, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.order.items?.length || 0} items - {inr(t.order.finalTotal || 0)}</div>
+                  {custLabel(t.order) && <div style={{ fontSize: isMobile ? 10 : 11, color: C.ink, fontWeight: 700, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>👤 {custLabel(t.order)}</div>}
                 </div>
               ) : <div style={{ fontSize: isMobile ? 10 : 11, color: C.gray, fontWeight: 700, textTransform: "uppercase", marginTop: 6 }}>Available</div>}
             </button>
@@ -1607,7 +1616,7 @@ function OrdersView({ C, isMobile, orders, menu, waiterName, isOwner, filter, se
                 </div>
               </div>
               <div style={{ fontSize: 12, color: C.gray, marginBottom: 10, display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <span>#{o.id?.slice(1,5).toUpperCase()}</span><span>{timeAgo(o.createdAt)} ago</span>{o.waiter && <span>{o.waiter}</span>}
+                <span>#{o.id?.slice(1,5).toUpperCase()}</span><span>{timeAgo(o.createdAt)} ago</span>{o.waiter && <span>{o.waiter}</span>}{custLabel(o) && <span style={{ color: C.ink, fontWeight: 800 }}>👤 {custLabel(o)}</span>}{custLabel(o) && <span style={{ color: C.ink, fontWeight: 800 }}>👤 {custLabel(o)}</span>}{custLabel(o) && <span style={{ color: C.ink, fontWeight: 800 }}>👤 {custLabel(o)}</span>}
               </div>
               {isCancelled && (
                 <div style={{ background: C.amberLight, color: C.amber, padding: "8px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, marginBottom: 10 }}>
@@ -1904,7 +1913,7 @@ function printKOT(order) {
     try { w.addEventListener("afterprint", cleanup); } catch (e) {}
     setTimeout(cleanup, 90000);
     w.document.open();
-    w.document.write(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:10px}h2,h3{text-align:center;margin:4px 0;font-weight:900}h2{font-size:26px}h3{font-size:18px}.c{text-align:center;font-size:12px;font-weight:700}.big{font-size:16px;font-weight:800}</style></head><body><h2>KOT</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + esc(order.table)}</h3><div class="c">${now}</div><div class="c">#${esc(order.id.slice(1,9).toUpperCase())}</div>${order.waiter ? `<div class="c">Waiter: ${esc(order.waiter)}</div>` : ""}<div style="border-top:2px solid #000;margin:10px 0"></div><table style="width:100%"><tbody>${itemsHtml}</tbody></table><div style="border-top:2px solid #000;margin:10px 0"></div><div class="c big">Total Items: ${(order.items || []).reduce((s, it) => s + it.qty, 0)}</div><div class="c" style="margin-top:14px;font-size:11px">- Kitchen Copy -</div></body></html>`);
+    w.document.write(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>KOT</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:280px;margin:0 auto;padding:10px}h2,h3{text-align:center;margin:4px 0;font-weight:900}h2{font-size:26px}h3{font-size:18px}.c{text-align:center;font-size:12px;font-weight:700}.big{font-size:16px;font-weight:800}</style></head><body><h2>KOT</h2><h3>${order.orderType === "parcel" ? "PARCEL" : "TABLE " + esc(order.table)}</h3><div class="c">${now}</div><div class="c">#${esc(order.id.slice(1,9).toUpperCase())}</div>${custLabel(order) ? `<div class="c" style="font-size:14px;font-weight:900">${esc(custLabel(order))}</div>` : ""}${order.waiter ? `<div class="c">Waiter: ${esc(order.waiter)}</div>` : ""}<div style="border-top:2px solid #000;margin:10px 0"></div><table style="width:100%"><tbody>${itemsHtml}</tbody></table><div style="border-top:2px solid #000;margin:10px 0"></div><div class="c big">Total Items: ${(order.items || []).reduce((s, it) => s + it.qty, 0)}</div><div class="c" style="margin-top:14px;font-size:11px">- Kitchen Copy -</div></body></html>`);
     w.document.close();
     setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("Print error: " + e.message); } }, 300);
   } catch (e) { alert("Print error: " + e.message); }
@@ -1958,7 +1967,7 @@ function printBill(order) {
     try { w.addEventListener("afterprint", cleanup); } catch (e) {}
     setTimeout(cleanup, 90000);
     w.document.open();
-    w.document.write(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>Bill ${billNo}</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}h2{text-align:center;font-size:24px;font-weight:900;margin:4px 0}.c{text-align:center;font-size:10px}.line{border-top:2px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:4px 2px}th{border-bottom:2px solid #000;text-align:left;font-size:12px}.grand td{font-size:18px;font-weight:900;border-top:3px solid #000;padding-top:8px}.badge{display:inline-block;padding:3px 10px;border:2px solid #000;border-radius:10px;font-size:12px;margin:2px}</style></head><body><h2>${RESTAURANT.name}</h2><div class="c">${RESTAURANT.address}</div><div class="c">Ph: ${RESTAURANT.phones.join(" / ")}</div><div class="line"></div><div style="display:flex;justify-content:space-between;font-size:11px"><div>Bill: ${billNo}</div><div>${order.orderType === "parcel" ? "PARCEL" : "T-" + esc(order.table)}</div></div><div class="c" style="margin-top:4px">${now}</div>${order.waiter ? `<div class="c">Waiter: ${esc(order.waiter)}</div>` : ""}<div class="line"></div><table><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>${itemsHtml}</tbody></table><div class="line"></div><table><tr><td>Subtotal</td><td style="text-align:right">Rs ${sub}</td></tr>${order.gstAmount ? `<tr><td>GST</td><td style="text-align:right">+Rs ${order.gstAmount}</td></tr>` : ""}${order.billDiscount ? `<tr><td>Discount</td><td style="text-align:right">-Rs ${order.billDiscount}</td></tr>` : ""}<tr class="grand"><td>GRAND TOTAL</td><td style="text-align:right">Rs ${total}</td></tr></table><div class="line"></div><div class="c"><span class="badge">${(order.payment || "cash").toUpperCase()}</span><span class="badge">${order.paid ? "PAID" : order.payment === "due" ? "DUE" : "PENDING"}</span></div><div class="c" style="margin-top:10px;font-size:11px">** Thank you, visit again **</div><div class="c" style="font-size:10px">Eat &amp; Park Restaurant</div></body></html>`);
+    w.document.write(`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'"><title>Bill ${billNo}</title><style>@page{margin:0}*{color:#000!important}body{font-family:Arial,sans-serif;width:290px;margin:0 auto;padding:10px;font-weight:700}h2{text-align:center;font-size:24px;font-weight:900;margin:4px 0}.c{text-align:center;font-size:10px}.line{border-top:2px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:4px 2px}th{border-bottom:2px solid #000;text-align:left;font-size:12px}.grand td{font-size:18px;font-weight:900;border-top:3px solid #000;padding-top:8px}.badge{display:inline-block;padding:3px 10px;border:2px solid #000;border-radius:10px;font-size:12px;margin:2px}</style></head><body><h2>${RESTAURANT.name}</h2><div class="c">${RESTAURANT.address}</div><div class="c">Ph: ${RESTAURANT.phones.join(" / ")}</div><div class="line"></div><div style="display:flex;justify-content:space-between;font-size:11px"><div>Bill: ${billNo}</div><div>${order.orderType === "parcel" ? "PARCEL" : "T-" + esc(order.table)}</div></div><div class="c" style="margin-top:4px">${now}</div>${custLabel(order) ? `<div class="c" style="font-size:12px">Customer: ${esc(custLabel(order))}</div>` : ""}${order.waiter ? `<div class="c">Waiter: ${esc(order.waiter)}</div>` : ""}<div class="line"></div><table><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amt</th></tr></thead><tbody>${itemsHtml}</tbody></table><div class="line"></div><table><tr><td>Subtotal</td><td style="text-align:right">Rs ${sub}</td></tr>${order.gstAmount ? `<tr><td>GST</td><td style="text-align:right">+Rs ${order.gstAmount}</td></tr>` : ""}${order.billDiscount ? `<tr><td>Discount</td><td style="text-align:right">-Rs ${order.billDiscount}</td></tr>` : ""}<tr class="grand"><td>GRAND TOTAL</td><td style="text-align:right">Rs ${total}</td></tr></table><div class="line"></div><div class="c"><span class="badge">${(order.payment || "cash").toUpperCase()}</span><span class="badge">${order.paid ? "PAID" : order.payment === "due" ? "DUE" : "PENDING"}</span></div><div class="c" style="margin-top:10px;font-size:11px">** Thank you, visit again **</div><div class="c" style="font-size:10px">Eat &amp; Park Restaurant</div></body></html>`);
     w.document.close();
     setTimeout(() => { try { w.focus(); w.print(); } catch (e) { alert("Print error: " + e.message); } }, 400);
   } catch (e) { alert("Print error: " + e.message); }
@@ -2329,6 +2338,16 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
     setCart(initialCart);
   }, [existingOrder?.id, orderSig, addMoreMode]);
 
+  // Order ka customer bill me load karo (warna save par Walk-in se overwrite hota tha)
+  useEffect(() => {
+    if (!existingOrder) return;
+    const c = existingOrder.customer || {};
+    const wi = (s) => /^walk-?in$/i.test(String(s || "").trim());
+    setCustName(wi(c.name) ? "" : (c.name || ""));
+    setCustPhone(wi(c.phone) ? "" : (c.phone || ""));
+    setCustAddress(c.address || "");
+  }, [existingOrder?.id]);
+
   // Autosave cart to localStorage
   useEffect(() => {
     if (!existingOrder && !addMoreMode && Object.keys(cart).length > 0) {
@@ -2458,7 +2477,7 @@ function BillingView({ C, isMobile, table, menu, orders, setOrders, cart, setCar
       const oref = doc(db, "orders", existingOrder.id);
       const osnap = await tx.get(oref);
       assertEditable(osnap.exists() ? osnap.data() : null, existingOrder);
-      tx.update(oref, { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, cashDiscount: Number(cashDiscount || 0), paymentSplit: payMode === "split" ? { cash: Number(splitCash), online: Number(splitUpi) } : null, customer: { name: custName || "Walk-in", phone: custPhone || "", address: custAddress || "" }, billEditedAt: Date.now(), ...extra });
+      tx.update(oref, { items: finalItems, subtotal: sub, billDiscountPct: discount, billDiscount: d, gstRate, gstAmount: g, finalTotal, payment: payMode, cashDiscount: Number(cashDiscount || 0), paymentSplit: payMode === "split" ? { cash: Number(splitCash), online: Number(splitUpi) } : null, customer: { ...(existingOrder.customer || {}), name: custName || "Walk-in", phone: custPhone || "", address: custAddress || "" }, billEditedAt: Date.now(), ...extra });
     });
     if (newKotItems.length) printKOT({ ...existingOrder, items: newKotItems, kots: [] });
     /*P8*/ if (removedItems.length) printKOT({ ...existingOrder, items: removedItems.map((i) => ({ ...i, name: "CANCEL >> " + i.name })), kots: [] });
