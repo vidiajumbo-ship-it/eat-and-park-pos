@@ -2601,7 +2601,8 @@ const subtotal = cartItems.reduce((s, [id, entry]) => {
   const item = menu.find((m) => m.id === id);
   return s + getCartLineTotal(entry, item);
 }, 0);
-  const deliveryFee = orderType === "parcel" ? 40 : 0;
+  const deliveryFee = orderType === "parcel" ? 0 : 0;
+  const finalDeliveryFee = (typeof guestMode !== 'undefined' && guestMode) ? 0 : deliveryFee;
   useEffect(() => { if (appliedDiscount > 0 && subtotal < couponMin) setAppliedDiscount(0); }, [appliedDiscount, couponMin, subtotal]);
   const discountAmount = Math.round((subtotal * appliedDiscount) / 100);
 
@@ -3205,7 +3206,8 @@ const handleWaiterPinSubmitOld = () => {
   const handlePlaceOrder = useCallback(async () => {
 if (submitLockRef.current) return;
   submitLockRef.current = true;
-  setIsProcessingPayment(true);
+  // Processing lock handled in try/catch
+  
     if (isScheduled && (!scheduleDate || !scheduleTime)) { showToast("⚠️ Schedule ki date aur time dono daalo", 'error'); return; }
     if (orderType === "parcel" && !parcelOpenNow()) { showToast(PARCEL_MSG, 'error'); return; }
     const _gone = cartItems.filter(([id]) => !menu.some((m) => m.id === id && m.available));
@@ -3992,7 +3994,7 @@ if (submitLockRef.current) return;
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16, borderBottom: `1px solid ${COLORS.line}`, paddingBottom: 20 }}>
                   <input type="text" placeholder="Your Name *" value={custName} onChange={(e) => setCustName(e.target.value)} style={inputStyle} />
                   <input type="tel" placeholder="Phone *" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} style={inputStyle} />
-                  {orderType === "parcel" && (
+                  {orderType === "parcel" && !guestMode && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {/* Auto GPS Box */}
                       <div style={{ display: "flex", gap: 8 }}>
@@ -4077,7 +4079,7 @@ if (submitLockRef.current) return;
                   {appliedDiscount > 0 && (<div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.success }}><span>Coupon ({appliedDiscount}%)</span><span>-{inr(discountAmount)}</span></div>)}
                   {loyaltyDiscount > 0 && (<div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.gold }}><span>Loyalty</span><span>-{inr(loyaltyDiscount)}</span></div>)}
                   {vipDiscount > 0 && (<div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.gold }}><span>👑 VIP Elite (20%)</span><span>-{inr(vipDiscount)}</span></div>)}
-                  {orderType === "parcel" && (<div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.copper }}><span>Delivery</span><span>+{inr(deliveryFee)}</span></div>)}
+                  {orderType === "parcel" && !guestMode && (<div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: COLORS.copper }}><span>Delivery</span><span>+{inr(deliveryFee)}</span></div>)}
                   <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 18, borderTop: `1px solid ${COLORS.line}`, paddingTop: 8, marginTop: 4 }}>
                     <span>Total</span><span style={{ color: COLORS.copper, fontFamily: "'JetBrains Mono', monospace" }}>{inr(finalTotal)}</span>
                   </div>
